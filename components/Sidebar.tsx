@@ -1,0 +1,465 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import { 
+  LayoutDashboard, 
+  Package, 
+  ShoppingCart, 
+  Database, 
+  Settings, 
+  FileText,
+  ClipboardList,
+  ShieldCheck,
+  Truck,
+  Receipt,
+  CreditCard,
+  History,
+  TrendingUp,
+  Map,
+  MapPin,
+  RefreshCw,
+  AlertTriangle,
+  Building2
+} from "lucide-react";
+import { signOut } from "next-auth/react";
+
+interface SidebarProps {
+  user: {
+    name?: string | null;
+    email?: string | null;
+    role: string;
+    companyId: string;
+  };
+}
+
+export default function Sidebar({ user }: SidebarProps) {
+  const pathname = usePathname();
+  const role = user.role;
+
+  const [companyName, setCompanyName] = useState("Saarlekha Factory");
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchCompanyBranding() {
+      try {
+        const res = await fetch("/api/profile/memberships");
+        if (res.ok) {
+          const mems = await res.json();
+          const current = mems.find((m: any) => m.companyId === user.companyId);
+          if (current) {
+            setCompanyName(current.companyName);
+            setLogoUrl(current.logoUrl);
+          }
+        }
+      } catch (err) {
+        console.error("Error loading company branding in Sidebar:", err);
+      }
+    }
+    fetchCompanyBranding();
+  }, [user.companyId]);
+
+  const handleSignOut = () => {
+    signOut({ callbackUrl: "/auth/signin" });
+  };
+
+  // Helper to check active routes
+  const isActive = (path: string) => {
+    return pathname.startsWith(path);
+  };
+
+  // Check roles permissions
+  const isAdmin = ["ADMIN", "OWNER"].includes(role);
+  const isStore = ["STORE_MANAGER", "STORE_KEEPER", "ADMIN", "OWNER"].includes(role);
+  const isPurchase = ["PURCHASE_MANAGER", "PURCHASE_OFFICER", "ADMIN", "OWNER"].includes(role);
+  const isQC = ["QC_INSPECTOR", "STORE_MANAGER", "ADMIN", "OWNER"].includes(role);
+  const isAccounts = ["ACCOUNTS", "ADMIN", "OWNER"].includes(role);
+
+  return (
+    <aside className="w-64 bg-onyx text-cream-light border-r border-onyx-light flex flex-col h-screen sticky top-0 font-body">
+      {/* Brand Header */}
+      <div className="p-5 border-b border-onyx-light bg-onyx-dark flex items-center space-x-3">
+        {logoUrl ? (
+          <img src={logoUrl} alt="Logo" className="w-9 h-9 object-contain bg-cream-light rounded-lg p-1 shrink-0" />
+        ) : (
+          <div className="w-9 h-9 bg-saffron text-onyx font-heading font-bold text-lg rounded-lg flex items-center justify-center shrink-0">
+            {companyName[0].toUpperCase()}
+          </div>
+        )}
+        <div className="min-w-0">
+          <h1 className="font-heading text-sm font-bold text-saffron tracking-tight truncate">
+            {companyName}
+          </h1>
+          <p className="font-body text-[9px] tracking-wider text-cream-dark uppercase font-semibold leading-none mt-1">
+            Stores & Purchase
+          </p>
+        </div>
+      </div>
+
+      {/* Nav Menu */}
+      <div className="flex-1 overflow-y-auto px-4 py-6 space-y-7">
+        {/* General Category */}
+        <div>
+          <h2 className="text-[10px] uppercase font-semibold text-cream-dark/40 tracking-wider mb-3 px-2">
+            Main
+          </h2>
+          <div className="space-y-1">
+            <Link
+              href="/dashboard"
+              className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                pathname === "/dashboard" 
+                  ? "bg-saffron text-onyx font-semibold shadow-md" 
+                  : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+              }`}
+            >
+              <LayoutDashboard size={18} />
+              <span>Dashboard</span>
+            </Link>
+          </div>
+        </div>
+
+        {/* Stores Category */}
+        { (isStore || isQC || role === "INDENTER") && (
+          <div>
+            <h2 className="text-[10px] uppercase font-semibold text-cream-dark/40 tracking-wider mb-3 px-2">
+              Stores & Inventory
+            </h2>
+            <div className="space-y-1">
+              <Link
+                href="/stores/items"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/stores/items")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <Package size={18} />
+                <span>Item Master</span>
+              </Link>
+
+              <Link
+                href="/stores/departments"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/stores/departments")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <Database size={18} />
+                <span>Departments Master</span>
+              </Link>
+
+              <Link
+                href="/stores/indents"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/stores/indents")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <ClipboardList size={18} />
+                <span>Indents</span>
+              </Link>
+
+              <Link
+                href="/stores/reorders"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/stores/reorders")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <RefreshCw size={18} />
+                <span>Reorder Basket</span>
+              </Link>
+
+              {isStore && (
+                <Link
+                  href="/stores/grn"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                    isActive("/stores/grn")
+                      ? "bg-saffron text-onyx font-semibold shadow-md"
+                      : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                  }`}
+                >
+                  <History size={18} />
+                  <span>GRN (Inwards)</span>
+                </Link>
+              )}
+
+              {isQC && (
+                <Link
+                  href="/stores/inspection"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                    isActive("/stores/inspection")
+                      ? "bg-saffron text-onyx font-semibold shadow-md"
+                      : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                  }`}
+                >
+                  <ShieldCheck size={18} />
+                  <span>QC Inspection</span>
+                </Link>
+              )}
+              {isStore && (
+                <Link
+                  href="/stores/rejected-material"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                    isActive("/stores/rejected-material")
+                      ? "bg-saffron text-onyx font-semibold shadow-md"
+                      : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                  }`}
+                >
+                  <AlertTriangle size={18} />
+                  <span>Rejected Materials</span>
+                </Link>
+              )}
+
+              {isStore && (
+                <Link
+                  href="/stores/outwards"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                    isActive("/stores/outwards")
+                      ? "bg-saffron text-onyx font-semibold shadow-md"
+                      : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                  }`}
+                >
+                  <Truck size={18} />
+                  <span>Outwards & Gatepass</span>
+                </Link>
+              )}
+
+              <Link
+                href="/stores/reports"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/stores/reports")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <FileText size={18} />
+                <span>Stores Reports</span>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Purchase Category */}
+        { (isPurchase || isAccounts) && (
+          <div>
+            <h2 className="text-[10px] uppercase font-semibold text-cream-dark/40 tracking-wider mb-3 px-2">
+              Purchase Module
+            </h2>
+            <div className="space-y-1">
+              <Link
+                href="/purchase/vendors"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/purchase/vendors")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <Database size={18} />
+                <span>Vendor Master</span>
+              </Link>
+
+              <Link
+                href="/purchase/shipto"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/purchase/shipto")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <MapPin size={18} />
+                <span>Ship-To Locations</span>
+              </Link>
+
+              <Link
+                href="/purchase/requisitions"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/purchase/requisitions")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <ShoppingCart size={18} />
+                <span>PR & RFQs</span>
+              </Link>
+
+              <Link
+                href="/purchase/po"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/purchase/po")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <ClipboardList size={18} />
+                <span>Purchase Orders</span>
+              </Link>
+
+              {["ADMIN", "OWNER", "PURCHASE_MANAGER", "APPROVER"].includes(role) && (
+                <Link
+                  href="/purchase/po/settings"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                    isActive("/purchase/po/settings")
+                      ? "bg-saffron text-onyx font-semibold shadow-md"
+                      : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                  }`}
+                >
+                  <Settings size={18} />
+                  <span>PO Terms Settings</span>
+                </Link>
+              )}
+
+              {isAccounts && (
+                <>
+                  <Link
+                    href="/purchase/invoices"
+                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                      isActive("/purchase/invoices")
+                        ? "bg-saffron text-onyx font-semibold shadow-md"
+                        : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                    }`}
+                  >
+                    <Receipt size={18} />
+                    <span>Invoices (3-Way Match)</span>
+                  </Link>
+
+                  <Link
+                    href="/purchase/debit-notes"
+                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                      isActive("/purchase/debit-notes")
+                        ? "bg-saffron text-onyx font-semibold shadow-md"
+                        : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                    }`}
+                  >
+                    <FileText size={18} />
+                    <span>Debit/Credit Notes</span>
+                  </Link>
+
+                  <Link
+                    href="/purchase/payments"
+                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                      isActive("/purchase/payments")
+                        ? "bg-saffron text-onyx font-semibold shadow-md"
+                        : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                    }`}
+                  >
+                    <CreditCard size={18} />
+                    <span>Supplier Payments</span>
+                  </Link>
+                </>
+              )}
+
+              <Link
+                href="/purchase/reports"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/purchase/reports")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <TrendingUp size={18} />
+                <span>Purchase Reports</span>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Integration Category */}
+        {isAccounts && (
+          <div>
+            <h2 className="text-[10px] uppercase font-semibold text-cream-dark/40 tracking-wider mb-3 px-2">
+              System Admin
+            </h2>
+            <div className="space-y-1">
+              <Link
+                href="/integration"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/integration")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <Map size={18} />
+                <span>ERP & Tally Settings</span>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Settings & Control Category */}
+        {isAdmin && (
+          <div>
+            <h2 className="text-[10px] uppercase font-semibold text-cream-dark/40 tracking-wider mb-3 px-2">
+              Settings & Control
+            </h2>
+            <div className="space-y-1">
+              <Link
+                href="/settings/company"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/settings/company")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <Building2 size={18} />
+                <span>Company Profile</span>
+              </Link>
+
+              <Link
+                href="/settings/documents"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/settings/documents")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <FileText size={18} />
+                <span>Document Settings</span>
+              </Link>
+
+              <Link
+                href="/settings/members"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/settings/members")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <Database size={18} />
+                <span>Members & Roles</span>
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* User Footer Profile & Logout */}
+      <div className="p-4 border-t border-onyx-light bg-onyx-dark flex flex-col space-y-2">
+        <div className="flex items-center space-x-3">
+          <div className="w-8 h-8 rounded-full bg-saffron text-onyx flex items-center justify-center font-bold text-sm">
+            {user.name ? user.name[0].toUpperCase() : user.email?.[0].toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold truncate text-cream-light">
+              {user.name || "User"}
+            </p>
+            <p className="text-[10px] text-cream-dark/50 font-mono tracking-wider uppercase">
+              {role.replace("_", " ")}
+            </p>
+          </div>
+        </div>
+        <button
+          onClick={handleSignOut}
+          className="w-full mt-2 flex items-center justify-center space-x-2 px-3 py-2 bg-onyx hover:bg-red-950 text-cream-light hover:text-red-200 border border-onyx-light hover:border-red-900 rounded-lg text-xs font-semibold transition-all duration-200"
+        >
+          <Settings size={14} />
+          <span>Sign Out</span>
+        </button>
+      </div>
+    </aside>
+  );
+}

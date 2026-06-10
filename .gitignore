@@ -39,3 +39,17 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# local backups, scratch files, and pdfs
+/files.zip
+/files1.zip
+/files_extracted/
+/files1_extracted/
+/temp_extracted/
+/temp_extracted_zip/
+/scratch/
+/inspect_rfq.js
+/scratch-inspect-docs.js
+/proxy.ts
+/gtc-of-purchase---elkem-ex-esd_english.pdf
+

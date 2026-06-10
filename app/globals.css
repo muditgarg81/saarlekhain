@@ -1,26 +1,82 @@
 @import "tailwindcss";
 
+@theme {
+  --color-cream: #fff8f1;
+  --color-cream-light: #fffcf8;
+  --color-cream-dark: #fbf1e6;
+  --color-onyx: #131313;
+  --color-onyx-light: #1f1f1f;
+  --color-onyx-dark: #080808;
+  --color-saffron: #f4c430;
+  --color-saffron-light: #f7d45f;
+  --color-saffron-dark: #dca710;
+  
+  --font-heading: "Playfair Display", serif;
+  --font-body: "Inter", sans-serif;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --background: #fff8f1;
+  --foreground: #131313;
 }
 
 body {
-  background: var(--background);
+  background-color: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
+}
+
+/* Glassmorphism card utility */
+.glass-card {
+  background: rgba(255, 252, 248, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(19, 19, 19, 0.06);
+}
+
+.dark .glass-card {
+  background: rgba(31, 31, 31, 0.7);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Dense factory data tables */
+.dense-table th {
+  padding: 6px 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background-color: #fbf1e6;
+  border-bottom: 2px solid rgba(19, 19, 19, 0.08);
+}
+
+.dense-table td {
+  padding: 6px 12px;
+  font-size: 0.825rem;
+  border-bottom: 1px solid rgba(19, 19, 19, 0.05);
+}
+
+.dense-table tr:hover {
+  background-color: rgba(244, 196, 48, 0.08);
+}
+
+/* Custom scrollbars for dense views */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(19, 19, 19, 0.02);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(19, 19, 19, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(19, 19, 19, 0.3);
 }

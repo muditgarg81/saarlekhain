@@ -1,0 +1,271 @@
+"use server";
+
+import { auth } from "@/auth";
+import { db } from "@/lib/db";
+import { Role } from "@prisma/client";
+import bcrypt from "bcryptjs";
+import { revalidatePath } from "next/cache";
+
+/**
+ * Register a new user and create their initial company ecosystem.
+ */
+export async function registerOwner(data: {
+  name: string;
+  email: string;
+  password: string;
+  companyName: string;
+}) {
+  const { name, email, password, companyName } = data;
+
+  if (!email || !password || !companyName || !name) {
+    throw new Error("Missing required registration fields");
+  }
+
+  // Check if user already exists
+  const existingUser = await db.user.findFirst({
+    where: { email },
+  });
+
+  if (existingUser && existingUser.passwordHash) {
+    throw new Error("A user with this email address already exists.");
+  }
+
+  const hashedPassword = await bcrypt.hash(password, 10);
+
+  const result = await db.$transaction(async (tx) => {
+    // 1. Create the Company record
+    const company = await tx.company.create({
+      data: {
+        name: companyName,
+        displayName: companyName,
+        legalName: companyName,
+      },
+    });
+
+    // 2. Create or update the User record
+    let user;
+    if (existingUser) {
+      user = await tx.user.update({
+        where: { id: existingUser.id },
+        data: {
+          name,
+          passwordHash: hashedPassword,
+          companyId: company.id,
+          role: Role.OWNER,
+        },
+      });
+    } else {
+      user = await tx.user.create({
+        data: {
+          email,
+          name,
+          passwordHash: hashedPassword,
+          companyId: company.id,
+          role: Role.OWNER,
+        },
+      });
+    }
+
+    // 3. Link user to company via CompanyMembership as OWNER
+    await tx.companyMembership.create({
+      data: {
+        companyId: company.id,
+        userId: user.id,
+        role: Role.OWNER,
+        status: "ACTIVE",
+        isPrimary: true,
+      },
+    });
+
+    // Mark other memberships as non-primary
+    await tx.companyMembership.updateMany({
+      where: {
+        userId: user.id,
+        companyId: { not: company.id },
+      },
+      data: {
+        isPrimary: false,
+      },
+    });
+
+    // 4. Seed dynamic default Store (MAIN)
+    const store = await tx.store.create({
+      data: {
+        companyId: company.id,
+        code: "MAIN",
+        name: "Main Inventory Warehouse",
+        status: "ACTIVE",
+      },
+    });
+
+    // 5. Seed default Department (STORES)
+    await tx.department.create({
+      data: {
+        companyId: company.id,
+        code: "STORES",
+        name: "Stores & Purchase",
+      },
+    });
+
+    // Seed default Categories (RM, CONS)
+    await tx.itemCategory.create({
+      data: { companyId: company.id, code: "RM", name: "Raw Materials" },
+    });
+    await tx.itemCategory.create({
+      data: { companyId: company.id, code: "CONS", name: "Consumables" },
+    });
+
+    // Set the defaultStoreId on the new company
+    await tx.company.update({
+      where: { id: company.id },
+      data: {
+        defaultStoreId: store.id,
+      },
+    });
+
+    // 6. Seed Numbering Schemes for all document types
+    const docTypes = ["PO", "GRN", "PR", "RFQ", "IND", "ISS", "GP", "INSP", "DN", "CN", "PAY"];
+    for (const docType of docTypes) {
+      await tx.numberingScheme.create({
+        data: {
+          companyId: company.id,
+          docType,
+          prefix: docType,
+          padding: 5,
+          resetOnFY: true,
+        },
+      });
+    }
+
+    return { user, company };
+  });
+
+  return { success: true, companyId: result.company.id };
+}
+
+/**
+ * Allows a logged-in user to create an additional company.
+ */
+export async function createNewCompany(companyName: string) {
+  const session = await auth();
+  if (!session || !session.user) {
+    throw new Error("Unauthorized");
+  }
+
+  const userId = (session.user as any).id;
+
+  if (!companyName) {
+    throw new Error("Company name is required");
+  }
+
+  const result = await db.$transaction(async (tx) => {
+    // 1. Create the new Company record
+    const company = await tx.company.create({
+      data: {
+        name: companyName,
+        displayName: companyName,
+        legalName: companyName,
+      },
+    });
+
+    // 2. Link user as OWNER of this company
+    await tx.companyMembership.create({
+      data: {
+        companyId: company.id,
+        userId,
+        role: Role.OWNER,
+        status: "ACTIVE",
+        isPrimary: false, // keep current primary intact
+      },
+    });
+
+    // 3. Seed default Store
+    const store = await tx.store.create({
+      data: {
+        companyId: company.id,
+        code: "MAIN",
+        name: "Main Inventory Warehouse",
+        status: "ACTIVE",
+      },
+    });
+
+    // 4. Seed default Department
+    await tx.department.create({
+      data: {
+        companyId: company.id,
+        code: "STORES",
+        name: "Stores & Purchase",
+      },
+    });
+
+    // Seed default Categories (RM, CONS)
+    await tx.itemCategory.create({
+      data: { companyId: company.id, code: "RM", name: "Raw Materials" },
+    });
+    await tx.itemCategory.create({
+      data: { companyId: company.id, code: "CONS", name: "Consumables" },
+    });
+
+    // Link default store
+    await tx.company.update({
+      where: { id: company.id },
+      data: {
+        defaultStoreId: store.id,
+      },
+    });
+
+    // 5. Seed Numbering Schemes
+    const docTypes = ["PO", "GRN", "PR", "RFQ", "IND", "ISS", "GP", "INSP", "DN", "CN", "PAY"];
+    for (const docType of docTypes) {
+      await tx.numberingScheme.create({
+        data: {
+          companyId: company.id,
+          docType,
+          prefix: docType,
+          padding: 5,
+          resetOnFY: true,
+        },
+      });
+    }
+
+    return company;
+  });
+
+  revalidatePath("/select-company");
+  return { success: true, companyId: result.id };
+}
+
+/**
+ * Direct password reset action for the forgot password flow.
+ */
+export async function resetPasswordDirectly(data: { email: string; newPassword: string }) {
+  const { email, newPassword } = data;
+  if (!email || !newPassword) {
+    return { success: false, error: "Email and password are required" };
+  }
+
+  if (newPassword.length < 6) {
+    return { success: false, error: "Password must be at least 6 characters long" };
+  }
+
+  try {
+    const user = await db.user.findFirst({
+      where: { email },
+    });
+
+    if (!user) {
+      return { success: false, error: "A user with this email address does not exist." };
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await db.user.update({
+      where: { id: user.id },
+      data: { passwordHash: hashedPassword },
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    console.error("Failed to reset password:", error);
+    return { success: false, error: error.message || "An unexpected error occurred." };
+  }
+}
