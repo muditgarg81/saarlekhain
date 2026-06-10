@@ -4,6 +4,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { can } from "@/lib/rbac";
 import { Role, MembershipStatus } from "@prisma/client";
+import { sendInvitationEmail } from "@/lib/mail";
 
 /**
  * Fetch all memberships for the active company.
@@ -126,6 +127,26 @@ export async function inviteMember(
       after: { email, role, storeScope, deptScope, approvalLimit } as any,
     },
   });
+
+  // Fetch company name for the email template
+  const company = await db.company.findUnique({
+    where: { id: companyId },
+    select: { name: true }
+  });
+  const companyName = company?.name || "Saarlekha Company";
+
+  // Send invitation email
+  try {
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://saarlekhain.com";
+    await sendInvitationEmail({
+      email,
+      companyName,
+      role,
+      appUrl
+    });
+  } catch (mailError) {
+    console.error("Failed to trigger invitation email dispatch:", mailError);
+  }
 
   return membership;
 }
