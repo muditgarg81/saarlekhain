@@ -16,7 +16,8 @@ import {
   Mail, 
   Eye,
   AlertTriangle,
-  ArrowRight
+  ArrowRight,
+  Menu
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
@@ -32,6 +33,7 @@ interface HeaderProps {
     storeId?: string | null;
     storeScope?: string[];
   };
+  onMenuClick?: () => void;
 }
 
 interface CompanyItem {
@@ -66,7 +68,7 @@ interface NotificationItem {
   createdAt: string;
 }
 
-export default function Header({ user }: HeaderProps) {
+export default function Header({ user, onMenuClick }: HeaderProps) {
   const { data: session, update } = useSession();
   const router = useRouter();
 
@@ -319,9 +321,19 @@ export default function Header({ user }: HeaderProps) {
   const totalUnreadCount = unreadNotifCount + reminders.length;
 
   return (
-    <header className="h-16 bg-cream-light border-b border-cream-dark px-8 flex items-center justify-between sticky top-0 z-40 shadow-sm font-body">
+    <header className="h-16 bg-cream-light border-b border-cream-dark px-4 md:px-8 flex items-center justify-between sticky top-0 z-40 shadow-sm font-body">
       {/* Left Section: Switchers & Search */}
-      <div className="flex items-center space-x-4 flex-1 max-w-2xl">
+      <div className="flex items-center space-x-3 md:space-x-4 flex-1 max-w-2xl">
+        
+        {/* Mobile menu toggle */}
+        <button
+          type="button"
+          onClick={onMenuClick}
+          className="md:hidden p-2 -ml-2 text-onyx/70 hover:text-onyx hover:bg-cream rounded-lg transition duration-150 cursor-pointer shrink-0"
+          title="Toggle navigation menu"
+        >
+          <Menu size={20} />
+        </button>
         
         {/* Company Dropdown Switcher */}
         <div className="relative flex items-center bg-cream border border-onyx/10 rounded-lg text-onyx/80 px-2.5 py-1 text-xs font-semibold hover:border-saffron hover:bg-cream-light transition-all duration-200">

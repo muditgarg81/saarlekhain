@@ -5,6 +5,7 @@ import {
   createSupplierInvoice, 
   updateInvoiceMatchStatus 
 } from "@/app/actions/invoices";
+import { can } from "@/lib/rbac";
 import { 
   Search, 
   Plus, 
@@ -77,7 +78,7 @@ interface InvoicesListProps {
   purchaseOrders: PurchaseOrder[];
   items: Item[];
   vendors: Vendor[];
-  userRole: string;
+  user: any;
 }
 
 export default function InvoicesList({
@@ -85,7 +86,7 @@ export default function InvoicesList({
   purchaseOrders,
   items,
   vendors,
-  userRole
+  user
 }: InvoicesListProps) {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -111,7 +112,7 @@ export default function InvoicesList({
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [overrideReason, setOverrideReason] = useState("");
 
-  const isAccounts = ["ACCOUNTS", "ADMIN", "OWNER"].includes(userRole);
+  const isAccounts = can(user, "invoice.match") || ["ACCOUNTS", "ADMIN", "OWNER"].includes(user.role);
 
   const handlePoChange = (poId: string) => {
     const selectedPo = purchaseOrders.find(p => p.id === poId);

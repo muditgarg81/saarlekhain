@@ -135,6 +135,8 @@ interface TermsConfig {
   jurisdictionCity: string | null;
 }
 
+import { can, SessionUser } from "@/lib/rbac";
+
 interface PurchaseOrdersListProps {
   initialPOs: PORecord[];
   items: Item[];
@@ -143,7 +145,7 @@ interface PurchaseOrdersListProps {
   presets: Preset[];
   companyProfile: CompanyProfile | null;
   termsConfig: TermsConfig | null;
-  userRole: string;
+  user: SessionUser;
 }
 
 export default function PurchaseOrdersList({
@@ -154,7 +156,7 @@ export default function PurchaseOrdersList({
   presets = [],
   companyProfile,
   termsConfig,
-  userRole
+  user
 }: PurchaseOrdersListProps) {
   const [purchaseOrders, setPurchaseOrders] = useState<PORecord[]>(initialPOs);
   const [search, setSearch] = useState("");
@@ -206,8 +208,8 @@ export default function PurchaseOrdersList({
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const canApprove = ["PURCHASE_MANAGER", "ADMIN", "OWNER", "APPROVER"].includes(userRole);
-  const isPurchase = ["PURCHASE_OFFICER", "PURCHASE_MANAGER", "ADMIN", "OWNER"].includes(userRole);
+  const canApprove = can(user, "po.approve") || ["ADMIN", "OWNER"].includes(user.role);
+  const isPurchase = can(user, "po.create") || ["ADMIN", "OWNER"].includes(user.role);
 
   // Check sessionStorage for prefilled quotes
   useEffect(() => {

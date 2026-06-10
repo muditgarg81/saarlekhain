@@ -1,18 +1,17 @@
-import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { getPresets, getTermsConfig, getCompanyProfile } from "@/app/actions/termsPresets";
 import PoTermsSettingsClient from "./PoTermsSettingsClient";
+import { getFreshUser } from "@/app/actions/auth";
+import { can } from "@/lib/rbac";
 
 export default async function PoTermsSettingsPage() {
-  const session = await auth();
-  if (!session || !session.user) {
+  const user = await getFreshUser();
+  if (!user) {
     redirect("/auth/signin");
   }
 
-  const userRole = (session.user as any).role || "VIEWER";
-
   // Only allow admin, manager, owner, or approver to modify terms settings
-  const hasAccess = ["ADMIN", "OWNER", "PURCHASE_MANAGER", "APPROVER"].includes(userRole);
+  const hasAccess = can(user, "po.approve") || can(user, "company.settings.edit") || ["ADMIN", "OWNER", "PURCHASE_MANAGER", "APPROVER"].includes(user.role);
   if (!hasAccess) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] p-8 text-center bg-cream rounded-xl border border-onyx/5">

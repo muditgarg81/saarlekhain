@@ -47,12 +47,14 @@ interface Vendor {
   status: VendorStatus;
 }
 
+import { can, SessionUser } from "@/lib/rbac";
+
 interface VendorsListProps {
   initialVendors: Vendor[];
-  userRole: string;
+  user: SessionUser;
 }
 
-export default function VendorsList({ initialVendors, userRole }: VendorsListProps) {
+export default function VendorsList({ initialVendors, user }: VendorsListProps) {
   const [vendors, setVendors] = useState<Vendor[]>(initialVendors);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -83,8 +85,8 @@ export default function VendorsList({ initialVendors, userRole }: VendorsListPro
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const canSeeBankDetails = ["ACCOUNTS", "ADMIN", "OWNER"].includes(userRole);
-  const canApprove = ["PURCHASE_MANAGER", "ADMIN", "OWNER"].includes(userRole);
+  const canSeeBankDetails = can(user, "payment.record") || can(user, "ledger.view") || ["ADMIN", "OWNER"].includes(user.role);
+  const canApprove = can(user, "vendor.approve") || ["ADMIN", "OWNER"].includes(user.role);
 
   const filteredVendors = vendors.filter(v => {
     const matchesSearch = v.name.toLowerCase().includes(search.toLowerCase()) || 

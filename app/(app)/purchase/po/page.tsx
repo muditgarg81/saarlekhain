@@ -1,16 +1,15 @@
-import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import PurchaseOrdersList from "./PurchaseOrdersList";
+import { getFreshUser } from "@/app/actions/auth";
 
 export default async function PurchaseOrdersPage() {
-  const session = await auth();
-  if (!session || !session.user) {
+  const user = await getFreshUser();
+  if (!user) {
     redirect("/auth/signin");
   }
 
-  const companyId = (session.user as any).companyId || "demo-company-id";
-  const userRole = (session.user as any).role || "VIEWER";
+  const companyId = user.companyId;
 
   // Fetch POs, Items, Vendors, Users, Ship-To Locations, Terms presets/configs concurrently
   const [
@@ -164,7 +163,7 @@ export default async function PurchaseOrdersPage() {
       presets={presetsList}
       companyProfile={companyProfile}
       termsConfig={termsConfig}
-      userRole={userRole}
+      user={user}
     />
   );
 }

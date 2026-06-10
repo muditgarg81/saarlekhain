@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { revalidatePath } from "next/cache";
+import { ROLE_PERMISSIONS } from "@/lib/rbac";
 
 /**
  * Register a new user and create their initial company ecosystem.
@@ -309,4 +310,54 @@ export async function resetPasswordDirectly(data: { email: string; newPassword: 
     console.error("Failed to reset password:", error);
     return { success: false, error: error.message || "An unexpected error occurred." };
   }
+}
+
+/**
+ * Fetch the fresh user session, role, scopes, and dynamic role permissions directly from the database.
+ * Bypasses the NextAuth client-side cached JWT token.
+ */
+export async function getFreshUser() {
+  const session = await auth();
+  if (!session || !session.user) return null;
+
+  const companyId = (session.user as any).companyId || "demo-company-id";
+  const userId = (session.user as any).id;
+
+  const membership = await db.companyMembership.findUnique({
+    where: {
+      companyId_userId: {
+        companyId,
+        userId,
+      },
+    },
+  });
+
+  const activeRole = membership?.role || (session.user as any).role || "VIEWER";
+
+  const customRolePerm = await db.rolePermission.findUnique({
+    where: {
+      companyId_role: {
+        companyId,
+        role: activeRole as any,
+      },
+    },
+  });
+
+  const permissions = customRolePerm 
+    ? customRolePerm.permissions 
+    : (ROLE_PERMISSIONS[activeRole as Role] || []);
+
+  return {
+    id: userId,
+    name: session.user.name,
+    email: session.user.email,
+    role: activeRole,
+    companyId,
+    storeId: (session.user as any).storeId,
+    storeScope: membership?.storeScope || [],
+    deptScope: membership?.deptScope || [],
+    approvalLimit: membership?.approvalLimit,
+    permissions,
+    status: membership?.status || "ACTIVE",
+  };
 }

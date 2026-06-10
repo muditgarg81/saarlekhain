@@ -28,6 +28,7 @@ import {
   Square
 } from "lucide-react";
 import Link from "next/link";
+import { can, SessionUser } from "@/lib/rbac";
 
 interface SerializedNote {
   id: string;
@@ -51,7 +52,7 @@ interface Vendor {
 interface DebitNotesListProps {
   notes: SerializedNote[];
   vendors: Vendor[];
-  userRole: string;
+  user: SessionUser;
 }
 
 function amountToWords(amount: number): string {
@@ -97,7 +98,7 @@ function amountToWords(amount: number): string {
   return result + " Only";
 }
 
-export default function DebitNotesList({ notes: initialNotes, vendors, userRole }: DebitNotesListProps) {
+export default function DebitNotesList({ notes: initialNotes, vendors, user }: DebitNotesListProps) {
   const [notes, setNotes] = useState<SerializedNote[]>(initialNotes);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "POSTED" | "UNPOSTED">("ALL");
@@ -120,7 +121,7 @@ export default function DebitNotesList({ notes: initialNotes, vendors, userRole 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
-  const isFinance = ["ADMIN", "OWNER", "ACCOUNTS_MANAGER", "APPROVER", "ACCOUNTS"].includes(userRole);
+  const isFinance = can(user, "invoice.match") || can(user, "payment.record") || ["ADMIN", "OWNER"].includes(user.role);
 
   // Filtered Notes
   const filteredNotes = notes.filter((n) => {

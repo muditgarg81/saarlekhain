@@ -1,16 +1,15 @@
-import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import InvoicesList from "./InvoicesList";
+import { getFreshUser } from "@/app/actions/auth";
 
 export default async function InvoicesPage() {
-  const session = await auth();
-  if (!session || !session.user) {
+  const user = await getFreshUser();
+  if (!user) {
     redirect("/auth/signin");
   }
 
-  const companyId = (session.user as any).companyId || "demo-company-id";
-  const userRole = (session.user as any).role || "VIEWER";
+  const companyId = user.companyId;
 
   // Fetch Supplier Invoices, POs, Items, and Vendors concurrently
   const [invoices, purchaseOrders, items, vendors] = await Promise.all([
@@ -100,7 +99,7 @@ export default async function InvoicesPage() {
       purchaseOrders={mappedPOs}
       items={items}
       vendors={vendors}
-      userRole={userRole}
+      user={user}
     />
   );
 }

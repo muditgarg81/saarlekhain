@@ -1,16 +1,15 @@
-import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import VendorsList from "./VendorsList";
+import { getFreshUser } from "@/app/actions/auth";
 
 export default async function VendorsPage() {
-  const session = await auth();
-  if (!session || !session.user) {
+  const user = await getFreshUser();
+  if (!user) {
     redirect("/auth/signin");
   }
 
-  const companyId = (session.user as any).companyId || "demo-company-id";
-  const userRole = (session.user as any).role || "VIEWER";
+  const companyId = user.companyId;
 
   // Fetch all active vendors for the company
   const vendors = await db.vendor.findMany({
@@ -53,7 +52,7 @@ export default async function VendorsPage() {
   return (
     <VendorsList
       initialVendors={mappedVendors}
-      userRole={userRole}
+      user={user}
     />
   );
 }

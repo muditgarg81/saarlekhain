@@ -21,20 +21,21 @@ import {
   MapPin,
   RefreshCw,
   AlertTriangle,
-  Building2
+  Building2,
+  X
 } from "lucide-react";
 import { signOut } from "next-auth/react";
+import { can, SessionUser } from "@/lib/rbac";
 
 interface SidebarProps {
-  user: {
+  user: SessionUser & {
     name?: string | null;
-    email?: string | null;
-    role: string;
-    companyId: string;
   };
+  isOpen?: boolean;
+  onClose?: () => void;
 }
 
-export default function Sidebar({ user }: SidebarProps) {
+export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
   const role = user.role;
 
@@ -60,6 +61,13 @@ export default function Sidebar({ user }: SidebarProps) {
     fetchCompanyBranding();
   }, [user.companyId]);
 
+  // Close the mobile sidebar whenever the pathname changes (e.g. after clicking a link)
+  useEffect(() => {
+    if (onClose) {
+      onClose();
+    }
+  }, [pathname, onClose]);
+
   const handleSignOut = () => {
     signOut({ callbackUrl: "/auth/signin" });
   };
@@ -69,33 +77,73 @@ export default function Sidebar({ user }: SidebarProps) {
     return pathname.startsWith(path);
   };
 
-  // Check roles permissions
-  const isAdmin = ["ADMIN", "OWNER"].includes(role);
-  const isStore = ["STORE_MANAGER", "STORE_KEEPER", "ADMIN", "OWNER"].includes(role);
-  const isPurchase = ["PURCHASE_MANAGER", "PURCHASE_OFFICER", "ADMIN", "OWNER"].includes(role);
-  const isQC = ["QC_INSPECTOR", "STORE_MANAGER", "ADMIN", "OWNER"].includes(role);
-  const isAccounts = ["ACCOUNTS", "ADMIN", "OWNER"].includes(role);
+  // Check roles permissions dynamically via RBAC
+  const isAdmin = can(user, "user.manage") || can(user, "company.settings.edit") || ["ADMIN", "OWNER"].includes(role);
+  
+  const isStore = can(user, "item.manage") || 
+                  can(user, "grn.post") || 
+                  can(user, "issue.create") || 
+                  can(user, "gatepass.create") || 
+                  can(user, "indent.create") || 
+                  can(user, "indent.approve") || 
+                  ["STORE_MANAGER", "STORE_KEEPER", "ADMIN", "OWNER"].includes(role);
+
+  const isPurchase = can(user, "pr.create") || 
+                     can(user, "pr.approve") || 
+                     can(user, "po.create") || 
+                     can(user, "po.approve") || 
+                     can(user, "vendor.manage") || 
+                     ["PURCHASE_MANAGER", "PURCHASE_OFFICER", "ADMIN", "OWNER"].includes(role);
+
+  const isQC = can(user, "inspection.record") || ["QC_INSPECTOR", "STORE_MANAGER", "ADMIN", "OWNER"].includes(role);
+
+  const isAccounts = can(user, "invoice.match") || 
+                     can(user, "payment.record") || 
+                     can(user, "ledger.view") || 
+                     ["ACCOUNTS", "ADMIN", "OWNER"].includes(role);
 
   return (
-    <aside className="w-64 bg-onyx text-cream-light border-r border-onyx-light flex flex-col h-screen sticky top-0 font-body">
-      {/* Brand Header */}
-      <div className="p-5 border-b border-onyx-light bg-onyx-dark flex items-center space-x-3">
-        {logoUrl ? (
-          <img src={logoUrl} alt="Logo" className="w-9 h-9 object-contain bg-cream-light rounded-lg p-1 shrink-0" />
-        ) : (
-          <div className="w-9 h-9 bg-saffron text-onyx font-heading font-bold text-lg rounded-lg flex items-center justify-center shrink-0">
-            {companyName[0].toUpperCase()}
+    <>
+      {/* Mobile backdrop overlay */}
+      {isOpen && (
+        <div 
+          onClick={onClose}
+          className="fixed inset-0 bg-black/40 backdrop-blur-xs z-40 md:hidden animate-in fade-in duration-200 cursor-pointer"
+        />
+      )}
+
+      <aside className={`w-64 bg-onyx text-cream-light border-r border-onyx-light flex flex-col h-screen font-body
+        fixed inset-y-0 left-0 z-50 transform transition-transform duration-300 ease-in-out md:static md:translate-x-0
+        ${isOpen ? "translate-x-0" : "-translate-x-full"}
+      `}>
+        {/* Brand Header */}
+        <div className="p-5 border-b border-onyx-light bg-onyx-dark flex items-center justify-between space-x-3">
+          <div className="flex items-center space-x-3 min-w-0">
+            {logoUrl ? (
+              <img src={logoUrl} alt="Logo" className="w-9 h-9 object-contain bg-cream-light rounded-lg p-1 shrink-0" />
+            ) : (
+              <div className="w-9 h-9 bg-saffron text-onyx font-heading font-bold text-lg rounded-lg flex items-center justify-center shrink-0">
+                {companyName[0].toUpperCase()}
+              </div>
+            )}
+            <div className="min-w-0">
+              <h1 className="font-heading text-sm font-bold text-saffron tracking-tight truncate">
+                {companyName}
+              </h1>
+              <p className="font-body text-[9px] tracking-wider text-cream-dark uppercase font-semibold leading-none mt-1">
+                Stores & Purchase
+              </p>
+            </div>
           </div>
-        )}
-        <div className="min-w-0">
-          <h1 className="font-heading text-sm font-bold text-saffron tracking-tight truncate">
-            {companyName}
-          </h1>
-          <p className="font-body text-[9px] tracking-wider text-cream-dark uppercase font-semibold leading-none mt-1">
-            Stores & Purchase
-          </p>
+          <button
+            type="button"
+            onClick={onClose}
+            className="md:hidden text-cream-light/60 hover:text-cream-light hover:bg-onyx-light p-1 rounded transition duration-150 cursor-pointer shrink-0"
+            title="Close navigation menu"
+          >
+            <X size={18} />
+          </button>
         </div>
-      </div>
 
       {/* Nav Menu */}
       <div className="flex-1 overflow-y-auto px-4 py-6 space-y-7">
@@ -174,7 +222,7 @@ export default function Sidebar({ user }: SidebarProps) {
                 <span>Reorder Basket</span>
               </Link>
 
-              {isStore && (
+              {can(user, "grn.post") && (
                 <Link
                   href="/stores/grn"
                   className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
@@ -188,7 +236,7 @@ export default function Sidebar({ user }: SidebarProps) {
                 </Link>
               )}
 
-              {isQC && (
+              {can(user, "inspection.record") && (
                 <Link
                   href="/stores/inspection"
                   className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
@@ -201,7 +249,8 @@ export default function Sidebar({ user }: SidebarProps) {
                   <span>QC Inspection</span>
                 </Link>
               )}
-              {isStore && (
+
+              {(can(user, "grn.post") || can(user, "inspection.record")) && (
                 <Link
                   href="/stores/rejected-material"
                   className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
@@ -215,7 +264,7 @@ export default function Sidebar({ user }: SidebarProps) {
                 </Link>
               )}
 
-              {isStore && (
+              {(can(user, "issue.create") || can(user, "gatepass.create")) && (
                 <Link
                   href="/stores/outwards"
                   className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
@@ -299,7 +348,7 @@ export default function Sidebar({ user }: SidebarProps) {
                 <span>Purchase Orders</span>
               </Link>
 
-              {["ADMIN", "OWNER", "PURCHASE_MANAGER", "APPROVER"].includes(role) && (
+              {(can(user, "po.approve") || can(user, "company.settings.edit") || ["ADMIN", "OWNER", "PURCHASE_MANAGER", "APPROVER"].includes(role)) && (
                 <Link
                   href="/purchase/po/settings"
                   className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
@@ -313,44 +362,46 @@ export default function Sidebar({ user }: SidebarProps) {
                 </Link>
               )}
 
-              {isAccounts && (
-                <>
-                  <Link
-                    href="/purchase/invoices"
-                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
-                      isActive("/purchase/invoices")
-                        ? "bg-saffron text-onyx font-semibold shadow-md"
-                        : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
-                    }`}
-                  >
-                    <Receipt size={18} />
-                    <span>Invoices (3-Way Match)</span>
-                  </Link>
+              {can(user, "invoice.match") && (
+                <Link
+                  href="/purchase/invoices"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                    isActive("/purchase/invoices")
+                      ? "bg-saffron text-onyx font-semibold shadow-md"
+                      : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                  }`}
+                >
+                  <Receipt size={18} />
+                  <span>Invoices (3-Way Match)</span>
+                </Link>
+              )}
 
-                  <Link
-                    href="/purchase/debit-notes"
-                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
-                      isActive("/purchase/debit-notes")
-                        ? "bg-saffron text-onyx font-semibold shadow-md"
-                        : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
-                    }`}
-                  >
-                    <FileText size={18} />
-                    <span>Debit/Credit Notes</span>
-                  </Link>
+              {(can(user, "invoice.match") || can(user, "payment.record")) && (
+                <Link
+                  href="/purchase/debit-notes"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                    isActive("/purchase/debit-notes")
+                      ? "bg-saffron text-onyx font-semibold shadow-md"
+                      : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                  }`}
+                >
+                  <FileText size={18} />
+                  <span>Debit/Credit Notes</span>
+                </Link>
+              )}
 
-                  <Link
-                    href="/purchase/payments"
-                    className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
-                      isActive("/purchase/payments")
-                        ? "bg-saffron text-onyx font-semibold shadow-md"
-                        : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
-                    }`}
-                  >
-                    <CreditCard size={18} />
-                    <span>Supplier Payments</span>
-                  </Link>
-                </>
+              {can(user, "payment.record") && (
+                <Link
+                  href="/purchase/payments"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                    isActive("/purchase/payments")
+                      ? "bg-saffron text-onyx font-semibold shadow-md"
+                      : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                  }`}
+                >
+                  <CreditCard size={18} />
+                  <span>Supplier Payments</span>
+                </Link>
               )}
 
               <Link
@@ -369,7 +420,7 @@ export default function Sidebar({ user }: SidebarProps) {
         )}
 
         {/* Integration Category */}
-        {isAccounts && (
+        {can(user, "erp.config") && (
           <div>
             <h2 className="text-[10px] uppercase font-semibold text-cream-dark/40 tracking-wider mb-3 px-2">
               System Admin
@@ -461,5 +512,6 @@ export default function Sidebar({ user }: SidebarProps) {
         </button>
       </div>
     </aside>
+  </>
   );
 }

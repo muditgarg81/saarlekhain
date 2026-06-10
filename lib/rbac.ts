@@ -143,7 +143,7 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
 
 export interface SessionUser {
   id: string;
-  email: string;
+  email?: string | null;
   role: Role;
   companyId: string;
   storeScope?: string[]; // empty = all stores

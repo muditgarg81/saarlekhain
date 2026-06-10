@@ -15,19 +15,14 @@ import {
   ArrowUpRight
 } from "lucide-react";
 import Link from "next/link";
+import { getFreshUser } from "@/app/actions/auth";
+import { can } from "@/lib/rbac";
 
 export default async function DashboardPage() {
-  const session = await auth();
-  if (!session || !session.user) {
+  const user = await getFreshUser();
+  if (!user) {
     redirect("/auth/signin");
   }
-
-  const user = {
-    id: (session.user as any).id,
-    role: (session.user as any).role || "VIEWER",
-    companyId: (session.user as any).companyId || "demo-company-id",
-    storeId: (session.user as any).storeId,
-  };
 
   const role = user.role;
 
@@ -45,7 +40,7 @@ export default async function DashboardPage() {
   // Calculate stock inventory valuation (for store managers / admins / owners)
   let totalValuation = 0;
   let lowStockAlerts = 0;
-  const isStore = ["STORE_MANAGER", "STORE_KEEPER", "ADMIN", "OWNER"].includes(role);
+  const isStore = can(user, "item.manage") || can(user, "grn.post") || ["STORE_MANAGER", "STORE_KEEPER", "ADMIN", "OWNER"].includes(role);
   
   if (isStore) {
     const items = await db.item.findMany({
@@ -67,7 +62,7 @@ export default async function DashboardPage() {
 
   // Calculate total outstanding payables (for accounts / admins / owners)
   let totalPayable = 0;
-  const isAccounts = ["ACCOUNTS", "ADMIN", "OWNER"].includes(role);
+  const isAccounts = can(user, "invoice.match") || can(user, "payment.record") || ["ACCOUNTS", "ADMIN", "OWNER"].includes(role);
   if (isAccounts) {
     const invoices = await db.supplierInvoice.aggregate({
       where: { companyId: user.companyId, matchStatus: { in: ["MATCHED", "PENDING"] } },
@@ -111,7 +106,7 @@ export default async function DashboardPage() {
       {/* Welcome Heading */}
       <div>
         <h1 className="font-heading text-3xl font-bold text-onyx tracking-tight">
-          Welcome back, {session.user.name || "User"}
+          Welcome back, {user.name || "User"}
         </h1>
         <p className="text-xs text-onyx/50 font-medium mt-1">
           Here is your active factory dashboard for {user.role.replace("_", " ")} role.
