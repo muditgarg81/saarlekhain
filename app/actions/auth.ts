@@ -263,9 +263,45 @@ export async function resetPasswordDirectly(data: { email: string; newPassword: 
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
-    await db.user.update({
-      where: { id: user.id },
-      data: { passwordHash: hashedPassword },
+
+    await db.$transaction(async (tx) => {
+      // 1. Update user password
+      await tx.user.update({
+        where: { id: user.id },
+        data: { passwordHash: hashedPassword },
+      });
+
+      // 2. Check if user already has an active primary membership
+      const hasPrimary = await tx.companyMembership.findFirst({
+        where: {
+          userId: user.id,
+          status: "ACTIVE",
+          isPrimary: true,
+        },
+      });
+
+      // 3. Find all INVITED memberships
+      const invited = await tx.companyMembership.findMany({
+        where: {
+          userId: user.id,
+          status: "INVITED",
+        },
+      });
+
+      // 4. Update status of invited memberships to ACTIVE and set isPrimary
+      if (invited.length > 0) {
+        for (let i = 0; i < invited.length; i++) {
+          const makePrimary = i === 0 && !hasPrimary;
+          await tx.companyMembership.update({
+            where: { id: invited[i].id },
+            data: {
+              status: "ACTIVE",
+              acceptedAt: new Date(),
+              ...(makePrimary ? { isPrimary: true } : {}),
+            },
+          });
+        }
+      }
     });
 
     return { success: true };

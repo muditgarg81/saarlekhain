@@ -136,8 +136,10 @@ export async function inviteMember(
   const companyName = company?.name || "Saarlekha Company";
 
   // Send invitation email
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://saarlekhain.com";
+  const invitationLink = `${appUrl}/auth/forgot-password?email=${encodeURIComponent(email)}`;
+
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || "https://saarlekhain.com";
     await sendInvitationEmail({
       email,
       companyName,
@@ -148,7 +150,10 @@ export async function inviteMember(
     console.error("Failed to trigger invitation email dispatch:", mailError);
   }
 
-  return membership;
+  return {
+    ...membership,
+    link: invitationLink
+  };
 }
 
 /**

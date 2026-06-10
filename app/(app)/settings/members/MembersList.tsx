@@ -22,7 +22,9 @@ import {
   CheckCircle,
   ShieldAlert,
   Sliders,
-  Info
+  Info,
+  Copy,
+  Check
 } from "lucide-react";
 import { Role, MembershipStatus } from "@prisma/client";
 
@@ -183,7 +185,16 @@ export default function MembersList({
   const [isInviteOpen, setIsInviteOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [msg, setMsg] = useState<{ type: "success" | "error"; text: string; link?: string } | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopyLink = (link: string) => {
+    if (typeof window !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
 
   // Initialize role custom configurations mapping
   const initialMap = ROLES.reduce((acc, r) => {
@@ -229,19 +240,39 @@ export default function MembersList({
     setMsg(null);
     try {
       const limit = inviteForm.approvalLimit ? Number(inviteForm.approvalLimit) : undefined;
-      await inviteMember(
+      const res = await inviteMember(
         inviteForm.email,
         inviteForm.role,
         inviteForm.storeScope,
         inviteForm.deptScope,
         limit
       );
-      setMsg({ type: "success", text: `Invitation sent successfully to ${inviteForm.email}` });
+      
+      const newMember: MemberRecord = {
+        id: res.id,
+        userId: res.userId,
+        role: res.role,
+        status: res.status,
+        storeScope: res.storeScope,
+        deptScope: res.deptScope,
+        approvalLimit: res.approvalLimit,
+        invitedAt: res.invitedAt,
+        acceptedAt: res.acceptedAt,
+        user: {
+          id: res.userId,
+          name: inviteForm.email.split("@")[0],
+          email: inviteForm.email,
+        }
+      };
+
+      setMembers(prev => [newMember, ...prev]);
+      setMsg({ 
+        type: "success", 
+        text: `Invitation created successfully for ${inviteForm.email}!`,
+        link: res.link
+      });
       setIsInviteOpen(false);
       setInviteForm({ email: "", role: "VIEWER", storeScope: [], deptScope: [], approvalLimit: "" });
-      
-      // Reload member list
-      setTimeout(() => window.location.reload(), 1000);
     } catch (err: any) {
       setMsg({ type: "error", text: err.message || "Failed to send invitation." });
     } finally {
@@ -479,14 +510,52 @@ export default function MembersList({
       </div>
 
       {msg && (
-        <div className={`p-4 rounded-xl border flex items-start space-x-2.5 font-semibold transition-all duration-200 animate-in fade-in ${
+        <div className={`p-4 rounded-xl border flex flex-col md:flex-row md:items-start justify-between gap-4 font-semibold transition-all duration-200 animate-in fade-in ${
           msg.type === "success" 
-            ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
-            : "bg-red-50 border-red-200 text-red-800"
+            ? "bg-emerald-50/90 border-emerald-200 text-emerald-900" 
+            : "bg-red-50/90 border-red-200 text-red-900"
         }`}>
-          {msg.type === "success" ? <CheckCircle size={16} className="shrink-0 mt-0.5" /> : <AlertCircle size={16} className="shrink-0 mt-0.5" />}
-          <span className="flex-1">{msg.text}</span>
-          <button onClick={() => setMsg(null)} className="text-onyx/40 hover:text-onyx cursor-pointer">
+          <div className="flex items-start space-x-2.5 flex-1 min-w-0">
+            {msg.type === "success" ? (
+              <CheckCircle size={16} className="shrink-0 mt-0.5 text-emerald-600" />
+            ) : (
+              <AlertCircle size={16} className="shrink-0 mt-0.5 text-red-600" />
+            )}
+            <div className="flex-1 min-w-0 space-y-1">
+              <span className="block text-xs font-bold leading-normal">{msg.text}</span>
+              {msg.type === "success" && msg.link && (
+                <div className="mt-2 text-[10px] font-normal text-emerald-800 leading-normal">
+                  <p className="font-semibold text-emerald-950 mb-1.5 flex items-center gap-1">
+                    <span>Direct Activation Link:</span>
+                    <span className="bg-emerald-100/60 text-emerald-900 px-1.5 py-0.5 rounded text-[8px] font-mono border border-emerald-200/50 uppercase tracking-wide">Fallback / Instant</span>
+                  </p>
+                  <div className="flex items-center gap-2 max-w-xl bg-white border border-emerald-200 p-1.5 rounded-lg">
+                    <input
+                      type="text"
+                      readOnly
+                      value={msg.link}
+                      className="flex-1 min-w-0 bg-transparent px-1 font-mono text-[9px] select-all focus:outline-none text-emerald-900 border-none"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleCopyLink(msg.link!)}
+                      className="flex items-center gap-1 px-2.5 py-1 bg-saffron hover:bg-saffron-dark text-onyx rounded font-bold text-[9px] transition duration-150 cursor-pointer shadow-sm active:scale-95 shrink-0"
+                    >
+                      {copied ? <Check size={11} /> : <Copy size={11} />}
+                      <span>{copied ? "Copied!" : "Copy Link"}</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <button 
+            onClick={() => {
+              setMsg(null);
+              setCopied(false);
+            }} 
+            className="text-onyx/40 hover:text-onyx cursor-pointer self-start shrink-0 p-0.5 hover:bg-onyx/5 rounded"
+          >
             <X size={14} />
           </button>
         </div>
