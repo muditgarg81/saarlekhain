@@ -15,132 +15,137 @@ export async function registerOwner(data: {
   password: string;
   companyName: string;
 }) {
-  const { name, email, password, companyName } = data;
+  try {
+    const { name, email, password, companyName } = data;
 
-  if (!email || !password || !companyName || !name) {
-    throw new Error("Missing required registration fields");
-  }
-
-  // Check if user already exists
-  const existingUser = await db.user.findFirst({
-    where: { email },
-  });
-
-  if (existingUser && existingUser.passwordHash) {
-    throw new Error("A user with this email address already exists.");
-  }
-
-  const hashedPassword = await bcrypt.hash(password, 10);
-
-  const result = await db.$transaction(async (tx) => {
-    // 1. Create the Company record
-    const company = await tx.company.create({
-      data: {
-        name: companyName,
-        displayName: companyName,
-        legalName: companyName,
-      },
-    });
-
-    // 2. Create or update the User record
-    let user;
-    if (existingUser) {
-      user = await tx.user.update({
-        where: { id: existingUser.id },
-        data: {
-          name,
-          passwordHash: hashedPassword,
-          companyId: company.id,
-          role: Role.OWNER,
-        },
-      });
-    } else {
-      user = await tx.user.create({
-        data: {
-          email,
-          name,
-          passwordHash: hashedPassword,
-          companyId: company.id,
-          role: Role.OWNER,
-        },
-      });
+    if (!email || !password || !companyName || !name) {
+      return { success: false, error: "Missing required registration fields" };
     }
 
-    // 3. Link user to company via CompanyMembership as OWNER
-    await tx.companyMembership.create({
-      data: {
-        companyId: company.id,
-        userId: user.id,
-        role: Role.OWNER,
-        status: "ACTIVE",
-        isPrimary: true,
-      },
+    // Check if user already exists
+    const existingUser = await db.user.findFirst({
+      where: { email },
     });
 
-    // Mark other memberships as non-primary
-    await tx.companyMembership.updateMany({
-      where: {
-        userId: user.id,
-        companyId: { not: company.id },
-      },
-      data: {
-        isPrimary: false,
-      },
-    });
-
-    // 4. Seed dynamic default Store (MAIN)
-    const store = await tx.store.create({
-      data: {
-        companyId: company.id,
-        code: "MAIN",
-        name: "Main Inventory Warehouse",
-        status: "ACTIVE",
-      },
-    });
-
-    // 5. Seed default Department (STORES)
-    await tx.department.create({
-      data: {
-        companyId: company.id,
-        code: "STORES",
-        name: "Stores & Purchase",
-      },
-    });
-
-    // Seed default Categories (RM, CONS)
-    await tx.itemCategory.create({
-      data: { companyId: company.id, code: "RM", name: "Raw Materials" },
-    });
-    await tx.itemCategory.create({
-      data: { companyId: company.id, code: "CONS", name: "Consumables" },
-    });
-
-    // Set the defaultStoreId on the new company
-    await tx.company.update({
-      where: { id: company.id },
-      data: {
-        defaultStoreId: store.id,
-      },
-    });
-
-    // 6. Seed Numbering Schemes for all document types
-    const docTypes = ["PO", "GRN", "PR", "RFQ", "IND", "ISS", "GP", "INSP", "DN", "CN", "PAY"];
-    for (const docType of docTypes) {
-      await tx.numberingScheme.create({
-        data: {
-          companyId: company.id,
-          docType,
-          prefix: docType,
-          padding: 5,
-          resetOnFY: true,
-        },
-      });
+    if (existingUser && existingUser.passwordHash) {
+      return { success: false, error: "A user with this email address already exists." };
     }
 
-    return { user, company };
-  });
+    const hashedPassword = await bcrypt.hash(password, 10);
 
-  return { success: true, companyId: result.company.id };
+    const result = await db.$transaction(async (tx) => {
+      // 1. Create the Company record
+      const company = await tx.company.create({
+        data: {
+          name: companyName,
+          displayName: companyName,
+          legalName: companyName,
+        },
+      });
+
+      // 2. Create or update the User record
+      let user;
+      if (existingUser) {
+        user = await tx.user.update({
+          where: { id: existingUser.id },
+          data: {
+            name,
+            passwordHash: hashedPassword,
+            companyId: company.id,
+            role: Role.OWNER,
+          },
+        });
+      } else {
+        user = await tx.user.create({
+          data: {
+            email,
+            name,
+            passwordHash: hashedPassword,
+            companyId: company.id,
+            role: Role.OWNER,
+          },
+        });
+      }
+
+      // 3. Link user to company via CompanyMembership as OWNER
+      await tx.companyMembership.create({
+        data: {
+          companyId: company.id,
+          userId: user.id,
+          role: Role.OWNER,
+          status: "ACTIVE",
+          isPrimary: true,
+        },
+      });
+
+      // Mark other memberships as non-primary
+      await tx.companyMembership.updateMany({
+        where: {
+          userId: user.id,
+          companyId: { not: company.id },
+        },
+        data: {
+          isPrimary: false,
+        },
+      });
+
+      // 4. Seed dynamic default Store (MAIN)
+      const store = await tx.store.create({
+        data: {
+          companyId: company.id,
+          code: "MAIN",
+          name: "Main Inventory Warehouse",
+          status: "ACTIVE",
+        },
+      });
+
+      // 5. Seed default Department (STORES)
+      await tx.department.create({
+        data: {
+          companyId: company.id,
+          code: "STORES",
+          name: "Stores & Purchase",
+        },
+      });
+
+      // Seed default Categories (RM, CONS)
+      await tx.itemCategory.create({
+        data: { companyId: company.id, code: "RM", name: "Raw Materials" },
+      });
+      await tx.itemCategory.create({
+        data: { companyId: company.id, code: "CONS", name: "Consumables" },
+      });
+
+      // Set the defaultStoreId on the new company
+      await tx.company.update({
+        where: { id: company.id },
+        data: {
+          defaultStoreId: store.id,
+        },
+      });
+
+      // 6. Seed Numbering Schemes for all document types
+      const docTypes = ["PO", "GRN", "PR", "RFQ", "IND", "ISS", "GP", "INSP", "DN", "CN", "PAY"];
+      for (const docType of docTypes) {
+        await tx.numberingScheme.create({
+          data: {
+            companyId: company.id,
+            docType,
+            prefix: docType,
+            padding: 5,
+            resetOnFY: true,
+          },
+        });
+      }
+
+      return { user, company };
+    });
+
+    return { success: true, companyId: result.company.id };
+  } catch (error: any) {
+    console.error("Failed to register owner:", error);
+    return { success: false, error: error.message || "An unexpected error occurred." };
+  }
 }
 
 /**

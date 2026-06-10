@@ -31,10 +31,13 @@ export default function SignUpPage() {
         setTimeout(() => {
           router.push("/auth/signin");
         }, 2000);
+      } else {
+        setError(res.error || "An unexpected error occurred during signup.");
+        setLoading(false);
       }
     } catch (err: any) {
       console.error(err);
-      setError(err.message || "An unexpected error occurred during signup.");
+      setError("An unexpected error occurred during signup.");
       setLoading(false);
     }
   };
