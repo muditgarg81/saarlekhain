@@ -973,3 +973,105 @@ export async function updateIssue(
     return { success: false, error: err.message || "Failed to update issue" };
   }
 }
+
+export async function createDirectIssue(data: {
+  storeId: string;
+  deptId?: string | null;
+  issuedTo?: string | null;
+  lines: Array<{ itemId: string; qty: number }>;
+}) {
+  const session = await auth();
+  if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  const companyId = (session.user as any).companyId;
+  const actorId = (session.user as any).id;
+
+  try {
+    const { storeId, deptId, issuedTo, lines } = data;
+    if (!storeId) return { success: false, error: "Store is required" };
+    if (!lines || lines.length === 0) return { success: false, error: "Please add at least one item line" };
+
+    const issueNumber = await getNextSequence(companyId, "ISS");
+
+    const result = await db.$transaction(async (tx) => {
+      // 1. Create the Issue header
+      const newIssue = await tx.issue.create({
+        data: {
+          companyId,
+          number: issueNumber,
+          storeId,
+          deptId: deptId || null,
+          issuedTo: issuedTo || null,
+          postedById: actorId,
+          postedAt: new Date(),
+        }
+      });
+
+      // 2. Iterate through lines, check stock, create issueLine, post to stock ledger
+      for (const line of lines) {
+        if (line.qty <= 0) continue;
+
+        // Check stock
+        const stockSum = await tx.stockLedger.aggregate({
+          where: { companyId, itemId: line.itemId, storeId },
+          _sum: { qty: true }
+        });
+        const currentStock = stockSum._sum.qty || 0;
+
+        if (currentStock < line.qty) {
+          const item = await tx.item.findUnique({
+            where: { id: line.itemId },
+            select: { name: true }
+          });
+          throw new Error(`Insufficient stock for item "${item?.name || 'Unknown'}". Available: ${currentStock}, Requested: ${line.qty}`);
+        }
+
+        // Create issue line
+        await tx.issueLine.create({
+          data: {
+            issueId: newIssue.id,
+            itemId: line.itemId,
+            qty: line.qty,
+          }
+        });
+
+        // Post stock ledger entry (negative)
+        await postLedgerEntry(tx, {
+          companyId,
+          itemId: line.itemId,
+          storeId,
+          txnType: LedgerTxnType.ISSUE,
+          qty: -line.qty,
+          refType: "ISSUE",
+          refId: newIssue.id,
+          createdById: actorId,
+        });
+      }
+
+      // Log audit entry
+      await tx.auditLog.create({
+        data: {
+          companyId,
+          actorId,
+          action: "POST_ISSUE",
+          entity: "Issue",
+          entityId: newIssue.id,
+          after: JSON.parse(JSON.stringify(newIssue))
+        }
+      });
+
+      return newIssue;
+    }, {
+      maxWait: 15000,
+      timeout: 60000
+    });
+
+    revalidatePath("/stores/outwards");
+    revalidatePath("/stores/indents");
+    revalidatePath("/stores/reports");
+    return { success: true, issue: result };
+  } catch (err: any) {
+    console.error("Error creating direct issue:", err);
+    return { success: false, error: err.message || "Failed to create direct issue" };
+  }
+}

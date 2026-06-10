@@ -9,6 +9,7 @@ import {
   bulkDeleteGatePasses
 } from "@/app/actions/gatepasses";
 import {
+  createDirectIssue,
   updateIssue,
   deleteIssue,
   bulkDeleteIssues
@@ -118,10 +119,20 @@ export default function OutwardsList({
 
   // Modals & Drawer States
   const [isCreateGpOpen, setIsCreateGpOpen] = useState(false);
+  const [isCreateIssueOpen, setIsCreateIssueOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isReturnOpen, setIsReturnOpen] = useState(false);
   const [selectedGp, setSelectedGp] = useState<GatePassRecord | null>(null);
   const [selectedIssue, setSelectedIssue] = useState<IssueRecord | null>(null);
+
+  // New Direct Issue Form State
+  const [newDirectIssue, setNewDirectIssue] = useState({
+    storeId: "",
+    deptId: "",
+    issuedTo: "",
+    lines: [] as { itemId: string; qty: number }[]
+  });
+  const [newIssueLine, setNewIssueLine] = useState({ itemId: "", qty: 1 });
 
   // Edit States
   const [isEditIssueOpen, setIsEditIssueOpen] = useState(false);
@@ -609,6 +620,54 @@ export default function OutwardsList({
     }
   };
 
+  const addIssueLine = () => {
+    if (!newIssueLine.itemId) return;
+    if (newDirectIssue.lines.some(l => l.itemId === newIssueLine.itemId)) {
+      alert("Item already added to this issue");
+      return;
+    }
+    setNewDirectIssue(prev => ({
+      ...prev,
+      lines: [...prev.lines, { itemId: newIssueLine.itemId, qty: newIssueLine.qty }]
+    }));
+    setNewIssueLine({ itemId: "", qty: 1 });
+  };
+
+  const removeIssueLine = (index: number) => {
+    setNewDirectIssue(prev => ({
+      ...prev,
+      lines: prev.lines.filter((_, idx) => idx !== index)
+    }));
+  };
+
+  const handleCreateDirectIssue = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newDirectIssue.storeId) {
+      alert("Please select a source store");
+      return;
+    }
+    if (newDirectIssue.lines.length === 0) {
+      alert("Please add at least one item line");
+      return;
+    }
+
+    setActionLoading(true);
+    const res = await createDirectIssue({
+      storeId: newDirectIssue.storeId,
+      deptId: newDirectIssue.deptId || null,
+      issuedTo: newDirectIssue.issuedTo || null,
+      lines: newDirectIssue.lines
+    });
+    setActionLoading(false);
+
+    if (res.success) {
+      setIsCreateIssueOpen(false);
+      window.location.reload();
+    } else {
+      alert("Failed to create Direct Issue: " + res.error);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -619,13 +678,22 @@ export default function OutwardsList({
         </div>
         <div className="flex items-center space-x-3">
           {activeTab === "issues" && (
-            <a
-              href="/stores/indents"
-              className="flex items-center space-x-2 px-3.5 py-2 bg-saffron hover:bg-saffron-dark rounded-lg text-xs font-bold text-onyx shadow-md transition-all duration-150 cursor-pointer"
-            >
-              <Plus size={15} />
-              <span>Issue Against Indent</span>
-            </a>
+            <>
+              <button
+                onClick={() => setIsCreateIssueOpen(true)}
+                className="flex items-center space-x-2 px-3.5 py-2 bg-white hover:bg-cream-dark/50 border border-onyx/10 rounded-lg text-xs font-semibold text-onyx shadow-sm transition-all duration-150 cursor-pointer"
+              >
+                <Plus size={15} className="text-saffron" />
+                <span>Direct Issue</span>
+              </button>
+              <a
+                href="/stores/indents"
+                className="flex items-center space-x-2 px-3.5 py-2 bg-saffron hover:bg-saffron-dark rounded-lg text-xs font-bold text-onyx shadow-md transition-all duration-150 cursor-pointer"
+              >
+                <Plus size={15} />
+                <span>Issue Against Indent</span>
+              </a>
+            </>
           )}
           {activeTab === "gatepasses" && (
             <button
@@ -715,8 +783,16 @@ export default function OutwardsList({
                   <tr>
                     <td colSpan={10} className="text-center py-8 text-onyx/40 font-medium">
                       No material issues found.{" "}
+                      <button 
+                        onClick={() => setIsCreateIssueOpen(true)} 
+                        type="button"
+                        className="text-saffron-dark hover:underline font-bold cursor-pointer bg-transparent border-none p-0 inline-block align-baseline"
+                      >
+                        Issue items directly
+                      </button>
+                      {" "}or{" "}
                       <a href="/stores/indents" className="text-saffron-dark hover:underline font-bold">
-                        Go to Indents to issue material
+                        issue against an indent
                       </a>.
                     </td>
                   </tr>
@@ -926,6 +1002,184 @@ export default function OutwardsList({
           )}
         </div>
       </div>
+
+      {/* Create Direct Issue Modal */}
+      {isCreateIssueOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-cream max-w-xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
+            <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
+              <h3 className="font-heading text-lg font-bold">Create Direct Material Issue</h3>
+              <button 
+                onClick={() => {
+                  setIsCreateIssueOpen(false);
+                  setNewDirectIssue({ storeId: "", deptId: "", issuedTo: "", lines: [] });
+                  setNewIssueLine({ itemId: "", qty: 1 });
+                }} 
+                className="hover:text-saffron cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <form onSubmit={handleCreateDirectIssue} className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Store selection */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                    Source Store / Warehouse *
+                  </label>
+                  <select
+                    value={newDirectIssue.storeId}
+                    onChange={(e) => setNewDirectIssue(prev => ({ ...prev, storeId: e.target.value }))}
+                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
+                    required
+                  >
+                    <option value="">Select Warehouse</option>
+                    {stores.map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                    Recipient Department (Optional)
+                  </label>
+                  <select
+                    value={newDirectIssue.deptId}
+                    onChange={(e) => setNewDirectIssue(prev => ({ ...prev, deptId: e.target.value }))}
+                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
+                  >
+                    <option value="">Select Department</option>
+                    {departments.map(d => (
+                      <option key={d.id} value={d.id}>{d.name}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Issued To Employee */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                  Issued To (Employee Name / Ref)
+                </label>
+                <input
+                  type="text"
+                  value={newDirectIssue.issuedTo}
+                  onChange={(e) => setNewDirectIssue(prev => ({ ...prev, issuedTo: e.target.value }))}
+                  placeholder="e.g. Ramesh Kumar, Mech Maintenance Team"
+                  className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
+                />
+              </div>
+
+              {/* Add items panel */}
+              <div className="p-4 bg-cream-dark/30 border border-onyx/5 rounded-xl space-y-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/60">Add Line Item</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                  <div className="sm:col-span-8">
+                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
+                    <select
+                      value={newIssueLine.itemId}
+                      onChange={(e) => setNewIssueLine(prev => ({ ...prev, itemId: e.target.value }))}
+                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none"
+                    >
+                      <option value="">Select Item</option>
+                      {items.map(item => (
+                        <option key={item.id} value={item.id}>[{item.code}] {item.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-3">
+                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Qty *</label>
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="any"
+                      value={newIssueLine.qty}
+                      onChange={(e) => setNewIssueLine(prev => ({ ...prev, qty: parseFloat(e.target.value) || 1 }))}
+                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none font-mono"
+                    />
+                  </div>
+                  <div className="sm:col-span-1 flex items-center justify-center">
+                    <button
+                      type="button"
+                      onClick={addIssueLine}
+                      className="w-full py-2 bg-saffron hover:bg-saffron-dark text-onyx font-bold rounded-lg text-xs cursor-pointer"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Items List */}
+              <div className="space-y-2">
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70">
+                  Items List ({newDirectIssue.lines.length})
+                </label>
+                {newDirectIssue.lines.length === 0 ? (
+                  <p className="text-center py-4 bg-white border border-dashed border-onyx/10 text-xs text-onyx/40 font-medium rounded-lg">
+                    No items added yet.
+                  </p>
+                ) : (
+                  <div className="border border-onyx/5 rounded-lg overflow-hidden bg-white">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-cream-dark/50">
+                        <tr>
+                          <th className="p-2 font-bold uppercase">Item</th>
+                          <th className="p-2 font-bold uppercase text-right">Qty</th>
+                          <th className="p-2 font-bold text-center">Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {newDirectIssue.lines.map((line, idx) => {
+                          const item = items.find(i => i.id === line.itemId);
+                          return (
+                            <tr key={idx} className="border-t border-onyx/5">
+                              <td className="p-2">[{item?.code}] {item?.name}</td>
+                              <td className="p-2 text-right font-mono font-bold">{line.qty} {item?.baseUom}</td>
+                              <td className="p-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => removeIssueLine(idx)}
+                                  className="text-red-655 hover:text-red-800 cursor-pointer"
+                                  title="Remove Item"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              <div className="pt-4 border-t border-onyx/10 flex items-center justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsCreateIssueOpen(false);
+                    setNewDirectIssue({ storeId: "", deptId: "", issuedTo: "", lines: [] });
+                    setNewIssueLine({ itemId: "", qty: 1 });
+                  }}
+                  className="px-4 py-2 border border-onyx/10 rounded-lg text-xs font-semibold hover:bg-cream-dark/40 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading || newDirectIssue.lines.length === 0}
+                  className="px-4 py-2 bg-saffron hover:bg-saffron-dark rounded-lg text-xs font-bold text-onyx shadow cursor-pointer disabled:opacity-50"
+                >
+                  {actionLoading ? "Issuing..." : "Issue Material"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Create Gate Pass Modal */}
       {isCreateGpOpen && (
