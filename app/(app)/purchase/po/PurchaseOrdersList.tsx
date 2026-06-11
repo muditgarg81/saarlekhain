@@ -486,10 +486,14 @@ export default function PurchaseOrdersList({
 
     const gstinVal = companyProfile?.gstin ? `GSTIN: ${companyProfile.gstin}` : "";
     const panVal = companyProfile?.pan ? `PAN: ${companyProfile.pan}` : "";
-    const cinVal = companyProfile?.cin ? `CIN: ${companyProfile.cin}` : "";
-    const taxLine = [gstinVal, panVal, cinVal].filter(Boolean).join(" | ");
-    if (taxLine) {
-      doc.text(taxLine, startX, headerY);
+    const gstinPanLine = [gstinVal, panVal].filter(Boolean).join(" | ");
+    if (gstinPanLine) {
+      doc.text(gstinPanLine, startX, headerY);
+      headerY += 4;
+    }
+
+    if (companyProfile?.cin) {
+      doc.text(`CIN: ${companyProfile.cin}`, startX, headerY);
     }
 
     doc.setFont("helvetica", "bold");
