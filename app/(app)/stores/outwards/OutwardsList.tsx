@@ -14,6 +14,7 @@ import {
   deleteIssue,
   bulkDeleteIssues
 } from "@/app/actions/indents";
+import { limitYearTo4Digits } from "@/lib/date";
 import { 
   Search, 
   Plus, 
@@ -1248,7 +1249,7 @@ export default function OutwardsList({
                     <input
                       type="date"
                       value={newGp.dueBack}
-                      onChange={(e) => setNewGp(prev => ({ ...prev, dueBack: e.target.value }))}
+                      onChange={(e) => setNewGp(prev => ({ ...prev, dueBack: limitYearTo4Digits(e.target.value) }))}
                       className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg"
                       required
                     />
@@ -1674,7 +1675,7 @@ export default function OutwardsList({
                     <input
                       type="date"
                       value={editGpForm.dueBack}
-                      onChange={(e) => setEditGpForm(prev => prev ? { ...prev, dueBack: e.target.value } : null)}
+                      onChange={(e) => setEditGpForm(prev => prev ? { ...prev, dueBack: limitYearTo4Digits(e.target.value) } : null)}
                       className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg"
                       required
                     />

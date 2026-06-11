@@ -8,6 +8,7 @@ import {
   deleteGrn,
   bulkDeleteGrns
 } from "@/app/actions/grns";
+import { limitYearTo4Digits } from "@/lib/date";
 import { 
   Search, 
   Plus, 
@@ -920,7 +921,7 @@ export default function GrnList({
                   <input
                     type="date"
                     value={dcDate}
-                    onChange={(e) => setDcDate(e.target.value)}
+                    onChange={(e) => setDcDate(limitYearTo4Digits(e.target.value))}
                     className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg"
                     required
                   />
@@ -1012,7 +1013,7 @@ export default function GrnList({
                                 type="date"
                                 value={line.batchMfgDate || ""}
                                 onChange={(e) => {
-                                  const val = e.target.value;
+                                  const val = limitYearTo4Digits(e.target.value);
                                   setFormLines(prev => prev.map((l, i) => i === idx ? { ...l, batchMfgDate: val || null } : l));
                                 }}
                                 className="w-full text-[11px] p-1 border border-onyx/15 rounded"
@@ -1023,7 +1024,7 @@ export default function GrnList({
                                 type="date"
                                 value={line.batchExpiryDate || ""}
                                 onChange={(e) => {
-                                  const val = e.target.value;
+                                  const val = limitYearTo4Digits(e.target.value);
                                   setFormLines(prev => prev.map((l, i) => i === idx ? { ...l, batchExpiryDate: val || null } : l));
                                 }}
                                 className="w-full text-[11px] p-1 border border-onyx/15 rounded"
@@ -1255,7 +1256,7 @@ export default function GrnList({
                     type="date"
                     value={editGrnForm.dcDate}
                     onChange={(e) => {
-                      const val = e.target.value;
+                      const val = limitYearTo4Digits(e.target.value);
                       setEditGrnForm(prev => prev ? { ...prev, dcDate: val } : null);
                     }}
                     className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
@@ -1362,7 +1363,7 @@ export default function GrnList({
                                 type="date"
                                 value={line.batchMfgDate || ""}
                                 onChange={(e) => {
-                                  const val = e.target.value;
+                                  const val = limitYearTo4Digits(e.target.value);
                                   setEditGrnForm(prev => {
                                     if (!prev) return null;
                                     const updatedLines = [...prev.lines];
@@ -1378,7 +1379,7 @@ export default function GrnList({
                                 type="date"
                                 value={line.batchExpiryDate || ""}
                                 onChange={(e) => {
-                                  const val = e.target.value;
+                                  const val = limitYearTo4Digits(e.target.value);
                                   setEditGrnForm(prev => {
                                     if (!prev) return null;
                                     const updatedLines = [...prev.lines];

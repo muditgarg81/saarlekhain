@@ -9,6 +9,7 @@ import { VendorStatus } from "@prisma/client";
 const vendorSchema = z.object({
   name: z.string().min(2, "Vendor name must be at least 2 characters"),
   code: z.string().optional(),
+  address: z.string().optional().nullable().or(z.literal("")),
   gstin: z.string().regex(/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/, "Invalid GSTIN format").optional().nullable().or(z.literal("")),
   pan: z.string().regex(/^[A-Z]{5}[0-9]{4}[A-Z]{1}$/, "Invalid PAN format").optional().nullable().or(z.literal("")),
   udyamNo: z.string().optional().nullable(),
@@ -78,6 +79,7 @@ export async function createVendor(data: z.infer<typeof vendorSchema>) {
           companyId,
           code,
           name: validated.name,
+          address: validated.address || null,
           gstin: validated.gstin || null,
           pan: validated.pan || null,
           udyamNo: validated.udyamNo || null,
@@ -136,6 +138,7 @@ export async function updateVendor(
         data: {
           name: validated.name,
           code: data.code.trim(),
+          address: validated.address || null,
           gstin: validated.gstin || null,
           pan: validated.pan || null,
           udyamNo: validated.udyamNo || null,

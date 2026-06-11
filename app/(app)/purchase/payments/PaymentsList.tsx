@@ -7,6 +7,7 @@ import {
   deletePayment, 
   bulkDeletePayments 
 } from "@/app/actions/payments";
+import { limitYearTo4Digits } from "@/lib/date";
 import { 
   Search, 
   Plus, 
@@ -702,7 +703,7 @@ export default function PaymentsList({
                     type="date"
                     required
                     value={newPayment.paidOn}
-                    onChange={(e) => setNewPayment(prev => ({ ...prev, paidOn: e.target.value }))}
+                    onChange={(e) => setNewPayment(prev => ({ ...prev, paidOn: limitYearTo4Digits(e.target.value) }))}
                     className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg"
                   />
                 </div>
@@ -883,7 +884,7 @@ export default function PaymentsList({
                     type="date"
                     required
                     value={editPayment.paidOn}
-                    onChange={(e) => setEditPayment(prev => ({ ...prev, paidOn: e.target.value }))}
+                    onChange={(e) => setEditPayment(prev => ({ ...prev, paidOn: limitYearTo4Digits(e.target.value) }))}
                     className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg"
                   />
                 </div>

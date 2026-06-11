@@ -10,6 +10,7 @@ import {
   awardQuotation 
 } from "@/app/actions/requisitions";
 import { awardRfq, raisePoFromAward } from "@/app/actions/purchaseFlow";
+import { limitYearTo4Digits } from "@/lib/date";
 import { 
   Search, 
   Plus, 
@@ -686,7 +687,7 @@ export default function RequisitionsList({
                     <input
                       type="date"
                       value={newPrLine.requiredBy}
-                      onChange={(e) => setNewPrLine(prev => ({ ...prev, requiredBy: e.target.value }))}
+                      onChange={(e) => setNewPrLine(prev => ({ ...prev, requiredBy: limitYearTo4Digits(e.target.value) }))}
                       className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none"
                     />
                   </div>

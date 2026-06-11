@@ -39,8 +39,8 @@ export function resolvePoTerms(
 
   // Define resolution map
   const resolverMap: Record<string, () => any> = {
-    COMPANY_NAME: () => company?.name,
-    COMPANY_ADDRESS: () => company?.address,
+    COMPANY_NAME: () => company?.legalName || company?.displayName || company?.name,
+    COMPANY_ADDRESS: () => company?.registeredAddress || company?.address,
     COMPANY_GSTIN: () => company?.gstin,
     COMPANY_CITY: () => company?.city,
     GOVERNING_PLACE: () => company?.governingPlace,

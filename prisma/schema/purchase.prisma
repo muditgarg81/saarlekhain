@@ -90,6 +90,7 @@ model Vendor {
   companyId   String
   code        String
   name        String
+  address     String?
   gstin       String?
   pan         String?
   udyamNo     String?

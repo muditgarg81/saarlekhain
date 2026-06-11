@@ -10,6 +10,7 @@ import {
   convertShortageToPr,
   convertMultipleIndentsToPR
 } from "@/app/actions/indents";
+import { limitYearTo4Digits } from "@/lib/date";
 import { 
   Search, 
   Plus, 
@@ -580,7 +581,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
                     <input
                       type="date"
                       value={newLineItem.requiredBy}
-                      onChange={(e) => setNewLineItem(prev => ({ ...prev, requiredBy: e.target.value }))}
+                      onChange={(e) => setNewLineItem(prev => ({ ...prev, requiredBy: limitYearTo4Digits(e.target.value) }))}
                       className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none"
                     />
                   </div>
@@ -642,7 +643,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
                                 <input
                                   type="date"
                                   value={line.requiredBy}
-                                  onChange={(e) => updateLineItem(idx, "requiredBy", e.target.value)}
+                                  onChange={(e) => updateLineItem(idx, "requiredBy", limitYearTo4Digits(e.target.value))}
                                   className="w-full p-1 border border-onyx/10 rounded text-xs focus:outline-none focus:border-saffron"
                                 />
                               </td>

@@ -37,6 +37,7 @@ export default async function VendorsPage() {
       id: v.id,
       code: v.code,
       name: v.name,
+      address: v.address,
       gstin: v.gstin,
       pan: v.pan,
       udyamNo: v.udyamNo,

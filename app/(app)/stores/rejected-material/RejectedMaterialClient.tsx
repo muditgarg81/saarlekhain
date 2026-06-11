@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { updateRejectedMaterialStatus } from "@/app/actions/rejectedMaterials";
+import { limitYearTo4Digits } from "@/lib/date";
 import { 
   Search, 
   X, 
@@ -545,7 +546,7 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
                   type="date"
                   required
                   value={actionDate}
-                  onChange={(e) => setActionDate(e.target.value)}
+                  onChange={(e) => setActionDate(limitYearTo4Digits(e.target.value))}
                   className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-bold"
                   disabled={loading}
                 />

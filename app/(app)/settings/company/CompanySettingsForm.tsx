@@ -10,6 +10,8 @@ interface CompanyData {
   legalName?: string | null;
   displayName?: string | null;
   address?: string | null;
+  city?: string | null;
+  governingPlace?: string | null;
   gstin?: string | null;
   pan?: string | null;
   cin?: string | null;
@@ -37,6 +39,8 @@ export default function CompanySettingsForm({ initialCompany, stores }: CompanyS
     legalName: initialCompany.legalName || "",
     displayName: initialCompany.displayName || "",
     address: initialCompany.address || "",
+    city: initialCompany.city || "",
+    governingPlace: initialCompany.governingPlace || "",
     gstin: initialCompany.gstin || "",
     pan: initialCompany.pan || "",
     cin: initialCompany.cin || "",
@@ -202,6 +206,31 @@ export default function CompanySettingsForm({ initialCompany, stores }: CompanyS
                 placeholder="e.g. Plot No. 45, Phase 1, Industrial Area, Noida, UP"
                 className="w-full text-xs p-2 bg-cream border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron min-h-[70px]"
               />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">City</label>
+                <input
+                  type="text"
+                  value={formData.city}
+                  onChange={(e) => setFormData(prev => ({ ...prev, city: e.target.value }))}
+                  placeholder="e.g. Noida"
+                  className="w-full text-xs p-2 bg-cream border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Governing Law Place (State/Country) *</label>
+                <input
+                  type="text"
+                  value={formData.governingPlace}
+                  onChange={(e) => setFormData(prev => ({ ...prev, governingPlace: e.target.value }))}
+                  placeholder="e.g. Delhi, India"
+                  className="w-full text-xs p-2 bg-cream border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-semibold text-onyx"
+                  required
+                />
+              </div>
             </div>
 
             <div className="grid grid-cols-3 gap-4">

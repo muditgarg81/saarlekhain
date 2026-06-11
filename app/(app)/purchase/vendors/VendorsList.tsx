@@ -36,6 +36,7 @@ interface Vendor {
   id: string;
   code: string;
   name: string;
+  address: string | null;
   gstin: string | null;
   pan: string | null;
   udyamNo: string | null;
@@ -69,6 +70,7 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
   const [formFields, setFormFields] = useState({
     name: "",
     code: "",
+    address: "",
     gstin: "",
     pan: "",
     udyamNo: "",
@@ -102,6 +104,7 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
     setFormFields({
       name: "",
       code: "",
+      address: "",
       gstin: "",
       pan: "",
       udyamNo: "",
@@ -124,6 +127,7 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
     setFormFields({
       name: v.name,
       code: v.code,
+      address: v.address || "",
       gstin: v.gstin || "",
       pan: v.pan || "",
       udyamNo: v.udyamNo || "",
@@ -147,6 +151,7 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
     const payload = {
       name: formFields.name,
       code: formFields.code || undefined,
+      address: formFields.address || null,
       gstin: formFields.gstin || null,
       pan: formFields.pan || null,
       udyamNo: formFields.udyamNo || null,
@@ -264,6 +269,7 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
               <tr>
                 <th>Vendor Code</th>
                 <th>Vendor Name</th>
+                <th>Address</th>
                 <th>Category</th>
                 <th>GSTIN</th>
                 <th>Credit (Days)</th>
@@ -275,7 +281,7 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
             <tbody>
               {filteredVendors.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-8 text-onyx/40 font-medium">
+                  <td colSpan={9} className="text-center py-8 text-onyx/40 font-medium">
                     No vendors registered.
                   </td>
                 </tr>
@@ -285,6 +291,9 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
                     <tr key={v.id}>
                       <td className="font-mono font-bold text-xs text-onyx/85">{v.code}</td>
                       <td className="font-semibold text-onyx">{v.name}</td>
+                      <td className="text-onyx/60 max-w-[180px] truncate" title={v.address || ""}>
+                        {v.address || "-"}
+                      </td>
                       <td>
                         <span className="text-[10px] font-bold uppercase text-onyx/60 bg-cream-dark/40 px-2 py-0.5 rounded">
                           {v.category || "General"}
@@ -432,6 +441,18 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
                     className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none disabled:opacity-50"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                  Vendor Address
+                </label>
+                <textarea
+                  value={formFields.address}
+                  onChange={(e) => setFormFields(prev => ({ ...prev, address: e.target.value }))}
+                  placeholder="e.g. Plot No. 89, Sector 4, Noida, UP"
+                  className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none min-h-[50px] resize-none"
+                />
               </div>
 
               {/* GSTIN, PAN, Udyam */}
@@ -652,6 +673,10 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
                   <div>
                     <span className="font-semibold text-onyx/50">TDS Applicable:</span>
                     <p className="font-bold text-onyx mt-0.5">{selectedVendor.tdsApplicable ? "Yes" : "No"}</p>
+                  </div>
+                  <div className="col-span-2 border-t border-onyx/5 pt-2 mt-1">
+                    <span className="font-semibold text-onyx/50">Address:</span>
+                    <p className="font-semibold text-onyx mt-0.5 whitespace-pre-wrap">{selectedVendor.address || "Not provided"}</p>
                   </div>
                 </div>
               </div>

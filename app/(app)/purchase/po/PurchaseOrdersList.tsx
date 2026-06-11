@@ -9,6 +9,7 @@ import {
   cancelPO 
 } from "@/app/actions/purchaseOrders";
 import { PoType } from "@prisma/client";
+import { limitYearTo4Digits } from "@/lib/date";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { 
@@ -114,6 +115,14 @@ interface CompanyProfile {
   gstin: string | null;
   city: string | null;
   governingPlace: string | null;
+  legalName?: string | null;
+  displayName?: string | null;
+  logoUrl?: string | null;
+  registeredAddress?: string | null;
+  pan?: string | null;
+  cin?: string | null;
+  contactEmail?: string | null;
+  contactPhone?: string | null;
 }
 
 interface TermsConfig {
@@ -288,8 +297,8 @@ export default function PurchaseOrdersList({
         const tokenDefaults = preset.tokenDefaults || {};
 
         const resolverMap: Record<string, any> = {
-          COMPANY_NAME: companyProfile?.name || "SAARLEKHA INDUSTRIES PVT LTD",
-          COMPANY_ADDRESS: companyProfile?.address || null,
+          COMPANY_NAME: companyProfile?.legalName || companyProfile?.displayName || companyProfile?.name || "SAARLEKHA INDUSTRIES PVT LTD",
+          COMPANY_ADDRESS: companyProfile?.registeredAddress || companyProfile?.address || null,
           COMPANY_GSTIN: companyProfile?.gstin || null,
           COMPANY_CITY: companyProfile?.city || null,
           GOVERNING_PLACE: companyProfile?.governingPlace || null,
@@ -423,20 +432,65 @@ export default function PurchaseOrdersList({
     };
   };
 
-  const handleExportPDF = (po: PORecord) => {
+  const handleExportPDF = async (po: PORecord) => {
     const doc = new jsPDF();
+
+    let logoImg: HTMLImageElement | null = null;
+    if (companyProfile?.logoUrl) {
+      try {
+        logoImg = await new Promise<HTMLImageElement | null>((resolve) => {
+          const img = new Image();
+          img.crossOrigin = "anonymous";
+          img.src = companyProfile.logoUrl!;
+          img.onload = () => resolve(img);
+          img.onerror = () => resolve(null);
+        });
+      } catch (e) {
+        console.error("Failed to load logo", e);
+      }
+    }
+
+    const startX = logoImg ? 42 : 14;
+    const maxChars = logoImg ? 65 : 85;
+
+    if (logoImg) {
+      doc.addImage(logoImg, "PNG", 14, 12, 23, 23);
+    }
 
     // 1. Header Section
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(20);
+    doc.setFontSize(14);
     doc.setTextColor(30, 30, 30);
-    doc.text("SAARLEKHA INDUSTRIES PVT LTD", 14, 20);
+    const compName = companyProfile?.legalName || companyProfile?.displayName || companyProfile?.name || "SAARLEKHA INDUSTRIES PVT LTD";
+    doc.text(compName, startX, 18);
 
-    doc.setFontSize(9);
+    doc.setFontSize(8);
     doc.setFont("helvetica", "normal");
     doc.setTextColor(100, 100, 100);
-    doc.text("Main Inventory Warehouse", 14, 25);
-    doc.text("Email: procurement@saarlekha.com | Tel: +91-11-2345-6789", 14, 30);
+    
+    let headerY = 22.5;
+    const compAddr = companyProfile?.registeredAddress || companyProfile?.address || "";
+    if (compAddr) {
+      const compAddrShort = compAddr.length > maxChars ? compAddr.slice(0, maxChars) + "..." : compAddr;
+      doc.text(compAddrShort, startX, headerY);
+      headerY += 4;
+    }
+
+    const emailVal = companyProfile?.contactEmail ? `Email: ${companyProfile.contactEmail}` : "";
+    const phoneVal = companyProfile?.contactPhone ? `Tel: ${companyProfile.contactPhone}` : "";
+    const contactLine = [emailVal, phoneVal].filter(Boolean).join(" | ");
+    if (contactLine) {
+      doc.text(contactLine, startX, headerY);
+      headerY += 4;
+    }
+
+    const gstinVal = companyProfile?.gstin ? `GSTIN: ${companyProfile.gstin}` : "";
+    const panVal = companyProfile?.pan ? `PAN: ${companyProfile.pan}` : "";
+    const cinVal = companyProfile?.cin ? `CIN: ${companyProfile.cin}` : "";
+    const taxLine = [gstinVal, panVal, cinVal].filter(Boolean).join(" | ");
+    if (taxLine) {
+      doc.text(taxLine, startX, headerY);
+    }
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
@@ -965,7 +1019,7 @@ export default function PurchaseOrdersList({
                   <input
                     type="date"
                     value={newPo.deliveryDate}
-                    onChange={(e) => setNewPo(prev => ({ ...prev, deliveryDate: e.target.value }))}
+                    onChange={(e) => setNewPo(prev => ({ ...prev, deliveryDate: limitYearTo4Digits(e.target.value) }))}
                     className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
                   />
                 </div>
@@ -1315,7 +1369,7 @@ export default function PurchaseOrdersList({
                   <input
                     type="date"
                     value={amendForm.deliveryDate}
-                    onChange={(e) => setAmendForm(prev => ({ ...prev, deliveryDate: e.target.value }))}
+                    onChange={(e) => setAmendForm(prev => ({ ...prev, deliveryDate: limitYearTo4Digits(e.target.value) }))}
                     className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
                   />
                 </div>

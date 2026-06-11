@@ -13,6 +13,8 @@ export async function updateCompanyDetails(data: {
   legalName?: string | null;
   displayName?: string | null;
   address?: string | null;
+  city?: string | null;
+  governingPlace?: string | null;
   gstin?: string | null;
   pan?: string | null;
   cin?: string | null;
@@ -41,6 +43,8 @@ export async function updateCompanyDetails(data: {
       legalName: data.legalName,
       displayName: data.displayName,
       address: data.address,
+      city: data.city,
+      governingPlace: data.governingPlace,
       gstin: data.gstin,
       pan: data.pan,
       cin: data.cin,

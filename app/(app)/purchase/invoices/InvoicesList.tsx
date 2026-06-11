@@ -6,6 +6,7 @@ import {
   updateInvoiceMatchStatus 
 } from "@/app/actions/invoices";
 import { can } from "@/lib/rbac";
+import { limitYearTo4Digits } from "@/lib/date";
 import { 
   Search, 
   Plus, 
@@ -482,7 +483,7 @@ export default function InvoicesList({
                     type="date"
                     required
                     value={newInvoice.invoiceDate}
-                    onChange={(e) => setNewInvoice(prev => ({ ...prev, invoiceDate: e.target.value }))}
+                    onChange={(e) => setNewInvoice(prev => ({ ...prev, invoiceDate: limitYearTo4Digits(e.target.value) }))}
                     className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg"
                   />
                 </div>

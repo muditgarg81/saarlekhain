@@ -64,7 +64,21 @@ export default async function PurchaseOrdersPage() {
     }),
     db.company.findUnique({
       where: { id: companyId },
-      select: { name: true, address: true, gstin: true, city: true, governingPlace: true }
+      select: { 
+        name: true, 
+        address: true, 
+        gstin: true, 
+        city: true, 
+        governingPlace: true,
+        legalName: true,
+        displayName: true,
+        logoUrl: true,
+        registeredAddress: true,
+        pan: true,
+        cin: true,
+        contactEmail: true,
+        contactPhone: true
+      }
     }),
     db.poTermsConfig.findUnique({
       where: { companyId }
