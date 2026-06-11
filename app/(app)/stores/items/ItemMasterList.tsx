@@ -1747,7 +1747,7 @@ export default function ItemMasterList({ initialItems, categories, departments }
               {importError && (
                 <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg flex items-start space-x-3 text-xs text-red-800 font-semibold">
                   <ShieldAlert className="text-red-500 mt-0.5 shrink-0" size={16} />
-                  <span>{importError}</span>
+                  <span className="whitespace-pre-line">{importError}</span>
                 </div>
               )}
 

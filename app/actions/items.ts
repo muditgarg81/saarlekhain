@@ -317,8 +317,11 @@ export async function bulkCreateItems(itemsList: Array<{
 
       const serialMap = new Map<string, number>();
       const createdItems = [];
+      const validationErrors: string[] = [];
 
-      for (const itemData of itemsList) {
+      for (let idx = 0; idx < itemsList.length; idx++) {
+        const itemData = itemsList[idx];
+
         // Resolve Category ID from Category Code
         let categoryId: string | null = null;
         let catCode = "ITEM";
@@ -347,7 +350,8 @@ export async function bulkCreateItems(itemsList: Array<{
           const upperDeptCode = itemData.departmentCode.trim().toUpperCase();
           const mappedDeptId = departmentMap.get(upperDeptCode);
           if (!mappedDeptId) {
-            throw new Error(`Department Code '${itemData.departmentCode}' not found`);
+            validationErrors.push(`Row ${idx + 2}: Department Code '${itemData.departmentCode}' not found`);
+            continue;
           }
           departmentId = mappedDeptId;
         }
@@ -392,7 +396,8 @@ export async function bulkCreateItems(itemsList: Array<{
         const existingItem = existingItemsMap.get(code.toUpperCase());
         if (existingItem) {
           if (existingItem.deletedAt === null) {
-            throw new Error(`Item code '${code}' already exists`);
+            validationErrors.push(`Row ${idx + 2}: Item code '${code}' already exists`);
+            continue;
           }
           
           // Restore and update soft-deleted item
@@ -481,6 +486,10 @@ export async function bulkCreateItems(itemsList: Array<{
         // Add to cache map to prevent internal import duplicates
         existingItemsMap.set(code.toUpperCase(), { id: newItem.id, code, deletedAt: null });
         createdItems.push(newItem);
+      }
+
+      if (validationErrors.length > 0) {
+        throw new Error(validationErrors.join("\n"));
       }
 
       return createdItems;
