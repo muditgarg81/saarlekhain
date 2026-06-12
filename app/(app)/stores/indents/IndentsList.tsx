@@ -12,6 +12,7 @@ import {
   convertMultipleIndentsToPR
 } from "@/app/actions/indents";
 import { limitYearTo4Digits } from "@/lib/date";
+import { SearchableItemSelect } from "@/components/SearchableItemSelect";
 import { 
   Search, 
   Plus, 
@@ -618,16 +619,12 @@ export default function IndentsList({ initialIndents, items, stores, departments
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
                   <div className="sm:col-span-6">
                     <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
-                    <select
+                    <SearchableItemSelect
+                      items={items}
                       value={newLineItem.itemId}
-                      onChange={(e) => setNewLineItem(prev => ({ ...prev, itemId: e.target.value }))}
-                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none"
-                    >
-                      <option value="">Select Item</option>
-                      {items.map(item => (
-                        <option key={item.id} value={item.id}>[{item.code}] {item.name}</option>
-                      ))}
-                    </select>
+                      onChange={(val) => setNewLineItem(prev => ({ ...prev, itemId: val }))}
+                      placeholder="Select Item"
+                    />
                   </div>
                   <div className="sm:col-span-2">
                     <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Qty *</label>
