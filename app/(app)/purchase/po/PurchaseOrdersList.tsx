@@ -59,6 +59,9 @@ interface PORecord {
   number: string;
   vendorId: string;
   vendorName: string;
+  vendorAddress: string | null;
+  vendorGstin: string | null;
+  vendorPan: string | null;
   type: string;
   status: string;
   orderDate: string;
@@ -523,22 +526,57 @@ export default function PurchaseOrdersList({
     doc.setTextColor(30, 30, 30);
     doc.text("SUPPLIER / VENDOR DETAILS", 14, 52);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setTextColor(80, 80, 80);
     doc.text(`Name: ${po.vendorName}`, 14, 57);
-    doc.text(`Payment Terms: ${po.paymentTerms || "Net 30"}`, 14, 62);
-    doc.text(`Freight Terms: ${po.freightTerms || "FOB Destination"}`, 14, 67);
+    
+    let leftY = 61.5;
+    if (po.vendorAddress) {
+      const addrLines = doc.splitTextToSize(`Address: ${po.vendorAddress}`, 90);
+      addrLines.forEach((l: string) => {
+        doc.text(l, 14, leftY);
+        leftY += 4.5;
+      });
+    } else {
+      doc.text("Address: N/A", 14, leftY);
+      leftY += 4.5;
+    }
+    
+    const taxInfo = [`GSTIN: ${po.vendorGstin || "N/A"}`, `PAN: ${po.vendorPan || "N/A"}`].join(" | ");
+    doc.text(taxInfo, 14, leftY);
+    leftY += 4.5;
+    
+    doc.text(`Payment Terms: ${po.paymentTerms || "Net 30"}`, 14, leftY);
+    leftY += 4.5;
+    doc.text(`Freight Terms: ${po.freightTerms || "FOB Destination"}`, 14, leftY);
+    leftY += 4.5;
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(30, 30, 30);
     doc.text("SHIP TO / DELIVERY DESTINATION", 110, 52);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
+    doc.setFontSize(8.5);
     doc.setTextColor(80, 80, 80);
-    doc.text(`Destination: ${po.shipTo || "Main Warehouse Gate 1"}`, 110, 57);
-    doc.text(`Delivery Date: ${po.deliveryDate ? new Date(po.deliveryDate).toLocaleDateString() : "Immediate"}`, 110, 62);
-    doc.text(`PO Type: ${po.type}`, 110, 67);
+    
+    let rightY = 57;
+    if (po.shipTo) {
+      const shipToLines = doc.splitTextToSize(`Destination: ${po.shipTo}`, 90);
+      shipToLines.forEach((l: string) => {
+        doc.text(l, 110, rightY);
+        rightY += 4.5;
+      });
+    } else {
+      doc.text("Destination: N/A", 110, rightY);
+      rightY += 4.5;
+    }
+    
+    doc.text(`Delivery Date: ${po.deliveryDate ? new Date(po.deliveryDate).toLocaleDateString() : "Immediate"}`, 110, rightY);
+    rightY += 4.5;
+    doc.text(`PO Type: ${po.type}`, 110, rightY);
+    rightY += 4.5;
+
+    const startY = Math.max(leftY, rightY) + 5;
 
     // 3. Table of items
     const tableHeaders = [
@@ -562,7 +600,7 @@ export default function PurchaseOrdersList({
     autoTable(doc, {
       head: tableHeaders,
       body: tableRows,
-      startY: 75,
+      startY: startY,
       theme: "striped",
       headStyles: { fillColor: [224, 130, 4] }, // Saffron colored header
       styles: { fontSize: 8.5, font: "helvetica" },
@@ -1791,6 +1829,18 @@ export default function PurchaseOrdersList({
                   <span suppressHydrationWarning>{selectedPO.deliveryDate ? new Date(selectedPO.deliveryDate).toLocaleDateString() : "N/A"}</span>
                 </p>
               </div>
+              <div>
+                <span className="font-semibold text-onyx/50">Supplier GSTIN:</span>
+                <p className="font-bold text-onyx mt-0.5">{selectedPO.vendorGstin || "N/A"}</p>
+              </div>
+              <div>
+                <span className="font-semibold text-onyx/50">Supplier PAN:</span>
+                <p className="font-bold text-onyx mt-0.5">{selectedPO.vendorPan || "N/A"}</p>
+              </div>
+              <div className="col-span-2">
+                <span className="font-semibold text-onyx/50">Supplier Registered Address:</span>
+                <p className="font-bold text-onyx mt-0.5 whitespace-pre-line">{selectedPO.vendorAddress || "N/A"}</p>
+              </div>
               <div className="col-span-2">
                 <span className="font-semibold text-onyx/50">Ship-To Location / Address:</span>
                 <p className="font-bold text-onyx mt-0.5">{selectedPO.shipTo || "N/A"}</p>
@@ -1810,6 +1860,7 @@ export default function PurchaseOrdersList({
                     <thead className="bg-cream-dark/50">
                       <tr>
                         <th className="p-2.5 font-bold">Item Description</th>
+                        <th className="p-2.5 font-bold text-right">Rate</th>
                         <th className="p-2.5 font-bold text-right">Qty</th>
                         <th className="p-2.5 font-bold text-right">Landed Cost</th>
                         <th className="p-2.5 font-bold text-right">Recd Qty</th>
@@ -1821,6 +1872,7 @@ export default function PurchaseOrdersList({
                         return (
                           <tr key={line.id} className="border-t border-onyx/5">
                             <td className="p-2.5">[{line.itemCode}] {line.itemName}</td>
+                            <td className="p-2.5 text-right font-mono">₹{line.rate.toFixed(2)}</td>
                             <td className="p-2.5 text-right font-mono font-bold">{line.qty}</td>
                             <td className="p-2.5 text-right font-mono">₹{landed.toFixed(2)}</td>
                             <td className="p-2.5 text-right font-mono font-bold text-blue-700">{line.receivedQty}</td>
