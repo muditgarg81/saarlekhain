@@ -450,3 +450,73 @@ export async function cancelPO(poId: string) {
   }
 }
 
+export async function updatePO(poId: string, data: z.infer<typeof poSchema>) {
+  const session = await auth();
+  if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  const companyId = (session.user as any).companyId;
+  const actorId = (session.user as any).id;
+
+  try {
+    const validated = poSchema.parse(data);
+
+    const original = await db.purchaseOrder.findFirst({
+      where: { id: poId, companyId },
+      include: { lines: true }
+    });
+    if (!original) return { success: false, error: "Purchase Order not found" };
+
+    if (!["DRAFT", "PENDING_APPROVAL"].includes(original.status)) {
+      return { success: false, error: "Only Draft or Pending Approval POs can be edited" };
+    }
+
+    const result = await db.$transaction(async (tx) => {
+      // Delete existing lines
+      await tx.poLine.deleteMany({
+        where: { poId }
+      });
+
+      // Update PO and create new lines
+      const po = await tx.purchaseOrder.update({
+        where: { id: poId },
+        data: {
+          vendorId: validated.vendorId,
+          type: validated.type,
+          status: PoStatus.DRAFT, // Reset status to DRAFT on edit
+          deliveryDate: validated.deliveryDate ? new Date(validated.deliveryDate) : null,
+          paymentTerms: validated.paymentTerms || null,
+          freightTerms: validated.freightTerms || null,
+          shipTo: validated.shipTo || null,
+          termsConditions: validated.termsConditions || null,
+          termsPresetId: validated.termsPresetId || null,
+          rateContractExpiry: validated.rateContractExpiry ? new Date(validated.rateContractExpiry) : null,
+          prId: validated.rfqId || null,
+          lines: {
+            create: validated.lines.map((l) => ({
+              itemId: l.itemId,
+              qty: l.qty,
+              rate: l.rate,
+              discount: l.discount,
+              gstRate: l.gstRate,
+              requiredBy: l.requiredBy ? new Date(l.requiredBy) : null,
+            })),
+          },
+        },
+        include: {
+          lines: true,
+        },
+      });
+
+      await logAudit(tx, companyId, actorId, "UPDATE", "PurchaseOrder", po.id, original, po);
+      return po;
+    });
+
+    revalidatePath("/purchase/po");
+    return { success: true, po: result };
+  } catch (err: any) {
+    console.error("Error updating PO:", err);
+    return { success: false, error: err.message || "Failed to update PO" };
+  }
+}
+
+

@@ -5,7 +5,8 @@ import {
   createVendor, 
   updateVendor, 
   updateVendorStatus, 
-  deleteVendor 
+  deleteVendor,
+  bulkCreateVendors
 } from "@/app/actions/vendors";
 import { 
   Search, 
@@ -21,9 +22,12 @@ import {
   AlertCircle,
   Lock,
   Unlock,
-  DollarSign
+  DollarSign,
+  Upload,
+  FileSpreadsheet
 } from "lucide-react";
 import { VendorStatus } from "@prisma/client";
+import * as utils from "xlsx";
 
 interface BankDetails {
   bankName?: string;
@@ -65,6 +69,14 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+
+  // Bulk Import States
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [bulkData, setBulkData] = useState<any[] | null>(null);
+  const [isImporting, setIsImporting] = useState(false);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [importSuccess, setImportSuccess] = useState<string | null>(null);
 
   // Form Field States
   const [formFields, setFormFields] = useState({
@@ -214,6 +226,223 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
     return `•••• •••• •••• ${no.slice(-4)}`;
   };
 
+  // Template Excel generator for Vendors
+  const downloadTemplate = () => {
+    const headers = [
+      "Vendor Name",
+      "Vendor Code",
+      "Address",
+      "GSTIN",
+      "PAN",
+      "Udyam No",
+      "Category",
+      "Payment Terms",
+      "Credit Days",
+      "TDS Applicable",
+      "Bank Name",
+      "Account No",
+      "IFSC",
+      "Branch"
+    ];
+    const sampleRows = [
+      [
+        "Global Polythreads",
+        "VND-00001",
+        "279, Sector F Sanwer Road Industrial Area, Indore 452015",
+        "23BLIPR1572E1Z7",
+        "BLIPR1572E",
+        "UDYAM-MP-23-0012345",
+        "RM",
+        "Net 30",
+        "30",
+        "No",
+        "State Bank of India",
+        "12345678901",
+        "SBIN0001234",
+        "Sanwer Road Branch"
+      ],
+      [
+        "ARMSTRONG",
+        "VND-00003",
+        "501, SARAP, OPP. NAVJIVAN PRESS, Ahmedabad 380014",
+        "24AAAPA4683N1ZS",
+        "AAPA4683N",
+        "",
+        "CONSUMABLE",
+        "Net 15",
+        "15",
+        "Yes",
+        "HDFC Bank",
+        "98765432101234",
+        "HDFC0000123",
+        "Navrangpura Branch"
+      ]
+    ];
+    const ws = utils.utils.aoa_to_sheet([headers, ...sampleRows]);
+    const wb = utils.utils.book_new();
+    utils.utils.book_append_sheet(wb, ws, "Template");
+    utils.writeFile(wb, "Saarlekha_Vendors_Template.xlsx");
+  };
+
+  // Parsing and validation
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setBulkFile(file);
+    setImportError(null);
+    setImportSuccess(null);
+
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const bstr = evt.target?.result;
+        const wb = utils.read(bstr, { type: "binary" });
+        const wsName = wb.SheetNames[0];
+        const ws = wb.Sheets[wsName];
+        const rawRows = utils.utils.sheet_to_json(ws) as Array<Record<string, any>>;
+
+        if (rawRows.length === 0) {
+          setImportError("The uploaded file is empty");
+          return;
+        }
+
+        const parsedRows = rawRows.map((row, idx) => {
+          const name = String(row["Vendor Name"] || "").trim();
+          const code = String(row["Vendor Code"] || "").trim();
+          const address = String(row["Address"] || "").trim();
+          const gstin = String(row["GSTIN"] || "").trim().toUpperCase();
+          const pan = String(row["PAN"] || "").trim().toUpperCase();
+          const udyamNo = String(row["Udyam No"] || row["Udyam"] || "").trim();
+          const category = String(row["Category"] || "").trim().toUpperCase();
+          const paymentTerms = String(row["Payment Terms"] || "").trim();
+          const creditDaysRaw = row["Credit Days"];
+          const tdsApplicableRaw = String(row["TDS Applicable"] || "").trim().toLowerCase();
+
+          // Bank Details
+          const bankName = String(row["Bank Name"] || "").trim();
+          const accountNo = String(row["Account No"] || "").trim();
+          const ifsc = String(row["IFSC"] || "").trim().toUpperCase();
+          const branch = String(row["Branch"] || "").trim();
+
+          const errors: string[] = [];
+          const warnings: string[] = [];
+
+          if (!name) {
+            errors.push("Vendor Name is required");
+          } else if (name.length < 2) {
+            errors.push("Vendor name must be at least 2 characters");
+          }
+
+          if (code) {
+            const codeExists = vendors.some(v => v.code.toUpperCase() === code.toUpperCase());
+            if (codeExists) {
+              errors.push(`Vendor Code '${code}' already exists`);
+            }
+          }
+
+          if (gstin) {
+            const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
+            if (!gstinRegex.test(gstin)) {
+              errors.push("Invalid GSTIN format");
+            }
+          }
+
+          if (pan) {
+            const panRegex = /^[A-Z]{5}[0-9]{4}[A-Z]{1}$/;
+            if (!panRegex.test(pan)) {
+              errors.push("Invalid PAN format");
+            }
+          }
+
+          const validCategories = ["RM", "CONSUMABLE", "SERVICE", "CAPITAL"];
+          if (category && !validCategories.includes(category)) {
+            errors.push(`Invalid Category '${category}'. Expected one of: ${validCategories.join(", ")}`);
+          }
+
+          let creditDays = 0;
+          if (creditDaysRaw !== undefined && creditDaysRaw !== "") {
+            const parsed = parseInt(creditDaysRaw, 10);
+            if (isNaN(parsed) || parsed < 0) {
+              errors.push("Credit Days must be a non-negative integer");
+            } else {
+              creditDays = parsed;
+            }
+          }
+
+          const tdsApplicable = ["yes", "true", "1"].includes(tdsApplicableRaw);
+
+          const dataPayload = {
+            name,
+            code: code || null,
+            address: address || null,
+            gstin: gstin || null,
+            pan: pan || null,
+            udyamNo: udyamNo || null,
+            category: category || null,
+            paymentTerms: paymentTerms || null,
+            creditDays,
+            tdsApplicable,
+            bankDetails: bankName || accountNo || ifsc || branch ? {
+              bankName: bankName || null,
+              accountNo: accountNo || null,
+              ifsc: ifsc || null,
+              branch: branch || null
+            } : null
+          };
+
+          return {
+            rowNum: idx + 2,
+            data: dataPayload,
+            errors,
+            warnings,
+            isValid: errors.length === 0
+          };
+        });
+
+        setBulkData(parsedRows);
+      } catch (err: any) {
+        console.error("Error reading file", err);
+        setImportError(err.message || "Failed to read and parse Excel file");
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleBulkSubmit = async () => {
+    if (!bulkData) return;
+    const invalidRows = bulkData.filter(r => !r.isValid);
+    if (invalidRows.length > 0) {
+      setImportError(`Cannot import. There are ${invalidRows.length} rows with validation errors.`);
+      return;
+    }
+
+    setIsImporting(true);
+    setImportError(null);
+
+    const payload = bulkData.map(r => r.data);
+
+    try {
+      const res = await bulkCreateVendors(payload);
+      if (res.success && res.vendors) {
+        setImportSuccess(`Successfully imported ${res.count} vendors!`);
+        setTimeout(() => {
+          setIsBulkModalOpen(false);
+          setBulkFile(null);
+          setBulkData(null);
+          setImportSuccess(null);
+          window.location.reload();
+        }, 1500);
+      } else {
+        setImportError(res.error || "Failed to import vendors");
+      }
+    } catch (err: any) {
+      setImportError(err.message || "An unexpected error occurred during import");
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Top Header */}
@@ -223,6 +452,13 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
           <p className="text-xs text-onyx/50 mt-1">Manage vendor credentials, payment schedules, and role-secured banking detail records.</p>
         </div>
         <div className="flex items-center space-x-3">
+          <button
+            onClick={() => setIsBulkModalOpen(true)}
+            className="flex items-center space-x-2 px-3.5 py-2 bg-white hover:bg-cream-dark/50 border border-onyx/10 rounded-lg text-xs font-semibold text-onyx shadow-sm transition-all duration-150 cursor-pointer"
+          >
+            <Upload size={15} className="text-saffron" />
+            <span>Bulk Import</span>
+          </button>
           <button
             onClick={handleOpenCreate}
             className="flex items-center space-x-2 px-3.5 py-2 bg-saffron hover:bg-saffron-dark rounded-lg text-xs font-bold text-onyx shadow-md transition-all duration-150 cursor-pointer"
@@ -745,6 +981,204 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
               >
                 Close Details
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Import Modal */}
+      {isBulkModalOpen && (
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-cream max-w-4xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
+            {/* Modal Header */}
+            <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Upload size={20} className="text-saffron" />
+                <h3 className="font-heading text-lg font-bold text-cream-light">Bulk Import Vendors</h3>
+              </div>
+              <button 
+                onClick={() => {
+                  setIsBulkModalOpen(false);
+                  setBulkFile(null);
+                  setBulkData(null);
+                  setImportError(null);
+                  setImportSuccess(null);
+                }} 
+                className="hover:text-saffron transition-colors cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Instructions and Template Download */}
+              <div className="bg-cream-dark/20 border border-onyx/5 p-4 rounded-xl flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+                <div className="space-y-1.5">
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-onyx/80">Instructions</h4>
+                  <ul className="text-[11px] text-onyx/60 list-disc list-inside space-y-1">
+                    <li>Download the template below. Supported formats: Excel (.xlsx, .xls) and CSV (.csv).</li>
+                    <li>Required columns are: <strong className="text-onyx/80">Vendor Name</strong>.</li>
+                    <li>If Vendor Code is omitted, it will be automatically generated.</li>
+                    <li>Category must be one of: <strong>RM, CONSUMABLE, SERVICE, CAPITAL</strong>.</li>
+                  </ul>
+                </div>
+                <div>
+                  <button
+                    onClick={downloadTemplate}
+                    className="flex items-center space-x-2 px-3.5 py-2 bg-saffron hover:bg-saffron-dark rounded-lg text-xs font-bold text-onyx shadow-sm transition-all duration-150 cursor-pointer w-full md:w-auto justify-center"
+                  >
+                    <FileSpreadsheet size={15} />
+                    <span>Download Template</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Status Alert Messages */}
+              {importError && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-lg flex items-start space-x-3 text-xs text-red-800 font-semibold">
+                  <ShieldAlert className="text-red-500 mt-0.5 shrink-0" size={16} />
+                  <span className="whitespace-pre-line">{importError}</span>
+                </div>
+              )}
+
+              {importSuccess && (
+                <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-lg flex items-start space-x-3 text-xs text-green-800 font-semibold">
+                  <span className="text-green-500 text-base leading-none">✓</span>
+                  <span>{importSuccess}</span>
+                </div>
+              )}
+
+              {/* File Dropzone Area */}
+              {!bulkData && (
+                <div className="relative border-2 border-dashed border-onyx/20 hover:border-saffron hover:bg-cream-dark/10 rounded-xl p-8 flex flex-col items-center justify-center gap-3 transition-all duration-200 min-h-[160px]">
+                  <Upload size={32} className="text-onyx/30" />
+                  <div className="text-center">
+                    <p className="text-xs font-bold text-onyx/75">Select or drop your Excel/CSV file here</p>
+                    <p className="text-[10px] text-onyx/40 mt-1">Accepts .xlsx, .xls, and .csv formats</p>
+                  </div>
+                  <label className="mt-2 px-3.5 py-1.5 bg-white border border-onyx/10 rounded-lg text-xs font-bold hover:bg-cream-dark/50 cursor-pointer shadow-sm">
+                    Select File
+                    <input
+                      type="file"
+                      accept=".xlsx, .xls, .csv"
+                      onChange={handleFileUpload}
+                      className="hidden"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {/* Verification Preview Grid */}
+              {bulkData && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-3">
+                      <span className="text-xs font-bold text-onyx/85">File: <span className="font-mono">{bulkFile?.name}</span></span>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-onyx/5 text-onyx/65">
+                        {bulkData.length} rows parsed
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setBulkFile(null);
+                        setBulkData(null);
+                        setImportError(null);
+                        setImportSuccess(null);
+                      }}
+                      className="text-xs font-semibold text-red-600 hover:text-red-700 cursor-pointer"
+                    >
+                      Clear File
+                    </button>
+                  </div>
+
+                  <div className="border border-onyx/15 rounded-xl overflow-hidden shadow-sm max-h-[300px] overflow-y-auto">
+                    <table className="w-full dense-table text-left border-collapse">
+                      <thead className="sticky top-0 bg-onyx text-cream-light z-10">
+                        <tr>
+                          <th className="w-12 text-center">Row</th>
+                          <th className="w-12 text-center">Status</th>
+                          <th>Vendor Name</th>
+                          <th>Code</th>
+                          <th>Category</th>
+                          <th>GSTIN</th>
+                          <th>Payment Terms</th>
+                          <th>Validation Feedback</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bulkData.map((row, idx) => (
+                          <tr 
+                            key={idx} 
+                            className={`border-b border-onyx/5 ${
+                              row.isValid ? "hover:bg-green-50/30" : "bg-red-50/20 hover:bg-red-50/40"
+                            }`}
+                          >
+                            <td className="text-center font-mono font-bold text-onyx/50 text-[10px]">{row.rowNum}</td>
+                            <td className="text-center py-2">
+                              {row.isValid ? (
+                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-green-100 text-green-800 text-xs font-bold">✓</span>
+                              ) : (
+                                <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-red-100 text-red-800 text-xs font-bold">!</span>
+                              )}
+                            </td>
+                            <td className="font-semibold text-xs text-onyx/90">{row.data.name || "—"}</td>
+                            <td className="font-mono font-semibold text-[11px] text-onyx/70">{row.data.code || "(Auto)"}</td>
+                            <td className="text-xs text-onyx/75 font-mono">{row.data.category || "—"}</td>
+                            <td className="text-xs text-onyx/70 font-semibold">{row.data.gstin || "—"}</td>
+                            <td className="text-xs text-onyx/70 font-semibold">{row.data.paymentTerms || "—"}</td>
+                            <td className="text-[10px] font-medium text-red-700 max-w-xs truncate">
+                              {row.isValid ? (
+                                row.warnings && row.warnings.length > 0 ? (
+                                  <span className="text-amber-600 font-bold">{row.warnings.join("; ")}</span>
+                                ) : (
+                                  <span className="text-green-700 font-semibold">Valid row</span>
+                                )
+                              ) : (
+                                <span className="text-red-700 font-semibold">{row.errors.join("; ")}</span>
+                              )}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 bg-cream-dark/15 border-t border-onyx/10 flex items-center justify-between">
+              <div>
+                {bulkData && (
+                  <p className="text-[11px] text-onyx/50 font-medium">
+                    {bulkData.filter(r => r.isValid).length} of {bulkData.length} rows are valid. All rows must be valid to import.
+                  </p>
+                )}
+              </div>
+              <div className="flex items-center space-x-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsBulkModalOpen(false);
+                    setBulkFile(null);
+                    setBulkData(null);
+                    setImportError(null);
+                    setImportSuccess(null);
+                  }}
+                  className="px-4 py-2 border border-onyx/10 rounded-lg text-xs font-semibold hover:bg-cream-dark/40 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBulkSubmit}
+                  disabled={isImporting || !bulkData || bulkData.some(r => !r.isValid)}
+                  className="flex items-center space-x-2 px-4 py-2 bg-saffron hover:bg-saffron-dark disabled:opacity-40 rounded-lg text-xs font-bold text-onyx shadow shadow-saffron-dark/50 cursor-pointer"
+                >
+                  <span>{isImporting ? "Importing..." : "Import Vendors"}</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { 
   createIndent, 
+  updateIndent,
   submitIndent, 
   approveIndent, 
   rejectIndent, 
@@ -24,7 +25,8 @@ import {
   ArrowRight,
   Eye,
   Building2,
-  AlertTriangle
+  AlertTriangle,
+  Edit3
 } from "lucide-react";
 
 interface IndentLine {
@@ -92,6 +94,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isIssueOpen, setIsIssueOpen] = useState(false);
   const [selectedIndent, setSelectedIndent] = useState<Indent | null>(null);
+  const [editingIndentId, setEditingIndentId] = useState<string | null>(null);
 
   // New Indent Form State
   const [newIndent, setNewIndent] = useState({
@@ -99,6 +102,45 @@ export default function IndentsList({ initialIndents, items, stores, departments
     purpose: "",
     lines: [] as { itemId: string; qty: number; remarks: string; requiredBy: string }[],
   });
+
+  const handleOpenEdit = (indent: Indent) => {
+    setErrorMsg(null);
+    setEditingIndentId(indent.id);
+    setNewIndent({
+      priority: indent.priority,
+      purpose: indent.purpose || "",
+      lines: indent.lines.map(line => ({
+        itemId: line.itemId,
+        qty: line.qty,
+        remarks: line.remarks || "",
+        requiredBy: line.requiredBy ? new Date(line.requiredBy).toISOString().split("T")[0] : ""
+      }))
+    });
+    setIsCreateOpen(true);
+  };
+
+  const handleOpenCreate = () => {
+    setErrorMsg(null);
+    setEditingIndentId(null);
+    setNewIndent({
+      priority: "NORMAL",
+      purpose: "",
+      lines: []
+    });
+    setNewLineItem({ itemId: "", qty: 1, remarks: "", requiredBy: "" });
+    setIsCreateOpen(true);
+  };
+
+  const handleCloseCreate = () => {
+    setIsCreateOpen(false);
+    setEditingIndentId(null);
+    setNewIndent({
+      priority: "NORMAL",
+      purpose: "",
+      lines: []
+    });
+    setNewLineItem({ itemId: "", qty: 1, remarks: "", requiredBy: "" });
+  };
 
   const [newLineItem, setNewLineItem] = useState({ itemId: "", qty: 1, remarks: "", requiredBy: "" });
 
@@ -208,18 +250,28 @@ export default function IndentsList({ initialIndents, items, stores, departments
       return;
     }
     setActionLoading(true);
-    const res = await createIndent({
-      priority: newIndent.priority,
-      purpose: newIndent.purpose,
-      lines: newIndent.lines,
-    });
+    let res;
+    if (editingIndentId) {
+      res = await updateIndent(editingIndentId, {
+        priority: newIndent.priority,
+        purpose: newIndent.purpose,
+        lines: newIndent.lines,
+      });
+    } else {
+      res = await createIndent({
+        priority: newIndent.priority,
+        purpose: newIndent.purpose,
+        lines: newIndent.lines,
+      });
+    }
     setActionLoading(false);
 
-    if (res.success && res.indent) {
-      // Reload or append
+    if (res.success) {
+      setIsCreateOpen(false);
+      setEditingIndentId(null);
       window.location.reload();
     } else {
-      alert("Failed to create: " + res.error);
+      alert("Failed to " + (editingIndentId ? "update" : "create") + ": " + res.error);
     }
   };
 
@@ -289,7 +341,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
         </div>
         <div className="flex items-center space-x-3">
           <button
-            onClick={() => setIsCreateOpen(true)}
+            onClick={handleOpenCreate}
             className="flex items-center space-x-2 px-3.5 py-2 bg-saffron hover:bg-saffron-dark rounded-lg text-xs font-bold text-onyx shadow-md transition-all duration-150 cursor-pointer"
           >
             <Plus size={15} />
@@ -434,14 +486,24 @@ export default function IndentsList({ initialIndents, items, stores, departments
                           </button>
 
                           {ind.status === "DRAFT" && (
-                            <button
-                              onClick={() => handleWorkflowAction("submit", ind)}
-                              title="Submit for Approval"
-                              className="p-1 hover:bg-yellow-50 text-yellow-600 hover:text-yellow-700 rounded border border-transparent hover:border-yellow-200"
-                              type="button"
-                            >
-                              <RefreshCw size={13} />
-                            </button>
+                            <>
+                              <button
+                                onClick={() => handleOpenEdit(ind)}
+                                title="Edit Indent"
+                                className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer"
+                                type="button"
+                              >
+                                <Edit3 size={13} />
+                              </button>
+                              <button
+                                onClick={() => handleWorkflowAction("submit", ind)}
+                                title="Submit for Approval"
+                                className="p-1 hover:bg-yellow-50 text-yellow-600 hover:text-yellow-700 rounded border border-transparent hover:border-yellow-200 cursor-pointer"
+                                type="button"
+                              >
+                                <RefreshCw size={13} />
+                              </button>
+                            </>
                           )}
 
                           {ind.status === "SUBMITTED" && isApprover && (
@@ -501,8 +563,8 @@ export default function IndentsList({ initialIndents, items, stores, departments
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-cream max-w-2xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
             <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
-              <h3 className="font-heading text-lg font-bold">Raise Material Requisition Indent</h3>
-              <button onClick={() => setIsCreateOpen(false)} className="hover:text-saffron transition-colors cursor-pointer">
+              <h3 className="font-heading text-lg font-bold">{editingIndentId ? "Edit Material Requisition Indent" : "Raise Material Requisition Indent"}</h3>
+              <button onClick={handleCloseCreate} className="hover:text-saffron transition-colors cursor-pointer">
                 <X size={20} />
               </button>
             </div>
@@ -677,7 +739,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
               <div className="pt-4 border-t border-onyx/10 flex items-center justify-end space-x-3">
                 <button
                   type="button"
-                  onClick={() => setIsCreateOpen(false)}
+                  onClick={handleCloseCreate}
                   className="px-4 py-2 border border-onyx/10 rounded-lg text-xs font-semibold hover:bg-cream-dark/40 cursor-pointer"
                 >
                   Cancel
@@ -687,7 +749,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
                   disabled={actionLoading || newIndent.lines.length === 0}
                   className="px-4 py-2 bg-saffron hover:bg-saffron-dark rounded-lg text-xs font-bold text-onyx shadow cursor-pointer disabled:opacity-50"
                 >
-                  {actionLoading ? "Saving..." : "Save Draft Indent"}
+                  {actionLoading ? "Saving..." : editingIndentId ? "Save Changes" : "Save Draft Indent"}
                 </button>
               </div>
             </form>

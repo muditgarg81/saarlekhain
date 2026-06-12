@@ -249,3 +249,155 @@ export async function deleteVendor(id: string) {
     return { success: false, error: err.message || "Failed to delete vendor" };
   }
 }
+
+const bankDetailsSchema = z.object({
+  bankName: z.string().optional().nullable(),
+  accountNo: z.string().optional().nullable(),
+  ifsc: z.string().optional().nullable(),
+  branch: z.string().optional().nullable(),
+}).optional().nullable();
+
+const vendorImportSchema = z.object({
+  name: z.string().min(2, "Vendor name must be at least 2 characters"),
+  code: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  gstin: z.string().optional().nullable(),
+  pan: z.string().optional().nullable(),
+  udyamNo: z.string().optional().nullable(),
+  category: z.string().optional().nullable(),
+  paymentTerms: z.string().optional().nullable(),
+  creditDays: z.number().int().nonnegative().default(0),
+  tdsApplicable: z.boolean().default(false),
+  bankDetails: bankDetailsSchema,
+});
+
+export async function bulkCreateVendors(vendorsList: Array<z.infer<typeof vendorImportSchema>>) {
+  const session = await auth();
+  if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  const companyId = (session.user as any).companyId;
+  const actorId = (session.user as any).id;
+
+  try {
+    const result = await db.$transaction(async (tx) => {
+      // Fetch all existing vendors for uniqueness and soft-delete mapping
+      const existingVendors = await tx.vendor.findMany({
+        where: { companyId },
+        select: { id: true, code: true, deletedAt: true }
+      });
+      // Map uppercase code -> existing vendor record
+      const existingVendorsMap = new Map<string, { id: string; code: string; deletedAt: Date | null }>(
+        existingVendors.map(v => [v.code.toUpperCase(), v])
+      );
+
+      const createdVendors = [];
+      const validationErrors: string[] = [];
+
+      for (let idx = 0; idx < vendorsList.length; idx++) {
+        const vendorData = vendorsList[idx];
+
+        // Resolve vendor code
+        let code = vendorData.code?.trim();
+        if (!code) {
+          const count = await tx.vendor.count({ where: { companyId } });
+          code = `VND-${String(count + createdVendors.length + 1).padStart(5, "0")}`;
+        }
+
+        // Check for uniqueness
+        const existingVendor = existingVendorsMap.get(code.toUpperCase());
+        if (existingVendor) {
+          if (existingVendor.deletedAt === null) {
+            validationErrors.push(`Row ${idx + 2}: Vendor code '${code}' already exists`);
+            continue;
+          }
+          
+          // Restore and update soft-deleted vendor
+          let restoredVendor: any;
+          restoredVendor = await tx.vendor.update({
+            where: { id: existingVendor.id },
+            data: {
+              deletedAt: null,
+              status: VendorStatus.PENDING_APPROVAL,
+              name: vendorData.name,
+              address: vendorData.address || null,
+              gstin: vendorData.gstin || null,
+              pan: vendorData.pan || null,
+              udyamNo: vendorData.udyamNo || null,
+              category: vendorData.category || null,
+              paymentTerms: vendorData.paymentTerms || null,
+              creditDays: vendorData.creditDays ?? 0,
+              tdsApplicable: vendorData.tdsApplicable ?? false,
+              bankDetails: (vendorData.bankDetails || null) as any,
+            }
+          });
+
+          await logAudit(
+            tx,
+            companyId,
+            actorId,
+            "RESTORE",
+            "Vendor",
+            restoredVendor.id,
+            existingVendor,
+            restoredVendor
+          );
+
+          // Update cache map to mark it active
+          existingVendorsMap.set(code.toUpperCase(), { id: restoredVendor.id, code, deletedAt: null });
+          createdVendors.push(restoredVendor);
+          continue;
+        }
+
+        let newVendor: any;
+        newVendor = await tx.vendor.create({
+          data: {
+            companyId,
+            code,
+            name: vendorData.name,
+            address: vendorData.address || null,
+            gstin: vendorData.gstin || null,
+            pan: vendorData.pan || null,
+            udyamNo: vendorData.udyamNo || null,
+            category: vendorData.category || null,
+            paymentTerms: vendorData.paymentTerms || null,
+            creditDays: vendorData.creditDays ?? 0,
+            tdsApplicable: vendorData.tdsApplicable ?? false,
+            bankDetails: (vendorData.bankDetails || null) as any,
+            status: VendorStatus.PENDING_APPROVAL,
+          }
+        });
+
+        await logAudit(
+          tx,
+          companyId,
+          actorId,
+          "CREATE",
+          "Vendor",
+          newVendor.id,
+          null,
+          newVendor
+        );
+
+        // Add to cache map
+        existingVendorsMap.set(code.toUpperCase(), { id: newVendor.id, code, deletedAt: null });
+        createdVendors.push(newVendor);
+      }
+
+      if (validationErrors.length > 0) {
+        throw new Error(validationErrors.join("\n"));
+      }
+
+      return createdVendors;
+    }, {
+      maxWait: 15000,
+      timeout: 60000
+    });
+
+    revalidatePath("/purchase/vendors");
+    return { success: true, count: result.length, vendors: result };
+  } catch (err: any) {
+    console.error("Error bulk creating vendors:", err);
+    return { success: false, error: err.message || "Failed to bulk create vendors" };
+  }
+}
+

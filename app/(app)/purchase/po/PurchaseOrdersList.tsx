@@ -6,8 +6,10 @@ import {
   submitForApproval, 
   approvePO, 
   amendPO, 
-  cancelPO 
+  cancelPO,
+  updatePO
 } from "@/app/actions/purchaseOrders";
+import { SearchableItemSelect } from "@/components/SearchableItemSelect";
 import { PoType } from "@prisma/client";
 import { limitYearTo4Digits } from "@/lib/date";
 import { jsPDF } from "jspdf";
@@ -176,6 +178,8 @@ export default function PurchaseOrdersList({
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isAmendOpen, setIsAmendOpen] = useState(false);
   const [selectedPO, setSelectedPO] = useState<PORecord | null>(null);
+  const [editingPOId, setEditingPOId] = useState<string | null>(null);
+  const [selectedPOIds, setSelectedPOIds] = useState<string[]>([]);
 
   // New PO Form State
   const [newPo, setNewPo] = useState<{
@@ -684,6 +688,60 @@ export default function PurchaseOrdersList({
     setNewPoLine({ itemId: "", qty: 1, rate: 0, discount: 0, gstRate: 18 });
   };
 
+  const toggleSelect = (id: string) => {
+    setSelectedPOIds(prev =>
+      prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedPOIds.length === filteredPOs.length) {
+      setSelectedPOIds([]);
+    } else {
+      setSelectedPOIds(filteredPOs.map(po => po.id));
+    }
+  };
+
+  const handleBulkCancel = async () => {
+    if (selectedPOIds.length === 0) return;
+    const confirmMsg = `Are you sure you want to cancel/delete the ${selectedPOIds.length} selected Purchase Orders?`;
+    if (!confirm(confirmMsg)) return;
+
+    setActionLoading(true);
+    setErrorMsg(null);
+    let successCount = 0;
+    for (const poId of selectedPOIds) {
+      const res = await cancelPO(poId);
+      if (res.success) successCount++;
+    }
+    setActionLoading(false);
+    alert(`Successfully processed ${successCount} purchase orders.`);
+    window.location.reload();
+  };
+
+  const handleOpenEdit = (po: PORecord) => {
+    setErrorMsg(null);
+    setEditingPOId(po.id);
+    setNewPo({
+      vendorId: po.vendorId,
+      type: po.type as PoType,
+      deliveryDate: po.deliveryDate ? new Date(po.deliveryDate).toISOString().split("T")[0] : "",
+      paymentTerms: po.paymentTerms || "",
+      freightTerms: po.freightTerms || "",
+      shipTo: po.shipTo || "",
+      termsConditions: po.termsConditions || "",
+      termsPresetId: po.termsPresetId || "",
+      lines: po.lines.map(line => ({
+        itemId: line.itemId,
+        qty: line.qty,
+        rate: line.rate,
+        discount: line.discount,
+        gstRate: line.gstRate
+      }))
+    });
+    setIsOpen(true);
+  };
+
   const handleCreatePo = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPo.lines.length === 0) {
@@ -693,14 +751,22 @@ export default function PurchaseOrdersList({
 
     setActionLoading(true);
     setErrorMsg(null);
-    const res = await createPO(newPo);
+    
+    let res;
+    if (editingPOId) {
+      res = await updatePO(editingPOId, newPo);
+    } else {
+      res = await createPO(newPo);
+    }
+    
     setActionLoading(false);
 
     if (res.success) {
       setIsOpen(false);
+      setEditingPOId(null);
       window.location.reload();
     } else {
-      setErrorMsg(res.error || "Failed to create PO");
+      setErrorMsg(res.error || `Failed to ${editingPOId ? 'update' : 'create'} PO`);
     }
   };
 
@@ -787,9 +853,19 @@ export default function PurchaseOrdersList({
           <p className="text-xs text-onyx/50 mt-1">Manage corporate purchase orders, value-based approval limits, and amendment versioning logs.</p>
         </div>
         <div className="flex items-center space-x-3">
+          {selectedPOIds.length > 0 && (
+            <button
+              onClick={handleBulkCancel}
+              className="flex items-center space-x-2 px-3.5 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-xs font-bold text-white shadow-md transition-all duration-150 cursor-pointer animate-in fade-in zoom-in-95 duration-100"
+            >
+              <Trash2 size={15} />
+              <span>Bulk Cancel ({selectedPOIds.length})</span>
+            </button>
+          )}
           <button
             onClick={() => {
               setErrorMsg(null);
+              setEditingPOId(null);
               setNewPo({
                 vendorId: "",
                 type: "REGULAR",
@@ -848,6 +924,14 @@ export default function PurchaseOrdersList({
           <table className="w-full dense-table text-left border-collapse">
             <thead>
               <tr>
+                <th className="w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={filteredPOs.length > 0 && selectedPOIds.length === filteredPOs.length}
+                    onChange={toggleSelectAll}
+                    className="rounded border-onyx/20 text-saffron focus:ring-saffron cursor-pointer"
+                  />
+                </th>
                 <th>PO Number</th>
                 <th>Supplier</th>
                 <th>Type</th>
@@ -861,7 +945,7 @@ export default function PurchaseOrdersList({
             <tbody>
               {filteredPOs.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="text-center py-8 text-onyx/40 font-medium">
+                  <td colSpan={9} className="text-center py-8 text-onyx/40 font-medium">
                     No purchase orders found.
                   </td>
                 </tr>
@@ -869,6 +953,14 @@ export default function PurchaseOrdersList({
                 filteredPOs.map((po) => {
                   return (
                     <tr key={po.id}>
+                      <td className="text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedPOIds.includes(po.id)}
+                          onChange={() => toggleSelect(po.id)}
+                          className="rounded border-onyx/20 text-saffron focus:ring-saffron cursor-pointer"
+                        />
+                      </td>
                       <td className="font-mono font-bold text-xs text-onyx/85">
                         {po.number}
                         {po.version > 1 && (
@@ -913,6 +1005,15 @@ export default function PurchaseOrdersList({
                           >
                             <FileText size={13} />
                           </button>
+                          {["DRAFT", "PENDING_APPROVAL"].includes(po.status) && isPurchase && (
+                            <button
+                              onClick={() => handleOpenEdit(po)}
+                              title="Edit PO"
+                              className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer"
+                            >
+                              <Edit3 size={13} />
+                            </button>
+                          )}
 
                           {po.status === "DRAFT" && (
                             <button
@@ -969,8 +1070,8 @@ export default function PurchaseOrdersList({
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-cream max-w-3xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden animate-in zoom-in-95 duration-150">
             <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
-              <h3 className="font-heading text-lg font-bold">Create Purchase Order</h3>
-              <button onClick={() => setIsOpen(false)} className="hover:text-saffron cursor-pointer">
+              <h3 className="font-heading text-lg font-bold">{editingPOId ? "Edit Purchase Order" : "Create Purchase Order"}</h3>
+              <button onClick={() => { setIsOpen(false); setEditingPOId(null); }} className="hover:text-saffron cursor-pointer">
                 <X size={20} />
               </button>
             </div>
@@ -1183,16 +1284,12 @@ export default function PurchaseOrdersList({
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
                   <div className="sm:col-span-4">
                     <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
-                    <select
+                    <SearchableItemSelect
+                      items={items}
                       value={newPoLine.itemId}
-                      onChange={(e) => setNewPoLine(prev => ({ ...prev, itemId: e.target.value }))}
-                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg"
-                    >
-                      <option value="">Select Item</option>
-                      {items.map(item => (
-                        <option key={item.id} value={item.id}>[{item.code}] {item.name}</option>
-                      ))}
-                    </select>
+                      onChange={(val) => setNewPoLine(prev => ({ ...prev, itemId: val }))}
+                      placeholder="Select Item"
+                    />
                   </div>
                   <div className="sm:col-span-2">
                     <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Qty *</label>
@@ -1303,7 +1400,7 @@ export default function PurchaseOrdersList({
               <div className="pt-4 border-t border-onyx/10 flex items-center justify-end space-x-3">
                 <button
                   type="button"
-                  onClick={() => setIsOpen(false)}
+                  onClick={() => { setIsOpen(false); setEditingPOId(null); }}
                   className="px-4 py-2 border border-onyx/10 rounded-lg text-xs font-semibold hover:bg-cream-dark/40 cursor-pointer"
                 >
                   Cancel
@@ -1313,7 +1410,7 @@ export default function PurchaseOrdersList({
                   disabled={actionLoading || newPo.lines.length === 0}
                   className="px-4 py-2 bg-saffron hover:bg-saffron-dark rounded-lg text-xs font-bold text-onyx shadow cursor-pointer disabled:opacity-50"
                 >
-                  {actionLoading ? "Saving..." : "Save PO Draft"}
+                  {actionLoading ? "Saving..." : editingPOId ? "Save Changes" : "Save PO Draft"}
                 </button>
               </div>
             </form>

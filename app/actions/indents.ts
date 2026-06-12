@@ -80,6 +80,84 @@ export async function createIndent(data: {
   }
 }
 
+export async function updateIndent(
+  indentId: string,
+  data: {
+    priority: string;
+    purpose?: string | null;
+    lines: IndentLineInput[];
+  }
+) {
+  const session = await auth();
+  if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  const companyId = (session.user as any).companyId;
+  const actorId = (session.user as any).id;
+
+  try {
+    if (!data.lines || data.lines.length === 0) {
+      return { success: false, error: "Indent must contain at least one line item" };
+    }
+
+    const indent = await db.indent.findFirst({
+      where: { id: indentId, companyId },
+      include: { lines: true }
+    });
+
+    if (!indent) return { success: false, error: "Indent not found" };
+    if (indent.status !== IndentStatus.DRAFT) {
+      return { success: false, error: "Only draft indents can be edited" };
+    }
+
+    const result = await db.$transaction(async (tx) => {
+      // 1. Delete existing lines
+      await tx.indentLine.deleteMany({
+        where: { indentId }
+      });
+
+      // 2. Update indent and create new lines
+      const updatedIndent = await tx.indent.update({
+        where: { id: indentId },
+        data: {
+          priority: data.priority,
+          purpose: data.purpose || null,
+          lines: {
+            create: data.lines.map((l) => ({
+              itemId: l.itemId,
+              qty: l.qty,
+              requiredBy: l.requiredBy ? new Date(l.requiredBy) : null,
+              remarks: l.remarks || null,
+            })),
+          },
+        },
+        include: {
+          lines: true,
+        },
+      });
+
+      await tx.auditLog.create({
+        data: {
+          companyId,
+          actorId,
+          action: "UPDATE",
+          entity: "Indent",
+          entityId: indentId,
+          before: JSON.parse(JSON.stringify(indent)),
+          after: JSON.parse(JSON.stringify(updatedIndent)),
+        },
+      });
+
+      return updatedIndent;
+    });
+
+    revalidatePath("/stores/indents");
+    return { success: true, indent: result };
+  } catch (err: any) {
+    console.error("Error updating indent:", err);
+    return { success: false, error: err.message || "Failed to update indent" };
+  }
+}
+
 export async function submitIndent(id: string) {
   const session = await auth();
   if (!session || !session.user) return { success: false, error: "Unauthorized" };
