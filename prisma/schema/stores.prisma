@@ -93,6 +93,7 @@ enum GrnSource {
   FREE_SAMPLE
   RETURNABLE
   JOBWORK_RETURN
+  WITHOUT_PO
   @@schema("stores")
 
 }

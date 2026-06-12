@@ -1,10 +1,7 @@
-import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getReminders } from "@/lib/reminders";
-import { getItemValuation } from "@/lib/stock";
 import { 
-  Package, 
   ShoppingCart, 
   AlertTriangle, 
   CheckCircle2, 
@@ -16,7 +13,6 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { getFreshUser } from "@/app/actions/auth";
-import { can } from "@/lib/rbac";
 
 export default async function DashboardPage() {
   const user = await getFreshUser();
@@ -24,52 +20,20 @@ export default async function DashboardPage() {
     redirect("/auth/signin");
   }
 
-  const role = user.role;
-
   // Run database queries concurrently
-  const [reminders, itemsCount, vendorsCount, pendingIndents, activePos, invoicesCount, pendingRejections] = await Promise.all([
+  const [reminders, vendorsCount, activePos, invoicesCount, prsCount, invoicesSum] = await Promise.all([
     getReminders(user),
-    db.item.count({ where: { companyId: user.companyId, deletedAt: null } }),
     db.vendor.count({ where: { companyId: user.companyId, deletedAt: null } }),
-    db.indent.count({ where: { companyId: user.companyId, status: "SUBMITTED" } }),
     db.purchaseOrder.count({ where: { companyId: user.companyId, status: { in: ["APPROVED", "SENT", "PARTIALLY_RECEIVED"] } } }),
     db.supplierInvoice.count({ where: { companyId: user.companyId, matchStatus: "MISMATCH" } }),
-    db.rejectedMaterial.count({ where: { companyId: user.companyId, status: "PENDING_RETURN" } }),
-  ]);
-
-  // Calculate stock inventory valuation (for store managers / admins / owners)
-  let totalValuation = 0;
-  let lowStockAlerts = 0;
-  const isStore = can(user, "item.manage") || can(user, "grn.post") || ["STORE_MANAGER", "STORE_KEEPER", "ADMIN", "OWNER"].includes(role);
-  
-  if (isStore) {
-    const items = await db.item.findMany({
-      where: { companyId: user.companyId, deletedAt: null },
-      select: { id: true, reorderLevel: true }
-    });
-
-    const valuations = await Promise.all(
-      items.map(item => getItemValuation(user.companyId, item.id))
-    );
-
-    valuations.forEach((val, idx) => {
-      totalValuation += val.totalValue;
-      if (val.qty < items[idx].reorderLevel) {
-        lowStockAlerts++;
-      }
-    });
-  }
-
-  // Calculate total outstanding payables (for accounts / admins / owners)
-  let totalPayable = 0;
-  const isAccounts = can(user, "invoice.match") || can(user, "payment.record") || ["ACCOUNTS", "ADMIN", "OWNER"].includes(role);
-  if (isAccounts) {
-    const invoices = await db.supplierInvoice.aggregate({
+    db.purchaseRequisition.count({ where: { companyId: user.companyId, deletedAt: null } }),
+    db.supplierInvoice.aggregate({
       where: { companyId: user.companyId, matchStatus: { in: ["MATCHED", "PENDING"] } },
       _sum: { amount: true }
-    });
-    totalPayable = invoices._sum.amount || 0;
-  }
+    }),
+  ]);
+
+  const totalPayable = invoicesSum._sum.amount || 0;
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -79,7 +43,10 @@ export default async function DashboardPage() {
     }).format(amount);
   };
 
-  const redReminders = reminders.filter((r) => r.severity === "red");
+  // Only purchase categories reminders should be shown on dashboard
+  const purchaseCategories = ["PENDING_PR", "PENDING_PO", "OVERDUE_PO_DELIVERY", "INVOICE_MISMATCH", "PAYMENTS_DUE"];
+  const purchaseReminders = reminders.filter(r => purchaseCategories.includes(r.category));
+  const redReminders = purchaseReminders.filter((r) => r.severity === "red");
 
   return (
     <div className="space-y-6">
@@ -122,7 +89,7 @@ export default async function DashboardPage() {
           </h2>
         </div>
 
-        {reminders.length === 0 ? (
+        {purchaseReminders.length === 0 ? (
           <div className="glass-card p-8 rounded-xl border border-onyx/5 flex flex-col items-center justify-center text-center">
             <CheckCircle2 size={36} className="text-green-600 mb-2" />
             <p className="text-sm font-semibold text-onyx/80">All caught up! No pending actions.</p>
@@ -130,7 +97,7 @@ export default async function DashboardPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {reminders.map((reminder) => (
+            {purchaseReminders.map((reminder) => (
               <Link
                 key={reminder.category}
                 href={reminder.deepLink}
@@ -168,84 +135,52 @@ export default async function DashboardPage() {
 
       {/* KPI Cards Grid */}
       <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-6">
-        {/* Core items count (Stores) */}
+        {/* Core PR & RFQs count */}
         <Link 
-          href="/stores/items"
+          href="/purchase/requisitions"
           className="glass-card p-6 rounded-xl border border-onyx/5 flex items-center space-x-4 hover:border-saffron hover:shadow-md transition-all duration-200 group cursor-pointer"
         >
           <div className="p-3 bg-cream-dark border border-onyx/5 rounded-lg text-saffron-dark group-hover:bg-saffron group-hover:text-onyx transition-all duration-150">
-            <Package size={24} />
+            <ShoppingCart size={24} />
           </div>
           <div>
-            <p className="text-[10px] uppercase font-bold text-onyx/50 tracking-wider">Item Master</p>
-            <p className="text-2xl font-bold text-onyx mt-0.5">{itemsCount}</p>
-            <p className="text-[10px] text-onyx/40 font-medium">Active codings in system</p>
+            <p className="text-[10px] uppercase font-bold text-onyx/50 tracking-wider">PR & RFQs</p>
+            <p className="text-2xl font-bold text-onyx mt-0.5">{prsCount}</p>
+            <p className="text-[10px] text-onyx/40 font-medium">Purchase Requisitions</p>
           </div>
         </Link>
 
-        {/* Dynamic store valuation OR active POs */}
-        {isStore ? (
-          <Link 
-            href="/stores/reports"
-            className="glass-card p-6 rounded-xl border border-onyx/5 flex items-center space-x-4 hover:border-saffron hover:shadow-md transition-all duration-200 group cursor-pointer"
-          >
-            <div className="p-3 bg-cream-dark border border-onyx/5 rounded-lg text-saffron-dark group-hover:bg-saffron group-hover:text-onyx transition-all duration-150">
-              <TrendingUp size={24} />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase font-bold text-onyx/50 tracking-wider">Stock Valuation</p>
-              <p className="text-2xl font-bold text-onyx mt-0.5">{formatCurrency(totalValuation)}</p>
-              <p className="text-[10px] text-onyx/40 font-medium">Weighted Average derived</p>
-            </div>
-          </Link>
-        ) : (
-          <Link 
-            href="/purchase/po"
-            className="glass-card p-6 rounded-xl border border-onyx/5 flex items-center space-x-4 hover:border-saffron hover:shadow-md transition-all duration-200 group cursor-pointer"
-          >
-            <div className="p-3 bg-cream-dark border border-onyx/5 rounded-lg text-saffron-dark group-hover:bg-saffron group-hover:text-onyx transition-all duration-150">
-              <ShoppingCart size={24} />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase font-bold text-onyx/50 tracking-wider">Active POs</p>
-              <p className="text-2xl font-bold text-onyx mt-0.5">{activePos}</p>
-              <p className="text-[10px] text-onyx/40 font-medium">Open purchase orders</p>
-            </div>
-          </Link>
-        )}
+        {/* Active POs */}
+        <Link 
+          href="/purchase/po"
+          className="glass-card p-6 rounded-xl border border-onyx/5 flex items-center space-x-4 hover:border-saffron hover:shadow-md transition-all duration-200 group cursor-pointer"
+        >
+          <div className="p-3 bg-cream-dark border border-onyx/5 rounded-lg text-saffron-dark group-hover:bg-saffron group-hover:text-onyx transition-all duration-150">
+            <ShoppingCart size={24} />
+          </div>
+          <div>
+            <p className="text-[10px] uppercase font-bold text-onyx/50 tracking-wider">Active POs</p>
+            <p className="text-2xl font-bold text-onyx mt-0.5">{activePos}</p>
+            <p className="text-[10px] text-onyx/40 font-medium">Open purchase orders</p>
+          </div>
+        </Link>
 
-        {/* Dynamic accounts payable OR pending indents */}
-        {isAccounts ? (
-          <Link 
-            href="/purchase/payments"
-            className="glass-card p-6 rounded-xl border border-onyx/5 flex items-center space-x-4 hover:border-saffron hover:shadow-md transition-all duration-200 group cursor-pointer"
-          >
-            <div className="p-3 bg-cream-dark border border-onyx/5 rounded-lg text-saffron-dark group-hover:bg-saffron group-hover:text-onyx transition-all duration-150">
-              <TrendingUp size={24} />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase font-bold text-onyx/50 tracking-wider">Outstanding Payables</p>
-              <p className="text-2xl font-bold text-onyx mt-0.5">{formatCurrency(totalPayable)}</p>
-              <p className="text-[10px] text-onyx/40 font-medium">Total active bills due</p>
-            </div>
-          </Link>
-        ) : (
-          <Link 
-            href="/stores/indents"
-            className="glass-card p-6 rounded-xl border border-onyx/5 flex items-center space-x-4 hover:border-saffron hover:shadow-md transition-all duration-200 group cursor-pointer"
-          >
-            <div className="p-3 bg-cream-dark border border-onyx/5 rounded-lg text-saffron-dark group-hover:bg-saffron group-hover:text-onyx transition-all duration-150">
-              <ShoppingCart size={24} />
-            </div>
-            <div>
-              <p className="text-[10px] uppercase font-bold text-onyx/50 tracking-wider">Pending Indents</p>
-              <p className="text-2xl font-bold text-onyx mt-0.5">{pendingIndents}</p>
-              <p className="text-[10px] text-onyx/40 font-medium">Awaiting issue/PR conversion</p>
-            </div>
-          </Link>
-        )}
+        {/* Outstanding Payables */}
+        <Link 
+          href="/purchase/payments"
+          className="glass-card p-6 rounded-xl border border-onyx/5 flex items-center space-x-4 hover:border-saffron hover:shadow-md transition-all duration-200 group cursor-pointer"
+        >
+          <div className="p-3 bg-cream-dark border border-onyx/5 rounded-lg text-saffron-dark group-hover:bg-saffron group-hover:text-onyx transition-all duration-150">
+            <TrendingUp size={24} />
+          </div>
+          <div>
+            <p className="text-[10px] uppercase font-bold text-onyx/50 tracking-wider">Outstanding Payables</p>
+            <p className="text-2xl font-bold text-onyx mt-0.5">{formatCurrency(totalPayable)}</p>
+            <p className="text-[10px] text-onyx/40 font-medium">Total active bills due</p>
+          </div>
+        </Link>
 
-        {/* QC status OR vendor count */}
+        {/* Suppliers vendor count */}
         <Link 
           href="/purchase/vendors"
           className="glass-card p-6 rounded-xl border border-onyx/5 flex items-center space-x-4 hover:border-saffron hover:shadow-md transition-all duration-200 group cursor-pointer"
@@ -260,43 +195,21 @@ export default async function DashboardPage() {
           </div>
         </Link>
 
-        {/* Dynamic rejections pendings summary */}
+        {/* Invoice Mismatches */}
         <Link 
-          href="/stores/rejected-material"
+          href="/purchase/invoices?matchStatus=MISMATCH"
           className="glass-card p-6 rounded-xl border border-onyx/5 flex items-center space-x-4 hover:border-saffron hover:shadow-md transition-all duration-200 group cursor-pointer"
         >
           <div className="p-3 bg-cream-dark border border-onyx/5 rounded-lg text-saffron-dark group-hover:bg-saffron group-hover:text-onyx transition-all duration-150">
             <AlertTriangle size={24} />
           </div>
           <div>
-            <p className="text-[10px] uppercase font-bold text-onyx/50 tracking-wider">Pending Rejections</p>
-            <p className="text-2xl font-bold text-onyx mt-0.5">{pendingRejections}</p>
-            <p className="text-[10px] text-onyx/40 font-medium">Awaiting vendor return</p>
+            <p className="text-[10px] uppercase font-bold text-onyx/50 tracking-wider">Mismatch Invoices</p>
+            <p className="text-2xl font-bold text-onyx mt-0.5">{invoicesCount}</p>
+            <p className="text-[10px] text-onyx/40 font-medium">Failing 3-Way Match</p>
           </div>
         </Link>
       </section>
-
-      {/* Warnings & Alerts banner (if any critical thresholds crossed) */}
-      {isStore && lowStockAlerts > 0 && (
-        <div className="bg-red-50 border-l-4 border-red-600 p-5 rounded-r-xl flex items-start space-x-4">
-          <ShieldAlert size={20} className="text-red-700 mt-0.5 shrink-0" />
-          <div>
-            <h4 className="text-sm font-bold text-red-900">Critical: Low Stock Level Warning</h4>
-            <p className="text-xs text-red-800 leading-relaxed mt-1">
-              There are currently {lowStockAlerts} items sitting below their designated reorder level thresholds. Please review the stock-on-hand values and trigger Purchase Requisitions (PR) to prevent production delays.
-            </p>
-            <div className="mt-3">
-              <Link 
-                href="/stores/reports?type=low-stock"
-                className="text-xs font-bold text-red-900 hover:text-red-950 underline flex items-center"
-              >
-                <span>View Low-Stock Inventory Register</span>
-                <ArrowRight size={12} className="ml-1" />
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
