@@ -18,6 +18,7 @@ interface IndentLineInput {
 export async function createIndent(data: {
   priority: string;
   purpose?: string | null;
+  deptId?: string | null;
   lines: IndentLineInput[];
 }) {
   const session = await auth();
@@ -25,7 +26,7 @@ export async function createIndent(data: {
 
   const companyId = (session.user as any).companyId;
   const actorId = (session.user as any).id;
-  const deptId = (session.user as any).deptId;
+  const deptId = data.deptId !== undefined ? data.deptId : (session.user as any).deptId;
 
   try {
     if (!data.lines || data.lines.length === 0) {
@@ -85,6 +86,7 @@ export async function updateIndent(
   data: {
     priority: string;
     purpose?: string | null;
+    deptId?: string | null;
     lines: IndentLineInput[];
   }
 ) {
@@ -121,6 +123,7 @@ export async function updateIndent(
         data: {
           priority: data.priority,
           purpose: data.purpose || null,
+          deptId: data.deptId || null,
           lines: {
             create: data.lines.map((l) => ({
               itemId: l.itemId,

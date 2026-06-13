@@ -101,6 +101,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
   const [newIndent, setNewIndent] = useState({
     priority: "NORMAL",
     purpose: "",
+    deptId: "",
     lines: [] as { itemId: string; qty: number; remarks: string; requiredBy: string }[],
   });
 
@@ -110,6 +111,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
     setNewIndent({
       priority: indent.priority,
       purpose: indent.purpose || "",
+      deptId: indent.deptId || "",
       lines: indent.lines.map(line => ({
         itemId: line.itemId,
         qty: line.qty,
@@ -126,6 +128,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
     setNewIndent({
       priority: "NORMAL",
       purpose: "",
+      deptId: "",
       lines: []
     });
     setNewLineItem({ itemId: "", qty: 1, remarks: "", requiredBy: "" });
@@ -138,6 +141,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
     setNewIndent({
       priority: "NORMAL",
       purpose: "",
+      deptId: "",
       lines: []
     });
     setNewLineItem({ itemId: "", qty: 1, remarks: "", requiredBy: "" });
@@ -256,12 +260,14 @@ export default function IndentsList({ initialIndents, items, stores, departments
       res = await updateIndent(editingIndentId, {
         priority: newIndent.priority,
         purpose: newIndent.purpose,
+        deptId: newIndent.deptId,
         lines: newIndent.lines,
       });
     } else {
       res = await createIndent({
         priority: newIndent.priority,
         purpose: newIndent.purpose,
+        deptId: newIndent.deptId,
         lines: newIndent.lines,
       });
     }
@@ -572,22 +578,39 @@ export default function IndentsList({ initialIndents, items, stores, departments
 
             <form onSubmit={handleCreateIndent} className="flex-1 overflow-y-auto p-6 space-y-6">
               {/* Header Details */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                <div className="sm:col-span-3">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                     Indent Priority
                   </label>
                   <select
                     value={newIndent.priority}
                     onChange={(e) => setNewIndent(prev => ({ ...prev, priority: e.target.value }))}
-                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
+                    className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
                   >
                     <option value="NORMAL">Normal</option>
                     <option value="HIGH">High</option>
                     <option value="URGENT">Urgent</option>
                   </select>
                 </div>
-                <div>
+                <div className="sm:col-span-4">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                    Department
+                  </label>
+                  <select
+                    value={newIndent.deptId}
+                    onChange={(e) => setNewIndent(prev => ({ ...prev, deptId: e.target.value }))}
+                    className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
+                  >
+                    <option value="">Select Department (Default)</option>
+                    {departments.map((dept) => (
+                      <option key={dept.id} value={dept.id}>
+                        {dept.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="sm:col-span-5">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                     Requisition Purpose / Remarks
                   </label>
