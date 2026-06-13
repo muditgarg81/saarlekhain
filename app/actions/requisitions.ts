@@ -28,6 +28,8 @@ const quotationSchema = z.object({
   vendorId: z.string(),
   leadDays: z.number().int().nonnegative().optional().nullable(),
   terms: z.string().optional().nullable(),
+  freight: z.number().nonnegative().default(0),
+  packingCharges: z.number().nonnegative().default(0),
   lines: z.array(z.object({
     rfqLineId: z.string().optional().nullable(),
     itemId: z.string(),
@@ -36,7 +38,6 @@ const quotationSchema = z.object({
     gstRate: z.number().nonnegative().default(0),
     canSupply: z.boolean().default(true),
     quotedQty: z.number().nonnegative().optional().nullable(),
-    freight: z.number().nonnegative().default(0),
     leadDays: z.number().int().nonnegative().optional().nullable(),
   })),
 });
@@ -242,6 +243,8 @@ export async function submitQuotation(data: z.infer<typeof quotationSchema>) {
           vendorId: validated.vendorId,
           leadDays: validated.leadDays || null,
           terms: validated.terms || null,
+          freight: validated.freight,
+          packingCharges: validated.packingCharges,
           awarded: false,
           lines: {
             create: validated.lines.map((l) => ({
@@ -252,7 +255,6 @@ export async function submitQuotation(data: z.infer<typeof quotationSchema>) {
               rfqLineId: l.rfqLineId || null,
               canSupply: l.canSupply ?? true,
               quotedQty: l.quotedQty ?? null,
-              freight: l.freight ?? 0,
               leadDays: l.leadDays ?? null,
             })),
           },
@@ -332,19 +334,65 @@ export async function awardQuotation(rfqId: string, quotationId: string) {
  * Recalculates landed costs and L1 ranks for all quotation lines linked to an RFQ.
  */
 export async function recalculateRfqRanks(rfqId: string, tx: any) {
-  // Fetch all RFQ lines
+  // 1. Fetch all quotations and their lines for this RFQ to calculate totalBasicValue
+  const quotations = await tx.quotation.findMany({
+    where: { rfqId },
+    include: {
+      lines: {
+        include: {
+          rfqLine: true
+        }
+      },
+      vendor: true
+    }
+  });
+
+  // Calculate landed units for all lines across all quotations
+  const landedUnitMap = new Map<string, { landedUnit: number; leadDays: number; rating: number }>();
+
+  for (const q of quotations) {
+    let totalBasicValue = 0;
+    const activeLines = q.lines.filter((l: any) => l.canSupply);
+
+    const lineDetails = activeLines.map((line: any) => {
+      const rfqLineQty = line.rfqLine?.qty ?? 0;
+      const effectiveQty = line.quotedQty && line.quotedQty > 0 ? line.quotedQty : rfqLineQty;
+      const basicValue = line.rate * (1 - line.discount / 100) * effectiveQty;
+      totalBasicValue += basicValue;
+      return {
+        id: line.id,
+        rate: line.rate,
+        discount: line.discount,
+        gstRate: line.gstRate,
+        effectiveQty,
+        basicValue,
+        leadDays: line.leadDays ?? q.leadDays ?? 999,
+        rating: q.vendor?.rating ?? 0
+      };
+    });
+
+    const totalCommonCharges = (q.freight ?? 0) + (q.packingCharges ?? 0);
+
+    for (const detail of lineDetails) {
+      let unitCharges = 0;
+      if (totalBasicValue > 0 && detail.effectiveQty > 0) {
+        const allocatedCharges = totalCommonCharges * (detail.basicValue / totalBasicValue);
+        unitCharges = allocatedCharges / detail.effectiveQty;
+      }
+      const landedUnit = detail.rate * (1 - detail.discount / 100) * (1 + detail.gstRate / 100) + unitCharges;
+      landedUnitMap.set(detail.id, {
+        landedUnit,
+        leadDays: detail.leadDays,
+        rating: detail.rating
+      });
+    }
+  }
+
+  // 2. Fetch all RFQ lines with their quotation lines to rank them
   const rfqLines = await tx.rfqLine.findMany({
     where: { rfqId },
     include: {
-      quotationLines: {
-        include: {
-          quotation: {
-            include: {
-              vendor: true
-            }
-          }
-        }
-      }
+      quotationLines: true
     }
   });
 
@@ -352,14 +400,12 @@ export async function recalculateRfqRanks(rfqId: string, tx: any) {
     const linesWithLanded = rfqLine.quotationLines
       .filter((line: any) => line.canSupply)
       .map((line: any) => {
-        const effectiveQty = line.quotedQty && line.quotedQty > 0 ? line.quotedQty : rfqLine.qty;
-        // Formula: rate * (1 - discount%) * (1 + gst%) + (freight / effectiveQty)
-        const landedUnit = line.rate * (1 - line.discount / 100) * (1 + line.gstRate / 100) + (line.freight / effectiveQty);
+        const computed = landedUnitMap.get(line.id);
         return {
           line,
-          landedUnit,
-          leadDays: line.leadDays ?? line.quotation.leadDays ?? 999,
-          rating: line.quotation.vendor.rating ?? 0
+          landedUnit: computed?.landedUnit ?? 0,
+          leadDays: computed?.leadDays ?? 999,
+          rating: computed?.rating ?? 0
         };
       });
 

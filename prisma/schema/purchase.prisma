@@ -193,6 +193,8 @@ model Quotation {
   vendorId  String
   leadDays  Int?
   terms     String?
+  freight        Float @default(0)
+  packingCharges Float @default(0)
   awarded   Boolean @default(false)
   rfq       Rfq    @relation(fields: [rfqId], references: [id])
   lines     QuotationLine[]
@@ -215,7 +217,6 @@ model QuotationLine {
 
   canSupply   Boolean @default(true)
   quotedQty   Float?
-  freight     Float   @default(0)
   leadDays    Int?
   landedUnit  Float?
   rank        Int?

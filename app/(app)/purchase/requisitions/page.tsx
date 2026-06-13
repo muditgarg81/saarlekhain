@@ -137,6 +137,8 @@ export default async function RequisitionsPage() {
           vendorName: vendor?.name || "Unknown Vendor",
           leadDays: q.leadDays,
           terms: q.terms,
+          freight: q.freight,
+          packingCharges: q.packingCharges,
           awarded: q.awarded,
           lines: q.lines.map((l) => ({
             id: l.id,
@@ -147,7 +149,6 @@ export default async function RequisitionsPage() {
             rfqLineId: l.rfqLineId,
             canSupply: l.canSupply,
             quotedQty: l.quotedQty,
-            freight: l.freight,
             leadDays: l.leadDays,
             landedUnit: l.landedUnit,
             rank: l.rank,

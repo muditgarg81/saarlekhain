@@ -77,7 +77,6 @@ interface QuotationLine {
   rfqLineId?: string | null;
   canSupply?: boolean;
   quotedQty?: number | null;
-  freight?: number;
   leadDays?: number | null;
   landedUnit?: number | null;
   rank?: number | null;
@@ -89,6 +88,8 @@ interface QuotationRecord {
   vendorName: string;
   leadDays: number | null;
   terms: string | null;
+  freight: number;
+  packingCharges: number;
   awarded: boolean;
   lines: QuotationLine[];
 }
@@ -204,6 +205,8 @@ export default function RequisitionsList({
     vendorId: "",
     leadDays: 5,
     terms: "FOB Destination",
+    freight: 0,
+    packingCharges: 0,
     lines: [] as {
       rfqLineId?: string | null;
       itemId: string;
@@ -212,7 +215,6 @@ export default function RequisitionsList({
       gstRate: number;
       canSupply: boolean;
       quotedQty: number | null;
-      freight: number;
       leadDays: number | null;
     }[]
   });
@@ -384,6 +386,8 @@ export default function RequisitionsList({
       vendorId: "",
       leadDays: 5,
       terms: "FOB Destination",
+      freight: 0,
+      packingCharges: 0,
       lines: rfq.lines.map(l => ({
         rfqLineId: l.id,
         itemId: l.itemId,
@@ -392,7 +396,6 @@ export default function RequisitionsList({
         gstRate: 18,
         canSupply: true,
         quotedQty: l.qty,
-        freight: 0,
         leadDays: 5,
       }))
     });
@@ -420,6 +423,8 @@ export default function RequisitionsList({
       vendorId: newQuote.vendorId,
       leadDays: maxLineLeadDays,
       terms: newQuote.terms,
+      freight: newQuote.freight,
+      packingCharges: newQuote.packingCharges,
       lines: newQuote.lines
     });
     setActionLoading(false);
@@ -1069,7 +1074,7 @@ export default function RequisitionsList({
                 </div>
               )}
 
-              {/* Vendor & Terms */}
+              {/* Vendor, Terms, Freight & Packing Charges */}
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
                 <div className="sm:col-span-8">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
@@ -1091,6 +1096,40 @@ export default function RequisitionsList({
                     value={newQuote.terms}
                     onChange={(e) => setNewQuote(prev => ({ ...prev, terms: e.target.value }))}
                     className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
+                  />
+                </div>
+
+                <div className="sm:col-span-6">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                    Common Freight (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={newQuote.freight || ""}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value) || 0;
+                      setNewQuote(prev => ({ ...prev, freight: val }));
+                    }}
+                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none font-mono"
+                    placeholder="0.00"
+                  />
+                </div>
+
+                <div className="sm:col-span-6">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                    Common Packing Charges (₹)
+                  </label>
+                  <input
+                    type="number"
+                    step="any"
+                    value={newQuote.packingCharges || ""}
+                    onChange={(e) => {
+                      const val = parseFloat(e.target.value) || 0;
+                      setNewQuote(prev => ({ ...prev, packingCharges: val }));
+                    }}
+                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none font-mono"
+                    placeholder="0.00"
                   />
                 </div>
               </div>
@@ -1134,7 +1173,7 @@ export default function RequisitionsList({
                         </div>
 
                         {/* Right Column */}
-                        <div className={`flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-cream-dark/15 border border-onyx/5 rounded-lg transition-opacity duration-200 ${
+                        <div className={`flex-1 grid grid-cols-2 sm:grid-cols-5 gap-3 p-3 bg-cream-dark/15 border border-onyx/5 rounded-lg transition-opacity duration-200 ${
                           !canSupply ? "opacity-40 pointer-events-none" : ""
                         }`}>
                           <div>
@@ -1210,25 +1249,6 @@ export default function RequisitionsList({
                                 });
                               }}
                               className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none text-right font-mono"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Freight (₹)</label>
-                            <input
-                              type="number"
-                              step="any"
-                              value={line.freight ?? ""}
-                              onChange={(e) => {
-                                const val = parseFloat(e.target.value) || 0;
-                                setNewQuote(prev => {
-                                  const updated = [...prev.lines];
-                                  updated[idx].freight = val;
-                                  return { ...prev, lines: updated };
-                                });
-                              }}
-                              className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none text-right font-mono"
-                              placeholder="0.00"
                             />
                           </div>
 
