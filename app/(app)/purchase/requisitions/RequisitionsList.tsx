@@ -408,10 +408,17 @@ export default function RequisitionsList({
 
     setActionLoading(true);
     setErrorMsg(null);
+
+    // Calculate maximum lead days from item lines
+    const activeLines = newQuote.lines.filter(l => l.canSupply !== false);
+    const maxLineLeadDays = activeLines.length > 0
+      ? Math.max(...activeLines.map(l => l.leadDays || 0))
+      : 5;
+
     const res = await submitQuotation({
       rfqId: selectedRfq!.id,
       vendorId: newQuote.vendorId,
-      leadDays: newQuote.leadDays,
+      leadDays: maxLineLeadDays,
       terms: newQuote.terms,
       lines: newQuote.lines
     });
@@ -1062,9 +1069,9 @@ export default function RequisitionsList({
                 </div>
               )}
 
-              {/* Vendor, Lead Days, Terms */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
+              {/* Vendor & Terms */}
+              <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
+                <div className="sm:col-span-8">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                     Select Supplier *
                   </label>
@@ -1075,18 +1082,7 @@ export default function RequisitionsList({
                     placeholder="Select Vendor"
                   />
                 </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
-                    Lead Time (Days)
-                  </label>
-                  <input
-                    type="number"
-                    value={newQuote.leadDays}
-                    onChange={(e) => setNewQuote(prev => ({ ...prev, leadDays: parseInt(e.target.value) || 0 }))}
-                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none font-mono"
-                  />
-                </div>
-                <div>
+                <div className="sm:col-span-4">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                     Delivery Terms
                   </label>
