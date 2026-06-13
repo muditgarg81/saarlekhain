@@ -63,6 +63,8 @@ enum IndentStatus {
   PARTIALLY_ISSUED
   ISSUED
   CONVERTED_TO_PR
+  PARTIALLY_ORDERED
+  SHORT_CLOSED
   CLOSED
   @@schema("stores")
 
@@ -190,6 +192,7 @@ model Item {
   abcClass      AbcClass @default(NONE)
   status        MasterStatus @default(ACTIVE)
   deletedAt     DateTime?
+  moq           Float    @default(1)
   company       Company  @relation(fields: [companyId], references: [id])
   department    Department? @relation(fields: [departmentId], references: [id])
 
@@ -328,6 +331,9 @@ model IndentLine {
   issuedQty    Float   @default(0)
   remarks      String?
   purchaseQty  Float   @default(0)   // qty routed to purchase (vs issued from stock)
+  orderedQty     Float      @default(0)
+  shortClosedQty Float      @default(0)
+  status         LineStatus @default(OPEN)
   prLineId     String?              // set on conversion
   prLine       PrLine? @relation(fields: [prLineId], references: [id])
   reorderSuggestionId String?

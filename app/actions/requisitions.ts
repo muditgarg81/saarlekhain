@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { getNextSequence } from "@/lib/sequences";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { PrStatus, RfqStatus } from "@prisma/client";
+import { PrStatus, RfqStatus, RfqLineStatus, LineStatus } from "@prisma/client";
 
 const prSchema = z.object({
   lines: z.array(z.object({
@@ -34,6 +34,10 @@ const quotationSchema = z.object({
     rate: z.number().nonnegative(),
     discount: z.number().nonnegative().default(0),
     gstRate: z.number().nonnegative().default(0),
+    canSupply: z.boolean().default(true),
+    quotedQty: z.number().nonnegative().optional().nullable(),
+    freight: z.number().nonnegative().default(0),
+    leadDays: z.number().int().nonnegative().optional().nullable(),
   })),
 });
 
@@ -246,6 +250,10 @@ export async function submitQuotation(data: z.infer<typeof quotationSchema>) {
               discount: l.discount,
               gstRate: l.gstRate,
               rfqLineId: l.rfqLineId || null,
+              canSupply: l.canSupply ?? true,
+              quotedQty: l.quotedQty ?? null,
+              freight: l.freight ?? 0,
+              leadDays: l.leadDays ?? null,
             })),
           },
         },
@@ -253,6 +261,9 @@ export async function submitQuotation(data: z.infer<typeof quotationSchema>) {
           lines: true,
         },
       });
+
+      // Recalculate ranks for the RFQ
+      await recalculateRfqRanks(validated.rfqId, tx);
 
       // Update RFQ status to Quotes Received
       await tx.rfq.update({
@@ -316,3 +327,77 @@ export async function awardQuotation(rfqId: string, quotationId: string) {
     return { success: false, error: err.message || "Failed to award quotation" };
   }
 }
+
+/**
+ * Recalculates landed costs and L1 ranks for all quotation lines linked to an RFQ.
+ */
+export async function recalculateRfqRanks(rfqId: string, tx: any) {
+  // Fetch all RFQ lines
+  const rfqLines = await tx.rfqLine.findMany({
+    where: { rfqId },
+    include: {
+      quotationLines: {
+        include: {
+          quotation: {
+            include: {
+              vendor: true
+            }
+          }
+        }
+      }
+    }
+  });
+
+  for (const rfqLine of rfqLines) {
+    const linesWithLanded = rfqLine.quotationLines
+      .filter((line: any) => line.canSupply)
+      .map((line: any) => {
+        const effectiveQty = line.quotedQty && line.quotedQty > 0 ? line.quotedQty : rfqLine.qty;
+        // Formula: rate * (1 - discount%) * (1 + gst%) + (freight / effectiveQty)
+        const landedUnit = line.rate * (1 - line.discount / 100) * (1 + line.gstRate / 100) + (line.freight / effectiveQty);
+        return {
+          line,
+          landedUnit,
+          leadDays: line.leadDays ?? line.quotation.leadDays ?? 999,
+          rating: line.quotation.vendor.rating ?? 0
+        };
+      });
+
+    // Sort by: landedUnit asc, leadDays asc, rating desc
+    linesWithLanded.sort((a: any, b: any) => {
+      if (Math.abs(a.landedUnit - b.landedUnit) > 0.0001) {
+        return a.landedUnit - b.landedUnit;
+      }
+      if (a.leadDays !== b.leadDays) {
+        return a.leadDays - b.leadDays;
+      }
+      return b.rating - a.rating;
+    });
+
+    // Update rank and landedUnit in DB
+    for (const qLine of rfqLine.quotationLines) {
+      if (!qLine.canSupply) {
+        await tx.quotationLine.update({
+          where: { id: qLine.id },
+          data: {
+            landedUnit: null,
+            rank: null
+          }
+        });
+      } else {
+        const match = linesWithLanded.find((m: any) => m.line.id === qLine.id);
+        if (match) {
+          const rank = linesWithLanded.indexOf(match) + 1;
+          await tx.quotationLine.update({
+            where: { id: qLine.id },
+            data: {
+              landedUnit: match.landedUnit,
+              rank
+            }
+          });
+        }
+      }
+    }
+  }
+}
+

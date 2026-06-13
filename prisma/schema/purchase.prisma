@@ -7,7 +7,9 @@ enum PrStatus {
   APPROVED
   REJECTED
   RFQ_ISSUED
+  PARTIALLY_ORDERED
   PO_RAISED
+  SHORT_CLOSED
   CLOSED
   @@schema("purchase")
 
@@ -102,6 +104,7 @@ model Vendor {
   rating      Float?
   status      VendorStatus @default(PENDING_APPROVAL)
   deletedAt   DateTime?
+  minOrderValue Float      @default(0)
   company     Company      @relation(fields: [companyId], references: [id])
 
   pos         PurchaseOrder[]
@@ -139,6 +142,9 @@ model PrLine {
   itemId String
   qty    Float
   requiredBy DateTime?
+  orderedQty     Float      @default(0)
+  shortClosedQty Float      @default(0)
+  status         LineStatus @default(OPEN)
   indentLines IndentLine[]
   rfqLines    RfqLine[]
   poRaised    Boolean @default(false)
@@ -172,8 +178,8 @@ model RfqLine {
   prLineId              String?
   prLine                PrLine?        @relation(fields: [prLineId], references: [id])
   quotationLines        QuotationLine[]
-  awardedQuotationLineId String?       @unique
-  awardedQuotationLine  QuotationLine? @relation("AwardedLine", fields: [awardedQuotationLineId], references: [id])
+  awardedQty            Float          @default(0)
+  status                RfqLineStatus  @default(OPEN)
   rfq    Rfq    @relation(fields: [rfqId], references: [id])
   @@schema("purchase")
 
@@ -204,9 +210,16 @@ model QuotationLine {
   gstRate     Float  @default(0)
   rfqLineId   String?
   rfqLine     RfqLine? @relation(fields: [rfqLineId], references: [id])
-  awardOf     RfqLine? @relation("AwardedLine")
   poLines     PoLine[]
   quotation   Quotation @relation(fields: [quotationId], references: [id])
+
+  canSupply   Boolean @default(true)
+  quotedQty   Float?
+  freight     Float   @default(0)
+  leadDays    Int?
+  landedUnit  Float?
+  rank        Int?
+
   @@schema("purchase")
 
 }
@@ -637,3 +650,52 @@ model PoTermsConfig {
   jurisdictionCity     String?                 // defaults to company city
   @@schema("purchase")
 }
+
+enum LineStatus {
+  OPEN
+  PARTIALLY_ORDERED
+  ORDERED
+  ISSUED
+  SHORT_CLOSED
+  CANCELLED
+  @@schema("purchase")
+}
+
+enum RfqLineStatus {
+  OPEN
+  QUOTED
+  AWARDED
+  PARTIALLY_AWARDED
+  UNCOVERED
+  SHORT
+  CLOSED
+  @@schema("purchase")
+}
+
+enum AwardReason {
+  L1
+  LEAD_TIME
+  APPROVED_VENDOR
+  CAPACITY_SPLIT
+  SOLE_SUPPLIER
+  PARTIAL_AVAILABILITY
+  OTHER
+  @@schema("purchase")
+}
+
+model AwardAllocation {
+  id              String      @id @default(cuid())
+  companyId       String
+  rfqLineId       String
+  quotationLineId String
+  vendorId        String
+  qty             Float
+  reason          AwardReason @default(L1)
+  note            String?
+  poLineId        String?
+  createdAt       DateTime    @default(now())
+  @@index([companyId, rfqLineId])
+  @@index([companyId, vendorId])
+  @@schema("purchase")
+}
+

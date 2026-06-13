@@ -33,12 +33,12 @@ export default async function RequisitionsPage() {
     }),
     db.item.findMany({
       where: { companyId, status: "ACTIVE", deletedAt: null },
-      select: { id: true, code: true, name: true, baseUom: true },
+      select: { id: true, code: true, name: true, baseUom: true, moq: true },
       orderBy: { code: "asc" },
     }),
     db.vendor.findMany({
       where: { companyId, deletedAt: null },
-      select: { id: true, name: true, code: true },
+      select: { id: true, name: true, code: true, minOrderValue: true },
       orderBy: { code: "asc" },
     }),
     db.user.findMany({
@@ -99,6 +99,9 @@ export default async function RequisitionsPage() {
           itemCode: item?.code || "N/A",
           qty: line.qty,
           requiredBy: line.requiredBy ? line.requiredBy.toISOString() : null,
+          orderedQty: line.orderedQty,
+          shortClosedQty: line.shortClosedQty,
+          status: line.status,
         };
       }),
     };
@@ -122,6 +125,8 @@ export default async function RequisitionsPage() {
           itemName: item?.name || "Unknown Item",
           itemCode: item?.code || "N/A",
           qty: line.qty,
+          awardedQty: line.awardedQty,
+          status: line.status,
         };
       }),
       quotations: rfq.quotations.map((q) => {
@@ -140,6 +145,12 @@ export default async function RequisitionsPage() {
             discount: l.discount,
             gstRate: l.gstRate,
             rfqLineId: l.rfqLineId,
+            canSupply: l.canSupply,
+            quotedQty: l.quotedQty,
+            freight: l.freight,
+            leadDays: l.leadDays,
+            landedUnit: l.landedUnit,
+            rank: l.rank,
           })),
         };
       }),

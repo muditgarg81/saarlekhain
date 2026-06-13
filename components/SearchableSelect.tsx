@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { Search, ChevronDown, X } from "lucide-react";
 
 interface Option {
-  id: string;
+  value: string;
   label: string;
 }
 
@@ -11,24 +11,25 @@ interface SearchableSelectProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
-  className?: string;
   disabled?: boolean;
+  className?: string;
 }
 
 export function SearchableSelect({
   options,
   value,
   onChange,
-  placeholder = "Select Option",
-  className = "",
+  placeholder = "Select option",
   disabled = false,
+  className = "",
 }: SearchableSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const selectedOption = options.find((opt) => opt.id === value);
+  const selectedOption = options.find((opt) => opt.value === value);
 
+  // Close dropdown when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (
@@ -42,6 +43,7 @@ export function SearchableSelect({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // Reset search query when dropdown closes
   useEffect(() => {
     if (!isOpen) {
       setSearchQuery("");
@@ -58,8 +60,8 @@ export function SearchableSelect({
       <div
         onClick={() => !disabled && setIsOpen(!isOpen)}
         className={`w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg flex items-center justify-between transition-all duration-150 min-h-[34px] select-none ${
-          disabled 
-            ? "bg-cream-dark/20 cursor-not-allowed opacity-60" 
+          disabled
+            ? "bg-cream-dark/20 text-onyx/40 cursor-not-allowed"
             : "cursor-pointer hover:border-onyx/20"
         }`}
       >
@@ -93,7 +95,7 @@ export function SearchableSelect({
               type="text"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Type to search..."
+              placeholder="Search..."
               className="w-full bg-transparent border-0 outline-none text-xs text-onyx p-0 placeholder-onyx/30 focus:ring-0 focus:outline-none"
               autoFocus
             />
@@ -103,18 +105,18 @@ export function SearchableSelect({
           <div className="overflow-y-auto py-1 max-h-56">
             {filteredOptions.length === 0 ? (
               <div className="px-3 py-2 text-xs text-onyx/40 text-center font-medium">
-                No matches found
+                No options found
               </div>
             ) : (
               filteredOptions.map((opt) => (
                 <div
-                  key={opt.id}
+                  key={opt.value}
                   onClick={() => {
-                    onChange(opt.id);
+                    onChange(opt.value);
                     setIsOpen(false);
                   }}
                   className={`px-3 py-2 text-xs cursor-pointer flex flex-col transition-colors duration-100 ${
-                    opt.id === value
+                    opt.value === value
                       ? "bg-saffron/10 font-bold text-onyx"
                       : "hover:bg-cream-dark/20 text-onyx/85"
                   }`}

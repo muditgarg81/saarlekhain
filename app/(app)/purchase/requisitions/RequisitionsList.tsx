@@ -9,9 +9,9 @@ import {
   submitQuotation, 
   awardQuotation 
 } from "@/app/actions/requisitions";
-import { awardRfq, raisePoFromAward } from "@/app/actions/purchaseFlow";
 import { limitYearTo4Digits } from "@/lib/date";
 import { SearchableItemSelect } from "@/components/SearchableItemSelect";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { 
   Search, 
   Plus, 
@@ -41,6 +41,9 @@ interface PRLine {
   itemCode: string;
   qty: number;
   requiredBy: string | null;
+  orderedQty?: number;
+  shortClosedQty?: number;
+  status?: string;
 }
 
 interface PRRecord {
@@ -61,6 +64,8 @@ interface RFQLine {
   itemCode: string;
   qty: number;
   awardedQuotationLineId?: string | null;
+  awardedQty?: number;
+  status?: string;
 }
 
 interface QuotationLine {
@@ -70,6 +75,12 @@ interface QuotationLine {
   discount: number;
   gstRate: number;
   rfqLineId?: string | null;
+  canSupply?: boolean;
+  quotedQty?: number | null;
+  freight?: number;
+  leadDays?: number | null;
+  landedUnit?: number | null;
+  rank?: number | null;
 }
 
 interface QuotationRecord {
@@ -98,12 +109,14 @@ interface Item {
   code: string;
   name: string;
   baseUom: string;
+  moq?: number;
 }
 
 interface Vendor {
   id: string;
   name: string;
   code: string;
+  minOrderValue?: number;
 }
 
 interface ShipToLocationRecord {
@@ -191,8 +204,45 @@ export default function RequisitionsList({
     vendorId: "",
     leadDays: 5,
     terms: "FOB Destination",
-    lines: [] as { rfqLineId?: string | null; itemId: string; rate: number; discount: number; gstRate: number }[]
+    lines: [] as {
+      rfqLineId?: string | null;
+      itemId: string;
+      rate: number;
+      discount: number;
+      gstRate: number;
+      canSupply: boolean;
+      quotedQty: number | null;
+      freight: number;
+      leadDays: number | null;
+    }[]
   });
+
+  // Comparison & Split Award Allocation State
+  const [compData, setCompData] = useState<{
+    rfq: any;
+    allocations: any[];
+    proposedAllocations: any[];
+  } | null>(null);
+
+  const [allocState, setAllocState] = useState<{
+    [rfqLineId: string]: {
+      quotationLineId: string;
+      qty: number;
+      reason: string;
+      note: string;
+      vendorId: string;
+      vendorName: string;
+    }[];
+  }>({});
+
+  // Short-close states
+  const [isShortCloseOpen, setIsShortCloseOpen] = useState(false);
+  const [shortCloseLineId, setShortCloseLineId] = useState<string | null>(null);
+  const [shortCloseLineName, setShortCloseLineName] = useState("");
+  const [shortCloseMaxQty, setShortCloseMaxQty] = useState(0);
+  const [shortCloseQty, setShortCloseQty] = useState(0);
+  const [shortCloseReason, setShortCloseReason] = useState("SUPPLIER_UNAVAILABLE");
+  const [shortCloseNote, setShortCloseNote] = useState("");
 
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -298,9 +348,16 @@ export default function RequisitionsList({
 
   const handleOpenRfq = (pr: PRRecord) => {
     setSelectedPr(pr);
+    const eligibleLines = pr.lines.filter(l => {
+      const openQty = l.qty - (l.orderedQty || 0) - (l.shortClosedQty || 0);
+      return openQty > 0;
+    });
     setNewRfq({
       prId: pr.id,
-      lines: pr.lines.map(l => ({ itemId: l.itemId, qty: l.qty }))
+      lines: eligibleLines.map(l => ({
+        itemId: l.itemId,
+        qty: l.qty - (l.orderedQty || 0) - (l.shortClosedQty || 0)
+      }))
     });
     setIsRfqOpen(true);
   };
@@ -327,7 +384,17 @@ export default function RequisitionsList({
       vendorId: "",
       leadDays: 5,
       terms: "FOB Destination",
-      lines: rfq.lines.map(l => ({ rfqLineId: l.id, itemId: l.itemId, rate: 0, discount: 0, gstRate: 18 }))
+      lines: rfq.lines.map(l => ({
+        rfqLineId: l.id,
+        itemId: l.itemId,
+        rate: 0,
+        discount: 0,
+        gstRate: 18,
+        canSupply: true,
+        quotedQty: l.qty,
+        freight: 0,
+        leadDays: 5,
+      }))
     });
     setIsQuoteOpen(true);
   };
@@ -359,17 +426,167 @@ export default function RequisitionsList({
     }
   };
 
-  const handleOpenCompare = (rfq: RFQRecord) => {
+  const handleOpenCompare = async (rfq: RFQRecord) => {
     setSelectedRfq(rfq);
-    const initialAwards: { [rfqLineId: string]: string } = {};
-    rfq.lines.forEach(rfqLine => {
-      const lowest = getLowestQuotation(rfq, rfqLine.id, rfqLine.itemId);
-      if (lowest.line) {
-        initialAwards[rfqLine.id] = lowest.line.id;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/rfqs/${rfq.id}/comparison`);
+      if (!res.ok) throw new Error("Failed to fetch comparison details");
+      const data = await res.json();
+      setCompData(data);
+      
+      const initialAllocations = data.allocations.length > 0 ? data.allocations : data.proposedAllocations;
+      const grouped: { [rfqLineId: string]: any[] } = {};
+      
+      data.rfq.lines.forEach((l: any) => {
+        grouped[l.id] = [];
+      });
+      
+      initialAllocations.forEach((alloc: any) => {
+        if (!grouped[alloc.rfqLineId]) {
+          grouped[alloc.rfqLineId] = [];
+        }
+        grouped[alloc.rfqLineId].push({
+          quotationLineId: alloc.quotationLineId,
+          qty: alloc.qty,
+          reason: alloc.reason || "L1",
+          note: alloc.note || "",
+          vendorId: alloc.vendorId,
+          vendorName: alloc.vendorName || data.rfq.quotations.find((q: any) => q.vendorId === alloc.vendorId)?.vendorName || "Unknown"
+        });
+      });
+      
+      setAllocState(grouped);
+      setIsCompOpen(true);
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const toggleAllocation = (rfqLineId: string, qLineId: string, vendorId: string, vendorName: string, isChecked: boolean, defaultQty: number, rank: number) => {
+    setAllocState(prev => {
+      const current = prev[rfqLineId] || [];
+      if (isChecked) {
+        return {
+          ...prev,
+          [rfqLineId]: [
+            ...current,
+            {
+              quotationLineId: qLineId,
+              qty: defaultQty,
+              reason: rank === 1 ? "L1" : "LEAD_TIME",
+              note: "",
+              vendorId,
+              vendorName
+            }
+          ]
+        };
+      } else {
+        return {
+          ...prev,
+          [rfqLineId]: current.filter(x => x.quotationLineId !== qLineId)
+        };
       }
     });
-    setLineAwards(initialAwards);
-    setIsCompOpen(true);
+  };
+
+  const updateAllocQty = (rfqLineId: string, qLineId: string, qty: number) => {
+    setAllocState(prev => {
+      const current = prev[rfqLineId] || [];
+      return {
+        ...prev,
+        [rfqLineId]: current.map(x => x.quotationLineId === qLineId ? { ...x, qty } : x)
+      };
+    });
+  };
+
+  const updateAllocReason = (rfqLineId: string, qLineId: string, reason: string) => {
+    setAllocState(prev => {
+      const current = prev[rfqLineId] || [];
+      return {
+        ...prev,
+        [rfqLineId]: current.map(x => x.quotationLineId === qLineId ? { ...x, reason } : x)
+      };
+    });
+  };
+
+  const updateAllocNote = (rfqLineId: string, qLineId: string, note: string) => {
+    setAllocState(prev => {
+      const current = prev[rfqLineId] || [];
+      return {
+        ...prev,
+        [rfqLineId]: current.map(x => x.quotationLineId === qLineId ? { ...x, note } : x)
+      };
+    });
+  };
+
+  const handleResetToL1 = async () => {
+    if (!confirm("Are you sure you want to reset all awards to L1 default allocations?")) return;
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/rfqs/${selectedRfq!.id}/propose-award`, {
+        method: "POST"
+      });
+      if (!res.ok) throw new Error("Failed to reset allocations");
+      const data = await res.json();
+      
+      const grouped: { [rfqLineId: string]: any[] } = {};
+      compData!.rfq.lines.forEach((l: any) => {
+        grouped[l.id] = [];
+      });
+      data.forEach((alloc: any) => {
+        if (!grouped[alloc.rfqLineId]) {
+          grouped[alloc.rfqLineId] = [];
+        }
+        grouped[alloc.rfqLineId].push({
+          quotationLineId: alloc.quotationLineId,
+          qty: alloc.qty,
+          reason: alloc.reason || "L1",
+          note: alloc.note || "",
+          vendorId: alloc.vendorId,
+          vendorName: alloc.vendorName || compData!.rfq.quotations.find((q: any) => q.vendorId === alloc.vendorId)?.vendorName || "Unknown"
+        });
+      });
+      setAllocState(grouped);
+      alert("Reset to L1 defaults successfully!");
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleShortCloseSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!shortCloseLineId || shortCloseQty <= 0 || shortCloseQty > shortCloseMaxQty) {
+      alert("Invalid short-close quantity");
+      return;
+    }
+    setActionLoading(true);
+    try {
+      const response = await fetch(`/api/pr/lines/${shortCloseLineId}/short-close`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          qty: shortCloseQty,
+          reason: shortCloseReason,
+          note: shortCloseNote
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to short-close line");
+      }
+      alert("Line short-closed successfully!");
+      setIsShortCloseOpen(false);
+      window.location.reload();
+    } catch (err: any) {
+      alert(err.message);
+    } finally {
+      setActionLoading(false);
+    }
   };
 
   const handleAwardQuote = async (rfqId: string, quoteId: string) => {
@@ -851,17 +1068,12 @@ export default function RequisitionsList({
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                     Select Supplier *
                   </label>
-                  <select
+                  <SearchableSelect
+                    options={vendors.map(v => ({ value: v.id, label: `[${v.code}] ${v.name}` }))}
                     value={newQuote.vendorId}
-                    onChange={(e) => setNewQuote(prev => ({ ...prev, vendorId: e.target.value }))}
-                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
-                    required
-                  >
-                    <option value="">Select Vendor</option>
-                    {vendors.map(v => (
-                      <option key={v.id} value={v.id}>{v.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setNewQuote(prev => ({ ...prev, vendorId: val }))}
+                    placeholder="Select Vendor"
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
@@ -888,83 +1100,164 @@ export default function RequisitionsList({
               </div>
 
               {/* Line rates */}
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70">
                   Item Rates & Taxes
                 </label>
-                <div className="border border-onyx/5 rounded-lg overflow-hidden">
-                  <table className="w-full text-left text-xs border-collapse bg-white">
-                    <thead className="bg-cream-dark/50">
-                      <tr>
-                        <th className="p-2.5 font-bold">Item</th>
-                        <th className="p-2.5 font-bold text-right w-24">Basic Rate</th>
-                        <th className="p-2.5 font-bold text-right w-20">Discount %</th>
-                        <th className="p-2.5 font-bold text-right w-20">GST %</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {newQuote.lines.map((line, idx) => {
-                        const rfqLine = selectedRfq.lines.find(rl => rl.id === line.rfqLineId);
-                        return (
-                          <tr key={line.rfqLineId || idx} className="border-t border-onyx/5">
-                            <td className="p-2.5">
-                              <p className="font-semibold">[{rfqLine?.itemCode}] {rfqLine?.itemName}</p>
-                              <p className="text-[10px] text-onyx/40">Target Qty: {rfqLine?.qty}</p>
-                            </td>
-                            <td className="p-2.5">
-                              <input
-                                type="number"
-                                step="any"
-                                required
-                                value={line.rate || ""}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
-                                  setNewQuote(prev => {
-                                    const updated = [...prev.lines];
-                                    updated[idx].rate = val;
-                                    return { ...prev, lines: updated };
-                                  });
-                                }}
-                                className="w-full text-xs p-1.5 border border-onyx/15 rounded text-right font-mono"
-                              />
-                            </td>
-                            <td className="p-2.5">
-                              <input
-                                type="number"
-                                step="any"
-                                value={line.discount}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
-                                  setNewQuote(prev => {
-                                    const updated = [...prev.lines];
-                                    updated[idx].discount = val;
-                                    return { ...prev, lines: updated };
-                                  });
-                                }}
-                                className="w-full text-xs p-1.5 border border-onyx/15 rounded text-right font-mono"
-                              />
-                            </td>
-                            <td className="p-2.5">
-                              <input
-                                type="number"
-                                step="any"
-                                value={line.gstRate}
-                                onChange={(e) => {
-                                  const val = parseFloat(e.target.value) || 0;
-                                  setNewQuote(prev => {
-                                    const updated = [...prev.lines];
-                                    updated[idx].gstRate = val;
-                                    return { ...prev, lines: updated };
-                                  });
-                                }}
-                                className="w-full text-xs p-1.5 border border-onyx/15 rounded text-right font-mono"
-                              />
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
+                <div className="space-y-3">
+                  {newQuote.lines.map((line, idx) => {
+                    const rfqLine = selectedRfq.lines.find(rl => rl.id === line.rfqLineId);
+                    const canSupply = line.canSupply !== false;
+                    return (
+                      <div key={line.rfqLineId || idx} className="p-4 bg-white border border-onyx/5 rounded-xl shadow-sm space-y-3 sm:space-y-0 sm:flex sm:gap-6 sm:items-start">
+                        {/* Left Column */}
+                        <div className="sm:w-1/3 space-y-3">
+                          <div>
+                            <p className="font-bold text-xs text-onyx">[{rfqLine?.itemCode}] {rfqLine?.itemName}</p>
+                            <p className="text-[10px] text-onyx/50 mt-0.5">Target Quantity: <span className="font-mono font-bold text-onyx">{rfqLine?.qty}</span></p>
+                          </div>
+                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                            <input
+                              type="checkbox"
+                              checked={canSupply}
+                              onChange={(e) => {
+                                const checked = e.target.checked;
+                                setNewQuote(prev => {
+                                  const updated = [...prev.lines];
+                                  updated[idx].canSupply = checked;
+                                  if (!checked) {
+                                    updated[idx].rate = 0;
+                                  }
+                                  return { ...prev, lines: updated };
+                                });
+                              }}
+                              className="rounded text-saffron focus:ring-saffron cursor-pointer"
+                            />
+                            <span className="text-xs font-bold text-onyx/75">Can Supply this Item</span>
+                          </label>
+                        </div>
+
+                        {/* Right Column */}
+                        <div className={`flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3 p-3 bg-cream-dark/15 border border-onyx/5 rounded-lg transition-opacity duration-200 ${
+                          !canSupply ? "opacity-40 pointer-events-none" : ""
+                        }`}>
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Basic Rate (₹) *</label>
+                            <input
+                              type="number"
+                              step="any"
+                              required={canSupply}
+                              value={line.rate || ""}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setNewQuote(prev => {
+                                  const updated = [...prev.lines];
+                                  updated[idx].rate = val;
+                                  return { ...prev, lines: updated };
+                                });
+                              }}
+                              className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none text-right font-mono"
+                              placeholder="0.00"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Quoted Qty</label>
+                            <input
+                              type="number"
+                              step="any"
+                              required={canSupply}
+                              value={line.quotedQty ?? ""}
+                              onChange={(e) => {
+                                const val = e.target.value === "" ? null : parseFloat(e.target.value) || 0;
+                                setNewQuote(prev => {
+                                  const updated = [...prev.lines];
+                                  updated[idx].quotedQty = val;
+                                  return { ...prev, lines: updated };
+                                });
+                              }}
+                              className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none text-right font-mono"
+                              placeholder={rfqLine?.qty.toString()}
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Discount %</label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={line.discount}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setNewQuote(prev => {
+                                  const updated = [...prev.lines];
+                                  updated[idx].discount = val;
+                                  return { ...prev, lines: updated };
+                                });
+                              }}
+                              className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none text-right font-mono"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">GST %</label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={line.gstRate}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setNewQuote(prev => {
+                                  const updated = [...prev.lines];
+                                  updated[idx].gstRate = val;
+                                  return { ...prev, lines: updated };
+                                });
+                              }}
+                              className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none text-right font-mono"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Freight (₹)</label>
+                            <input
+                              type="number"
+                              step="any"
+                              value={line.freight ?? ""}
+                              onChange={(e) => {
+                                const val = parseFloat(e.target.value) || 0;
+                                setNewQuote(prev => {
+                                  const updated = [...prev.lines];
+                                  updated[idx].freight = val;
+                                  return { ...prev, lines: updated };
+                                });
+                              }}
+                              className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none text-right font-mono"
+                              placeholder="0.00"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Lead Time (Days)</label>
+                            <input
+                              type="number"
+                              step="1"
+                              value={line.leadDays ?? ""}
+                              onChange={(e) => {
+                                const val = e.target.value === "" ? null : parseInt(e.target.value) || 0;
+                                setNewQuote(prev => {
+                                  const updated = [...prev.lines];
+                                  updated[idx].leadDays = val;
+                                  return { ...prev, lines: updated };
+                                });
+                              }}
+                              className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none text-right font-mono"
+                              placeholder="5"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -990,11 +1283,11 @@ export default function RequisitionsList({
       )}
 
       {/* Comparative statement modal */}
-      {isCompOpen && selectedRfq && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-cream max-w-4xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
+      {isCompOpen && compData && (
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-cream max-w-5xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
             <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
-              <h3 className="font-heading text-lg font-bold">Comparative Quote Cost Analysis ({selectedRfq.number})</h3>
+              <h3 className="font-heading text-lg font-bold">Comparative Quote Cost Analysis ({compData.rfq.number})</h3>
               <button onClick={() => setIsCompOpen(false)} className="hover:text-saffron cursor-pointer">
                 <X size={20} />
               </button>
@@ -1002,17 +1295,17 @@ export default function RequisitionsList({
 
             <div className="flex-1 overflow-y-auto p-6 space-y-6">
               <div className="flex items-center justify-between">
-                <p className="text-xs text-onyx/60">Below is a comparison of all supplier quotations received. Saffron highlighted cells represent the lowest landed unit cost for each item.</p>
+                <p className="text-xs text-onyx/60">Below is a comparison of all supplier quotations received. Cells display landed unit cost. Toggle checkbox to award items, or customize quantity splits.</p>
               </div>
 
               {/* Comparative Matrix Table */}
-              <div className="border border-onyx/5 rounded-lg overflow-hidden">
-                <table className="w-full text-left text-xs border-collapse bg-white">
+              <div className="border border-onyx/5 rounded-lg overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse bg-white min-w-[650px]">
                   <thead className="bg-cream-dark/50 text-[10px] uppercase font-bold tracking-wider">
                     <tr>
-                      <th className="p-3 border-r border-onyx/10 w-48">Item Details</th>
-                      {selectedRfq.quotations.map(q => (
-                        <th key={q.id} className="p-3 text-center border-r border-onyx/10">
+                      <th className="p-3 border-r border-onyx/10 w-64">Item Details</th>
+                      {compData.rfq.quotations.map((q: any) => (
+                        <th key={q.id} className="p-3 text-center border-r border-onyx/10 w-72">
                           <p className="font-bold text-onyx">{q.vendorName}</p>
                           <p className="text-[9px] text-onyx/50 font-normal">Lead: {q.leadDays || "N/A"} days</p>
                         </th>
@@ -1020,55 +1313,133 @@ export default function RequisitionsList({
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedRfq.lines.map(item => {
-                      const lowest = getLowestQuotation(selectedRfq, item.id, item.itemId);
+                    {compData.rfq.lines.map((item: any) => {
+                      const allocatedQty = (allocState[item.id] || []).reduce((sum, x) => sum + x.qty, 0);
+                      const diff = item.qty - allocatedQty;
+                      let coverStatus = "";
+                      let badgeClass = "";
+                      if (allocatedQty === 0) {
+                        coverStatus = "UNCOVERED";
+                        badgeClass = "bg-red-105 text-red-800 border-red-200";
+                      } else if (diff > 0.0001) {
+                        coverStatus = "SHORT";
+                        badgeClass = "bg-orange-105 text-orange-800 border-orange-200";
+                      } else if (allocatedQty > item.qty + 0.0001) {
+                        coverStatus = "OVER ALLOCATED";
+                        badgeClass = "bg-purple-105 text-purple-800 border-purple-200";
+                      } else {
+                        coverStatus = "COVERED";
+                        badgeClass = "bg-green-105 text-green-800 border-green-200";
+                      }
+
                       return (
                         <tr key={item.id} className="border-t border-onyx/10">
                           <td className="p-3 border-r border-onyx/10">
-                            <p className="font-bold">[{item.itemCode}] {item.itemName}</p>
-                            <p className="text-[10px] text-onyx/40">Target Qty: {item.qty}</p>
+                            <p className="font-bold text-onyx">[{item.itemCode}] {item.itemName}</p>
+                            <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                              <span className="text-[10px] text-onyx/60 font-medium">Target: <span className="font-mono font-bold text-onyx">{item.qty}</span></span>
+                              <span className="text-[10px] text-onyx/60 font-medium">Allocated: <span className="font-mono font-bold text-onyx">{allocatedQty}</span></span>
+                            </div>
+                            <div className="mt-2">
+                              <span className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-bold uppercase border ${badgeClass}`}>
+                                {coverStatus}
+                              </span>
+                            </div>
                           </td>
-                          {selectedRfq.quotations.map(q => {
-                            const line = q.lines.find(l => l.rfqLineId === item.id || (!l.rfqLineId && l.itemId === item.itemId));
+                          {compData.rfq.quotations.map((q: any) => {
+                            const line = q.lines.find((l: any) => l.rfqLineId === item.id);
                             if (!line) {
                               return <td key={q.id} className="p-3 text-center text-onyx/30 border-r border-onyx/10 bg-cream-dark/10">No quote</td>;
                             }
-                            const cost = calculateLandedCost(line.rate, line.discount, line.gstRate);
-                            const isLowest = lowest.cost !== null && Math.abs(cost - lowest.cost) < 0.01;
-                            const isSelected = lineAwards[item.id] === line.id;
-                            const isAwarded = item.awardedQuotationLineId === line.id;
+                            const cost = line.landedUnit ?? calculateLandedCost(line.rate, line.discount, line.gstRate);
+                            const rank = line.rank || 999;
+                            const isL1 = rank === 1;
+                            const allocs = allocState[item.id] || [];
+                            const allocEntry = allocs.find((x) => x.quotationLineId === line.id);
+                            const isSelected = !!allocEntry;
 
                             return (
                               <td 
                                 key={q.id} 
-                                className={`p-3 text-center border-r border-onyx/10 transition-colors ${
-                                  isLowest ? "bg-saffron/20" : ""
-                                } ${isSelected ? "bg-saffron/10 font-semibold" : ""}`}
+                                className={`p-3 border-r border-onyx/10 transition-colors text-center ${
+                                  isL1 ? "bg-saffron/20" : ""
+                                } ${isSelected ? "bg-saffron/5" : ""}`}
                               >
-                                <p className="font-mono">Basic: ₹{line.rate.toFixed(2)}</p>
-                                <p className="text-[10px] text-onyx/50 font-mono">Disc: {line.discount}% | GST: {line.gstRate}%</p>
-                                <p className={`text-xs mt-1 font-mono font-bold ${isLowest ? "text-saffron-dark" : "text-onyx"}`}>
-                                  Landed: ₹{cost.toFixed(2)}
-                                </p>
-                                
-                                {isAwarded && (
-                                  <span className="mt-1.5 inline-flex items-center space-x-0.5 text-green-700 font-bold bg-green-50 border border-green-200 px-1 py-0.5 rounded text-[8px] uppercase">
-                                    <Award size={9} />
-                                    <span>Awarded Line</span>
+                                <div className="space-y-1">
+                                  <p className="font-mono text-xs">Basic: ₹{line.rate.toFixed(2)}</p>
+                                  <p className="text-[9px] text-onyx/50 font-mono">Disc: {line.discount}% | GST: {line.gstRate}%</p>
+                                  <p className={`text-xs font-mono font-bold ${isL1 ? "text-saffron-dark" : "text-onyx"}`}>
+                                    Landed: ₹{cost.toFixed(2)}
+                                  </p>
+                                  {line.quotedQty !== null && (
+                                    <p className="text-[9px] text-onyx/50">Capacity: {line.quotedQty}</p>
+                                  )}
+                                  <span className={`inline-flex items-center px-1 rounded text-[8px] font-bold ${
+                                    isL1 ? "bg-green-100 text-green-800" : "bg-gray-100 text-gray-700"
+                                  }`}>
+                                    Rank {rank}
                                   </span>
+                                </div>
+
+                                {compData.rfq.status !== "CLOSED" && isPurchase && (
+                                  <div className="mt-3">
+                                    <label className="flex items-center justify-center gap-1.5 cursor-pointer">
+                                      <input
+                                        type="checkbox"
+                                        checked={isSelected}
+                                        onChange={(e) => toggleAllocation(item.id, line.id, q.vendorId, q.vendorName, e.target.checked, line.quotedQty !== null ? Math.min(item.qty, line.quotedQty) : item.qty, rank)}
+                                        className="rounded text-saffron focus:ring-saffron cursor-pointer"
+                                      />
+                                      <span className="text-[10px] font-bold text-onyx/75">Select</span>
+                                    </label>
+                                  </div>
                                 )}
 
-                                {selectedRfq.status !== "CLOSED" && selectedRfq.status !== "AWARDED" && isPurchase && (
-                                  <label className="mt-2.5 flex items-center justify-center space-x-1.5 cursor-pointer">
-                                    <input
-                                      type="radio"
-                                      name={`award-${item.id}`}
-                                      checked={isSelected}
-                                      onChange={() => setLineAwards(prev => ({ ...prev, [item.id]: line.id }))}
-                                      className="rounded-full text-saffron focus:ring-saffron cursor-pointer"
-                                    />
-                                    <span className="text-[9px] font-bold text-onyx/65">Award Line</span>
-                                  </label>
+                                {isSelected && (
+                                  <div className="mt-3 p-2 bg-cream-dark/15 border border-onyx/10 rounded-lg space-y-2 text-left">
+                                    <div>
+                                      <label className="block text-[8px] uppercase font-bold text-onyx/50 mb-0.5">Alloc Qty</label>
+                                      <input
+                                        type="number"
+                                        step="any"
+                                        value={allocEntry.qty}
+                                        onChange={(e) => updateAllocQty(item.id, line.id, parseFloat(e.target.value) || 0)}
+                                        className="w-full text-xs p-1 bg-white border border-onyx/10 rounded font-mono text-right"
+                                      />
+                                    </div>
+                                    
+                                    {!isL1 && (
+                                      <>
+                                        <div>
+                                          <label className="block text-[8px] uppercase font-bold text-onyx/50 mb-0.5">Award Reason *</label>
+                                          <SearchableSelect
+                                            options={[
+                                              { value: "LEAD_TIME", label: "Lead Time" },
+                                              { value: "APPROVED_VENDOR", label: "Approved Vendor" },
+                                              { value: "CAPACITY_SPLIT", label: "Capacity Split" },
+                                              { value: "SOLE_SUPPLIER", label: "Sole Supplier" },
+                                              { value: "PARTIAL_AVAILABILITY", label: "Partial Availability" },
+                                              { value: "OTHER", label: "Other" }
+                                            ]}
+                                            value={allocEntry.reason}
+                                            onChange={(val) => updateAllocReason(item.id, line.id, val)}
+                                            placeholder="Select Reason"
+                                          />
+                                        </div>
+                                        <div>
+                                          <label className="block text-[8px] uppercase font-bold text-onyx/50 mb-0.5">Note *</label>
+                                          <input
+                                            type="text"
+                                            value={allocEntry.note}
+                                            onChange={(e) => updateAllocNote(item.id, line.id, e.target.value)}
+                                            placeholder="Justification note"
+                                            className="w-full text-[10px] p-1 bg-white border border-onyx/10 rounded"
+                                            required
+                                          />
+                                        </div>
+                                      </>
+                                    )}
+                                  </div>
                                 )}
                               </td>
                             );
@@ -1076,68 +1447,152 @@ export default function RequisitionsList({
                         </tr>
                       );
                     })}
-
-                    {/* Award status row */}
-                    <tr className="border-t border-onyx-dark/25 bg-cream-dark/15 font-semibold">
-                      <td className="p-3 border-r border-onyx/10">Supplier Summary</td>
-                      {selectedRfq.quotations.map(q => {
-                        const awardedCount = selectedRfq.lines.filter(l => l.awardedQuotationLineId && q.lines.some(ql => ql.id === l.awardedQuotationLineId)).length;
-                        return (
-                          <td key={q.id} className="p-3 text-center border-r border-onyx/10 text-[10px]">
-                            {awardedCount > 0 ? (
-                              <span className="inline-flex items-center space-x-1 text-green-700 font-bold bg-green-50 border border-green-200 px-2 py-1 rounded">
-                                <Award size={11} />
-                                <span>{awardedCount} Line(s) Awarded</span>
-                              </span>
-                            ) : (
-                              <span className="text-onyx/40">No Lines Awarded</span>
-                            )}
-                          </td>
-                        );
-                      })}
-                    </tr>
                   </tbody>
                 </table>
               </div>
 
-              {/* Award actions (PO Navigation) */}
-              {selectedRfq.status === "AWARDED" && (
-                <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center justify-between text-xs text-green-800">
-                  <div className="flex items-center space-x-2 font-semibold">
-                    <ShieldCheck size={16} className="text-green-600" />
-                    <span>Quote contract has been awarded. Ready to create Purchase Order.</span>
-                  </div>
-                  {selectedRfq.quotations.filter(q => q.awarded).map(q => (
-                    <button
-                      key={q.id}
-                      onClick={() => navigateToCreatePO(selectedRfq, q)}
-                      className="flex items-center space-x-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded font-bold cursor-pointer transition-all"
-                    >
-                      <span>Create PO</span>
-                      <ArrowRight size={13} />
-                    </button>
-                  ))}
+              {/* Live Award Split Summary Panel */}
+              <div className="p-4 bg-cream-dark/25 border border-onyx/10 rounded-xl space-y-3">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/60">Award Split & Real-time Warning Panel</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {compData.rfq.quotations.map((q: any) => {
+                    const vendor = vendors.find((v) => v.id === q.vendorId);
+                    
+                    let vendorTotal = 0;
+                    const vendorAllocs: any[] = [];
+                    
+                    compData.rfq.lines.forEach((line: any) => {
+                      const allocs = allocState[line.id] || [];
+                      const match = allocs.find((a) => a.quotationLineId === q.lines.find((ql: any) => ql.rfqLineId === line.id)?.id);
+                      if (match) {
+                        const qLine = q.lines.find((ql: any) => ql.rfqLineId === line.id);
+                        if (qLine) {
+                          const landedUnit = qLine.landedUnit ?? calculateLandedCost(qLine.rate, qLine.discount, qLine.gstRate);
+                          const totalLineCost = landedUnit * match.qty;
+                          vendorTotal += totalLineCost;
+                          vendorAllocs.push({
+                            line,
+                            qty: match.qty,
+                            moq: line.moq || 1,
+                            totalLineCost
+                          });
+                        }
+                      }
+                    });
+
+                    if (vendorAllocs.length === 0) return null;
+
+                    const isBelowMinOrder = vendor && vendorTotal < (vendor.minOrderValue || 0);
+                    const hasMoqIssues = vendorAllocs.some(x => x.qty < x.moq);
+
+                    return (
+                      <div key={q.id} className="p-3 bg-white border border-onyx/5 rounded-lg shadow-xs space-y-2 text-left">
+                        <div className="flex justify-between items-center border-b border-onyx/5 pb-1.5">
+                          <span className="font-bold text-xs text-onyx">{q.vendorName}</span>
+                          <span className="font-mono font-bold text-xs text-saffron-dark">₹{vendorTotal.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        </div>
+                        
+                        <div className="text-[10px] text-onyx/60 space-y-1">
+                          <p>Items Allocated: <span className="font-bold text-onyx">{vendorAllocs.length}</span></p>
+                          {isBelowMinOrder && (
+                            <p className="flex items-center gap-1 text-red-600 bg-red-50 border border-red-100 p-1.5 rounded font-medium">
+                              <AlertCircle size={10} className="shrink-0" />
+                              <span>PO value is below Vendor's Min Order Value (₹{(vendor.minOrderValue || 0).toFixed(0)})</span>
+                            </p>
+                          )}
+                          {hasMoqIssues && (
+                            <div className="text-orange-600 bg-orange-50 border border-orange-100 p-1.5 rounded space-y-0.5 font-medium">
+                              <p className="flex items-center gap-1 font-bold">
+                                <AlertCircle size={10} className="shrink-0" />
+                                <span>MOQ Violations:</span>
+                              </p>
+                              <ul className="list-disc list-inside pl-1 text-[9px] space-y-0.5">
+                                {vendorAllocs.filter(x => x.qty < x.moq).map((x, i) => (
+                                  <li key={i}>
+                                    [{x.line.itemCode}] {x.qty} &lt; MOQ {x.moq}
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {Object.values(allocState).flat().length === 0 && (
+                    <p className="col-span-2 text-center py-4 text-xs text-onyx/40 italic">
+                      No allocations selected. Select vendors in the matrix above.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {compData.rfq.status === "CLOSED" && (
+                <div className="p-4 bg-green-50 border border-green-200 rounded-lg flex items-center space-x-2 text-xs text-green-800 font-semibold">
+                  <ShieldCheck size={16} className="text-green-600" />
+                  <span>Purchase Orders have been raised and RFQ is CLOSED.</span>
                 </div>
               )}
             </div>
 
             <div className="px-6 py-4 border-t border-onyx/10 bg-cream-dark/30 flex items-center justify-between">
               <div>
-                {selectedRfq.status !== "CLOSED" && selectedRfq.status !== "AWARDED" && isPurchase && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (Object.keys(lineAwards).length === 0) {
-                        alert("Please select at least one line award.");
-                        return;
-                      }
-                      setIsPoDetailsModalOpen(true);
-                    }}
-                    disabled={actionLoading || Object.keys(lineAwards).length === 0}
-                    className="px-4 py-2 bg-saffron hover:bg-saffron-dark text-onyx text-xs font-bold rounded-lg transition-colors shadow cursor-pointer disabled:opacity-50 animate-pulse-slow"
-                  >
-                    Post Awards & Generate POs
-                  </button>
+                {compData.rfq.status !== "CLOSED" && isPurchase && (
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={handleResetToL1}
+                      disabled={actionLoading}
+                      className="px-4 py-2 bg-cream hover:bg-cream-dark border border-onyx/20 text-onyx text-xs font-bold rounded-lg transition-colors shadow-sm cursor-pointer"
+                    >
+                      Reset to L1 Defaults
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const payloadLines: any[] = [];
+                        let isValid = true;
+                        let validationError = "";
+                        
+                        Object.entries(allocState).forEach(([rfqLineId, allocs]) => {
+                          allocs.forEach((alloc) => {
+                            const line = compData.rfq.lines.find((l: any) => l.id === rfqLineId);
+                            const q = compData.rfq.quotations.find((qt: any) => qt.vendorId === alloc.vendorId);
+                            const qLine = q?.lines.find((ql: any) => ql.rfqLineId === rfqLineId);
+                            const rank = qLine?.rank || 999;
+                            
+                            if (rank !== 1 && (!alloc.note || alloc.note.trim().length === 0)) {
+                              isValid = false;
+                              validationError = `Justification note is strictly required for selecting non-L1 supplier (${alloc.vendorName}) on item [${line?.itemCode}] ${line?.itemName}.`;
+                            }
+                            payloadLines.push({
+                              rfqLineId,
+                              quotationLineId: alloc.quotationLineId,
+                              qty: alloc.qty,
+                              reason: alloc.reason,
+                              note: alloc.note
+                            });
+                          });
+                        });
+                        
+                        if (!isValid) {
+                          alert(validationError);
+                          return;
+                        }
+
+                        if (payloadLines.length === 0) {
+                          alert("Please select at least one allocation.");
+                          return;
+                        }
+
+                        setIsPoDetailsModalOpen(true);
+                      }}
+                      disabled={actionLoading || Object.values(allocState).flat().length === 0}
+                      className="px-4 py-2 bg-saffron hover:bg-saffron-dark text-onyx text-xs font-bold rounded-lg transition-colors shadow cursor-pointer disabled:opacity-50"
+                    >
+                      Post Awards & Generate POs
+                    </button>
+                  </div>
                 )}
               </div>
               <button 
@@ -1184,23 +1639,88 @@ export default function RequisitionsList({
                 Line Items
               </h4>
 
-              <div className="border border-onyx/5 rounded-lg overflow-hidden">
-                <table className="w-full text-left text-xs border-collapse bg-white">
+              <div className="border border-onyx/5 rounded-lg overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse bg-white min-w-[500px]">
                   <thead className="bg-cream-dark/50">
-                    <tr>
-                      <th className="p-2.5 font-bold">Item Description</th>
-                      <th className="p-2.5 font-bold text-right">Qty</th>
-                      {selectedPr && <th className="p-2.5 font-bold">Needed By</th>}
+                    <tr className="font-bold uppercase tracking-wider text-[10px]">
+                      <th className="p-2.5">Item Description</th>
+                      {selectedPr ? (
+                        <>
+                          <th className="p-2.5 text-right">Qty</th>
+                          <th className="p-2.5 text-right text-green-700">Ordered</th>
+                          <th className="p-2.5 text-right text-red-600">Short</th>
+                          <th className="p-2.5 text-right">Open</th>
+                          <th className="p-2.5 text-center">Status</th>
+                          {canApprove && <th className="p-2.5 text-center">Action</th>}
+                        </>
+                      ) : (
+                        <th className="p-2.5 text-right">Qty</th>
+                      )}
+                      {selectedPr && <th className="p-2.5 text-left">Needed By</th>}
                     </tr>
                   </thead>
                   <tbody>
-                    {(selectedPr ? selectedPr.lines : selectedRfq!.lines).map((line) => (
-                      <tr key={line.id} className="border-t border-onyx/5">
-                        <td className="p-2.5">[{line.itemCode}] {line.itemName}</td>
-                        <td className="p-2.5 text-right font-mono font-bold">{line.qty}</td>
-                        {selectedPr && <td suppressHydrationWarning className="p-2.5">{(line as any).requiredBy ? new Date((line as any).requiredBy).toLocaleDateString() : "Immediate"}</td>}
-                      </tr>
-                    ))}
+                    {selectedPr ? (
+                      selectedPr.lines.map((line) => {
+                        const openQty = line.qty - (line.orderedQty || 0) - (line.shortClosedQty || 0);
+                        const isTerminal = openQty <= 0;
+                        return (
+                          <tr key={line.id} className="border-t border-onyx/5 text-[11px]">
+                            <td className="p-2.5">
+                              <p className="font-bold text-onyx">[{line.itemCode}] {line.itemName}</p>
+                            </td>
+                            <td className="p-2.5 text-right font-mono">{line.qty}</td>
+                            <td className="p-2.5 text-right font-mono text-green-700 font-semibold">{line.orderedQty || 0}</td>
+                            <td className="p-2.5 text-right font-mono text-red-600">{line.shortClosedQty || 0}</td>
+                            <td className="p-2.5 text-right font-mono font-bold text-onyx">{openQty}</td>
+                            <td className="p-2.5 text-center">
+                              <span className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                                line.status === "OPEN" ? "bg-gray-100 text-gray-800" :
+                                line.status === "PARTIALLY_ORDERED" ? "bg-yellow-100 text-yellow-800" :
+                                line.status === "ORDERED" ? "bg-green-100 text-green-800" :
+                                line.status === "SHORT_CLOSED" ? "bg-red-100 text-red-800 border border-red-200" : "bg-gray-100 text-gray-800"
+                              }`}>
+                                {(line.status || "OPEN").replace("_", " ")}
+                              </span>
+                            </td>
+                            {canApprove && (
+                              <td className="p-2.5 text-center">
+                                {!isTerminal ? (
+                                  <button
+                                    onClick={() => {
+                                      setShortCloseLineId(line.id);
+                                      setShortCloseLineName(`[${line.itemCode}] ${line.itemName}`);
+                                      setShortCloseMaxQty(openQty);
+                                      setShortCloseQty(openQty);
+                                      setShortCloseReason("SUPPLIER_UNAVAILABLE");
+                                      setShortCloseNote("");
+                                      setIsShortCloseOpen(true);
+                                    }}
+                                    className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-600 hover:text-red-700 font-bold border border-red-200 rounded text-[9px] cursor-pointer"
+                                  >
+                                    Short-Close
+                                  </button>
+                                ) : (
+                                  <span className="text-onyx/30 text-[9px]">-</span>
+                                )}
+                              </td>
+                            )}
+                            <td suppressHydrationWarning className="p-2.5">
+                              {line.requiredBy ? new Date(line.requiredBy).toLocaleDateString() : "Immediate"}
+                            </td>
+                          </tr>
+                        );
+                      })
+                    ) : (
+                      selectedRfq!.lines.map((line) => {
+                        return (
+                          <tr key={line.id} className="border-t border-onyx/5 text-[11px]">
+                            <td className="p-2.5">[{line.itemCode}] {line.itemName}</td>
+                            <td className="p-2.5 text-right font-mono font-bold">{line.qty}</td>
+                          </tr>
+                        );
+                      })
+                    )}
                   </tbody>
                 </table>
               </div>
@@ -1295,25 +1815,48 @@ export default function RequisitionsList({
               setActionLoading(true);
               setErrorMsg(null);
               try {
-                const awardsArray = Object.entries(lineAwards).map(([rfqLineId, quotationLineId]) => ({
-                  rfqLineId,
-                  quotationLineId
-                }));
+                // 1. Commit custom allocations first
+                const payloadLines = Object.entries(allocState).flatMap(([rfqLineId, allocs]) =>
+                  allocs.map((alloc) => ({
+                    rfqLineId,
+                    quotationLineId: alloc.quotationLineId,
+                    qty: alloc.qty,
+                    reason: alloc.reason,
+                    note: alloc.note
+                  }))
+                );
+
+                const awardRes = await fetch(`/api/rfqs/${selectedRfq!.id}/award`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ lines: payloadLines })
+                });
                 
-                const awardRes = await awardRfq(selectedRfq.id, awardsArray);
-                if (awardRes.success) {
-                  const poRes = await raisePoFromAward(selectedRfq.id, poPreflightDetails);
-                  if (poRes.success) {
-                    alert("RFQ Awarded and POs raised successfully!");
-                    setIsCompOpen(false);
-                    sessionStorage.setItem("requisitions_active_tab", "rfq");
-                    window.location.reload();
-                  } else {
-                    alert("RFQ Awarded, but failed to raise POs: " + poRes.error);
-                  }
-                } else {
-                  alert("Failed to award RFQ: " + awardRes.error);
+                if (!awardRes.ok) {
+                  const errData = await awardRes.json();
+                  throw new Error(errData.error || "Failed to commit award allocations");
                 }
+
+                // 2. Raise POs
+                const poRes = await fetch(`/api/rfqs/${selectedRfq!.id}/raise-po`, {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(poPreflightDetails)
+                });
+
+                const poData = await poRes.json();
+                if (!poRes.ok) {
+                  throw new Error(poData.error || "Failed to generate Purchase Orders");
+                }
+
+                if (poData.warnings && poData.warnings.length > 0) {
+                  alert("POs generated with the following warnings:\n\n" + poData.warnings.join("\n"));
+                } else {
+                  alert("RFQ Awarded and POs generated successfully!");
+                }
+
+                setIsCompOpen(false);
+                window.location.reload();
               } catch (err: any) {
                 alert("Error: " + err.message);
               } finally {
@@ -1350,20 +1893,16 @@ export default function RequisitionsList({
 
               <div>
                 <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Select Ship-To Location Master</label>
-                <select
-                  onChange={(e) => setPoPreflightDetails(prev => ({ ...prev, shipTo: e.target.value }))}
-                  className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded focus:outline-none mb-2 font-semibold text-onyx"
-                >
-                  {shipToLocations.length > 0 ? (
-                    shipToLocations.map(loc => (
-                      <option key={loc.id} value={`${loc.name} (${loc.address})`}>
-                        [{loc.code}] {loc.name} ({loc.address.slice(0, 30)}...)
-                      </option>
-                    ))
-                  ) : (
-                    <option value="">No predefined ship-to locations found</option>
-                  )}
-                </select>
+                <SearchableSelect
+                  options={shipToLocations.map(loc => ({
+                    value: `${loc.name} (${loc.address})`,
+                    label: `[${loc.code}] ${loc.name} (${loc.address.slice(0, 30)}...)`
+                  }))}
+                  value={poPreflightDetails.shipTo}
+                  onChange={(val) => setPoPreflightDetails(prev => ({ ...prev, shipTo: val }))}
+                  placeholder="Select ship-to location"
+                />
+                <div className="mt-2"></div>
                 <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Custom Delivery Address (Editable)</label>
                 <textarea
                   value={poPreflightDetails.shipTo}
@@ -1437,6 +1976,88 @@ export default function RequisitionsList({
                   className="px-3.5 py-1.5 bg-saffron hover:bg-saffron-dark text-onyx rounded-lg text-xs font-bold shadow cursor-pointer disabled:opacity-50"
                 >
                   {actionLoading ? "Generating POs..." : "Generate POs"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Short-Close PR Line Modal */}
+      {isShortCloseOpen && shortCloseLineId && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-[70] p-4 animate-in fade-in duration-200">
+          <div className="bg-cream max-w-md w-full rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
+            <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
+              <h3 className="font-heading text-base font-bold">Short-Close PR Line</h3>
+              <button 
+                onClick={() => setIsShortCloseOpen(false)} 
+                className="hover:text-saffron cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={handleShortCloseSubmit} className="p-6 space-y-4 text-xs">
+              <div className="bg-amber-50 text-amber-900 border-l-4 border-amber-500 p-3.5 rounded text-xs leading-relaxed">
+                <span className="font-bold">Item:</span> {shortCloseLineName}
+                <br />
+                <span className="font-bold">Max open quantity:</span> {shortCloseMaxQty}
+              </div>
+
+              <div>
+                <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Quantity to Short-Close *</label>
+                <input
+                  type="number"
+                  step="any"
+                  max={shortCloseMaxQty}
+                  min={0.0001}
+                  required
+                  value={shortCloseQty}
+                  onChange={(e) => setShortCloseQty(parseFloat(e.target.value) || 0)}
+                  className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Reason *</label>
+                <SearchableSelect
+                  options={[
+                    { value: "SUPPLIER_UNAVAILABLE", label: "Supplier Unavailable / No Quotes" },
+                    { value: "DELIVERY_DELAYED", label: "Excessive Delivery Lead Time" },
+                    { value: "NOT_REQUIRED", label: "Requirement Cancelled / Changed" },
+                    { value: "BUDGET_EXCEEDED", label: "Budget Limitations" },
+                    { value: "OTHER", label: "Other Reason" }
+                  ]}
+                  value={shortCloseReason}
+                  onChange={(val) => setShortCloseReason(val)}
+                  placeholder="Select reason"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Notes / Justification *</label>
+                <textarea
+                  value={shortCloseNote}
+                  onChange={(e) => setShortCloseNote(e.target.value)}
+                  placeholder="Provide justification notes for audit log..."
+                  className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron min-h-[80px] leading-relaxed"
+                  required
+                />
+              </div>
+
+              <div className="flex items-center justify-end space-x-2 pt-4 border-t border-onyx/5">
+                <button
+                  type="button"
+                  onClick={() => setIsShortCloseOpen(false)}
+                  className="px-3 py-1.5 border border-onyx/10 rounded-lg text-xs font-semibold hover:bg-cream-dark/40 cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading || shortCloseQty <= 0 || shortCloseQty > shortCloseMaxQty}
+                  className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-bold shadow cursor-pointer disabled:opacity-50"
+                >
+                  {actionLoading ? "Processing..." : "Confirm Short-Close"}
                 </button>
               </div>
             </form>

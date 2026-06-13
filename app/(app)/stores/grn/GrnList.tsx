@@ -9,6 +9,7 @@ import {
   bulkDeleteGrns
 } from "@/app/actions/grns";
 import { limitYearTo4Digits } from "@/lib/date";
+import { SearchableItemSelect } from "@/components/SearchableItemSelect";
 import { 
   Search, 
   Plus, 
@@ -150,13 +151,14 @@ export default function GrnList({
   } | null>(null);
 
   // Form States
-  const [sourceType, setSourceType] = useState<"AGAINST_PO" | "FREE_SAMPLE">("AGAINST_PO");
+  const [sourceType, setSourceType] = useState<"AGAINST_PO" | "WITHOUT_PO" | "FREE_SAMPLE">("AGAINST_PO");
   const [selectedPoId, setSelectedPoId] = useState("");
   const [selectedVendorId, setSelectedVendorId] = useState("");
   const [selectedStoreId, setSelectedStoreId] = useState(stores[0]?.id || "");
   const [dcNo, setDcNo] = useState("");
   const [dcDate, setDcDate] = useState("");
   const [invoiceNo, setInvoiceNo] = useState("");
+  const [manualSelectedItemId, setManualSelectedItemId] = useState("");
 
   const [formLines, setFormLines] = useState<Array<{
     itemId: string;
@@ -839,10 +841,17 @@ export default function GrnList({
                   </label>
                   <select
                     value={sourceType}
-                    onChange={(e) => setSourceType(e.target.value as any)}
-                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg"
+                    onChange={(e) => {
+                      const val = e.target.value as any;
+                      setSourceType(val);
+                      setFormLines([]);
+                      setSelectedPoId("");
+                      setSelectedVendorId("");
+                    }}
+                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
                   >
                     <option value="AGAINST_PO">Against Purchase Order</option>
+                    <option value="WITHOUT_PO">Without Purchase Order</option>
                     <option value="FREE_SAMPLE">Free Sample / Trial</option>
                   </select>
                 </div>
@@ -941,16 +950,65 @@ export default function GrnList({
               </div>
 
               {/* GRN Line Items */}
-              <div className="space-y-2">
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70">
-                  Receipt Line Items
-                </label>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70">
+                    Receipt Line Items
+                  </label>
+                </div>
+
+                {sourceType !== "AGAINST_PO" && (
+                  <div className="flex items-end gap-3 p-3 bg-cream-dark/15 rounded-lg border border-onyx/5">
+                    <div className="flex-1">
+                      <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                        Select Item to Add *
+                      </label>
+                      <SearchableItemSelect
+                        items={items}
+                        value={manualSelectedItemId}
+                        onChange={(val) => setManualSelectedItemId(val)}
+                        placeholder="Search and select item..."
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!manualSelectedItemId) return;
+                        const item = items.find(i => i.id === manualSelectedItemId);
+                        if (!item) return;
+                        if (formLines.some(l => l.itemId === item.id)) {
+                          alert("Item already added to receipt lines.");
+                          return;
+                        }
+                        const firstBin = stores.find(s => s.id === selectedStoreId)?.bins[0]?.id || null;
+                        setFormLines(prev => [
+                          ...prev,
+                          {
+                            itemId: item.id,
+                            poLineId: null,
+                            receivedQty: 1,
+                            binId: firstBin,
+                            batchLotNo: "",
+                            batchMfgDate: "",
+                            batchExpiryDate: "",
+                            itemName: item.name,
+                            itemCode: item.code,
+                          }
+                        ]);
+                        setManualSelectedItemId("");
+                      }}
+                      className="px-4 py-2 bg-onyx text-cream-light hover:bg-onyx-light rounded-lg text-xs font-bold shadow-md cursor-pointer transition-colors duration-150 shrink-0 h-[34px] flex items-center justify-center"
+                    >
+                      Add Item
+                    </button>
+                  </div>
+                )}
 
                 {formLines.length === 0 ? (
                   <p className="text-center py-6 bg-white border border-dashed border-onyx/10 text-xs text-onyx/40 font-medium rounded-lg">
                     {sourceType === "AGAINST_PO" 
                       ? "Select a purchase order to populate lines." 
-                      : "Add items manually (Free Sample Mode)."}
+                      : "Add items manually using the selector above."}
                   </p>
                 ) : (
                   <div className="border border-onyx/5 rounded-lg overflow-x-auto">
@@ -963,6 +1021,7 @@ export default function GrnList({
                           <th className="p-2.5 font-bold w-32">Lot Number</th>
                           <th className="p-2.5 font-bold w-32">Mfg Date</th>
                           <th className="p-2.5 font-bold w-32">Expiry Date</th>
+                          {sourceType !== "AGAINST_PO" && <th className="p-2.5 font-bold w-12 text-center"></th>}
                         </tr>
                       </thead>
                       <tbody>
@@ -1030,6 +1089,19 @@ export default function GrnList({
                                 className="w-full text-[11px] p-1 border border-onyx/15 rounded"
                               />
                             </td>
+                            {sourceType !== "AGAINST_PO" && (
+                              <td className="p-2.5 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setFormLines(prev => prev.filter((_, i) => i !== idx));
+                                  }}
+                                  className="text-red-500 hover:text-red-700 cursor-pointer p-1 rounded hover:bg-red-50 border border-transparent hover:border-red-200"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </td>
+                            )}
                           </tr>
                         ))}
                       </tbody>
@@ -1181,7 +1253,11 @@ export default function GrnList({
                   <input
                     type="text"
                     disabled
-                    value={editGrnForm.source === "AGAINST_PO" ? "Against Purchase Order" : "Free Sample / Trial"}
+                    value={
+                      editGrnForm.source === "AGAINST_PO" ? "Against Purchase Order" :
+                      editGrnForm.source === "WITHOUT_PO" ? "Without Purchase Order" :
+                      "Free Sample / Trial"
+                    }
                     className="w-full text-xs p-2 bg-cream-dark/20 border border-onyx/10 rounded-lg text-onyx/50"
                   />
                 </div>
