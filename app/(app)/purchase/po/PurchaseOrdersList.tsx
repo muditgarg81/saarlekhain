@@ -407,10 +407,18 @@ export default function PurchaseOrdersList({
     return html;
   };
 
-  const calculateLandedCost = (qty: number, rate: number, discount: number, gstRate: number) => {
+  const calculateLandedCost = (
+    qty: number,
+    rate: number,
+    discount: number,
+    gstRate: number,
+    totalTaxable = 0,
+    otherCharges = 0
+  ) => {
     const basic = qty * rate;
     const discounted = basic * (1 - discount / 100);
-    return discounted * (1 + gstRate / 100);
+    const allocatedOtherCharges = totalTaxable > 0 ? otherCharges * (discounted / totalTaxable) : 0;
+    return (discounted + allocatedOtherCharges) * (1 + gstRate / 100);
   };
 
   const getLandedTotal = (lines: { qty: number; rate: number; discount: number; gstRate: number }[], otherCharges = 0) => {
@@ -596,8 +604,19 @@ export default function PurchaseOrdersList({
       ["S.No", "Code", "Item Description", "Qty", "Basic Rate (Rs.)", "Disc %", "GST %", "Landed Cost (Rs.)"]
     ];
 
+    const totalTaxable = po.lines.reduce((sum, line) => {
+      return sum + line.qty * line.rate * (1 - line.discount / 100);
+    }, 0);
+
     const tableRows = po.lines.map((line, index) => {
-      const landed = calculateLandedCost(line.qty, line.rate, line.discount, line.gstRate);
+      const landed = calculateLandedCost(
+        line.qty,
+        line.rate,
+        line.discount,
+        line.gstRate,
+        totalTaxable,
+        po.otherCharges
+      );
       return [
         index + 1,
         line.itemCode,
@@ -1447,7 +1466,17 @@ export default function PurchaseOrdersList({
                       <tbody>
                         {newPo.lines.map((line, idx) => {
                           const item = items.find(i => i.id === line.itemId);
-                          const landed = calculateLandedCost(line.qty, line.rate, line.discount, line.gstRate);
+                          const totalTaxable = newPo.lines.reduce((sum, l) => {
+                            return sum + l.qty * l.rate * (1 - l.discount / 100);
+                          }, 0);
+                          const landed = calculateLandedCost(
+                            line.qty,
+                            line.rate,
+                            line.discount,
+                            line.gstRate,
+                            totalTaxable,
+                            newPo.otherCharges
+                          );
                           return (
                             <tr key={idx} className="border-t border-onyx/5">
                               <td className="p-2">[{item?.code}] {item?.name}</td>
@@ -1923,7 +1952,17 @@ export default function PurchaseOrdersList({
                     </thead>
                     <tbody>
                       {selectedPO.lines.map((line) => {
-                        const landed = calculateLandedCost(line.qty, line.rate, line.discount, line.gstRate);
+                        const totalTaxable = selectedPO.lines.reduce((sum, l) => {
+                          return sum + l.qty * l.rate * (1 - l.discount / 100);
+                        }, 0);
+                        const landed = calculateLandedCost(
+                          line.qty,
+                          line.rate,
+                          line.discount,
+                          line.gstRate,
+                          totalTaxable,
+                          selectedPO.otherCharges
+                        );
                         return (
                           <tr key={line.id} className="border-t border-onyx/5">
                             <td className="p-2.5">[{line.itemCode}] {line.itemName}</td>
