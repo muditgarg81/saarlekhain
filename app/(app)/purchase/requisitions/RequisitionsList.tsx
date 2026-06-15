@@ -698,174 +698,344 @@ export default function RequisitionsList({
 
       {/* Tables */}
       <div className="glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          {activeTab === "pr" ? (
-            <table className="w-full dense-table text-left border-collapse">
-              <thead>
-                <tr>
-                  <th>PR Number</th>
-                  <th className="text-center font-bold">Items Count</th>
-                  <th>Date Raised</th>
-                  <th>Approved By</th>
-                  <th>Approved Date</th>
-                  <th className="text-center">Status</th>
-                  <th className="text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredPrs.length === 0 ? (
+        {activeTab === "pr" ? (
+          <>
+            {/* Desktop Table View */}
+            <div className="overflow-x-auto hidden md:block">
+              <table className="w-full dense-table text-left border-collapse">
+                <thead>
                   <tr>
-                    <td colSpan={7} className="text-center py-8 text-onyx/40 font-medium">
-                      No purchase requisitions found.
-                    </td>
+                    <th>PR Number</th>
+                    <th className="text-center font-bold">Items Count</th>
+                    <th>Date Raised</th>
+                    <th>Approved By</th>
+                    <th>Approved Date</th>
+                    <th className="text-center">Status</th>
+                    <th className="text-center">Actions</th>
                   </tr>
-                ) : (
-                  filteredPrs.map((pr) => (
-                    <tr key={pr.id}>
-                      <td className="font-mono font-bold text-xs text-onyx/85">{pr.number}</td>
-                      <td className="text-center font-semibold">{pr.lines.length} items</td>
-                      <td suppressHydrationWarning>{new Date(pr.createdAt).toLocaleDateString()}</td>
-                      <td>{pr.approvedBy || "-"}</td>
-                      <td suppressHydrationWarning>{pr.approvedAt ? new Date(pr.approvedAt).toLocaleDateString() : "-"}</td>
-                      <td className="text-center">
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                          pr.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
-                          pr.status === "SUBMITTED" ? "bg-yellow-100 text-yellow-800" :
-                          pr.status === "APPROVED" ? "bg-green-100 text-green-800" :
-                          pr.status === "RFQ_ISSUED" ? "bg-blue-100 text-blue-800" :
-                          pr.status === "PO_RAISED" ? "bg-purple-100 text-purple-800" :
-                          pr.status === "REJECTED" ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"
-                        }`}>
-                          {pr.status.replace("_", " ")}
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <div className="flex items-center justify-center space-x-1.5">
-                          <button
-                            onClick={() => {
-                              setSelectedPr(pr);
-                              setSelectedRfq(null);
-                              setIsDetailOpen(true);
-                            }}
-                            className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer"
-                          >
-                            <Eye size={13} />
-                          </button>
-                          {(pr.status === "DRAFT" || pr.status === "SUBMITTED") && canApprove && (
-                            <>
-                              <button
-                                onClick={() => handleApprovePr(pr.id)}
-                                title="Approve PR"
-                                className="p-1 hover:bg-green-50 text-green-600 hover:text-green-700 rounded border border-transparent hover:border-green-200 cursor-pointer"
-                              >
-                                <Check size={13} />
-                              </button>
-                              <button
-                                onClick={() => {
-                                  setRejectPrId(pr.id);
-                                  setRejectRemarks("");
-                                  setIsRejectPrOpen(true);
-                                }}
-                                title="Reject PR"
-                                className="p-1 hover:bg-red-50 text-red-600 hover:text-red-700 rounded border border-transparent hover:border-red-200 cursor-pointer"
-                              >
-                                <X size={13} />
-                              </button>
-                            </>
-                          )}
-                          {pr.status === "APPROVED" && isPurchase && (
-                            <button
-                              onClick={() => handleOpenRfq(pr)}
-                              title="Create RFQ"
-                              className="p-1 hover:bg-blue-50 text-blue-600 hover:text-blue-700 rounded border border-transparent hover:border-blue-200 cursor-pointer"
-                            >
-                              <ArrowRight size={13} />
-                            </button>
-                          )}
-                        </div>
+                </thead>
+                <tbody>
+                  {filteredPrs.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-8 text-onyx/40 font-medium">
+                        No purchase requisitions found.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          ) : (
-            <table className="w-full dense-table text-left border-collapse">
-              <thead>
-                <tr>
-                  <th>RFQ Number</th>
-                  <th>Source PR</th>
-                  <th className="text-center font-bold">Items</th>
-                  <th className="text-center font-bold">Quotes Logged</th>
-                  <th>Date Issued</th>
-                  <th className="text-center">Status</th>
-                  <th className="text-center font-bold">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRfqs.length === 0 ? (
-                  <tr>
-                    <td colSpan={7} className="text-center py-8 text-onyx/40 font-medium">
-                      No RFQs issued.
-                    </td>
-                  </tr>
-                ) : (
-                  filteredRfqs.map((rfq) => (
-                    <tr key={rfq.id}>
-                      <td className="font-mono font-bold text-xs text-onyx/85">{rfq.number}</td>
-                      <td className="font-mono text-xs text-onyx/60">{rfq.prNumber || "Manual"}</td>
-                      <td className="text-center font-semibold">{rfq.lines.length} items</td>
-                      <td className="text-center font-bold text-saffron-dark">{rfq.quotations.length} quote(s)</td>
-                      <td suppressHydrationWarning>{new Date(rfq.createdAt).toLocaleDateString()}</td>
-                      <td className="text-center">
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                          rfq.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
-                          rfq.status === "QUOTES_RECEIVED" ? "bg-blue-100 text-blue-800" :
-                          rfq.status === "AWARDED" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
-                        }`}>
-                          {rfq.status.replace("_", " ")}
-                        </span>
-                      </td>
-                      <td className="text-center">
-                        <div className="flex items-center justify-center space-x-1.5">
+                  ) : (
+                    filteredPrs.map((pr) => (
+                      <tr key={pr.id}>
+                        <td className="font-mono font-bold text-xs text-onyx/85">{pr.number}</td>
+                        <td className="text-center font-semibold">{pr.lines.length} items</td>
+                        <td suppressHydrationWarning>{new Date(pr.createdAt).toLocaleDateString()}</td>
+                        <td>{pr.approvedBy || "-"}</td>
+                        <td suppressHydrationWarning>{pr.approvedAt ? new Date(pr.approvedAt).toLocaleDateString() : "-"}</td>
+                        <td className="text-center">
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            pr.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
+                            pr.status === "SUBMITTED" ? "bg-yellow-100 text-yellow-800" :
+                            pr.status === "APPROVED" ? "bg-green-100 text-green-800" :
+                            pr.status === "RFQ_ISSUED" ? "bg-blue-100 text-blue-800" :
+                            pr.status === "PO_RAISED" ? "bg-purple-100 text-purple-800" :
+                            pr.status === "REJECTED" ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"
+                          }`}>
+                            {pr.status.replace("_", " ")}
+                          </span>
+                        </td>
+                        <td className="text-center">
+                          <div className="flex items-center justify-center space-x-1.5">
+                            <button
+                              onClick={() => {
+                                setSelectedPr(pr);
+                                setSelectedRfq(null);
+                                setIsDetailOpen(true);
+                              }}
+                              className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer"
+                            >
+                              <Eye size={13} />
+                            </button>
+                            {(pr.status === "DRAFT" || pr.status === "SUBMITTED") && canApprove && (
+                              <>
+                                <button
+                                  onClick={() => handleApprovePr(pr.id)}
+                                  title="Approve PR"
+                                  className="p-1 hover:bg-green-50 text-green-600 hover:text-green-700 rounded border border-transparent hover:border-green-200 cursor-pointer"
+                                >
+                                  <Check size={13} />
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setRejectPrId(pr.id);
+                                    setRejectRemarks("");
+                                    setIsRejectPrOpen(true);
+                                  }}
+                                  title="Reject PR"
+                                  className="p-1 hover:bg-red-50 text-red-600 hover:text-red-700 rounded border border-transparent hover:border-red-200 cursor-pointer"
+                                >
+                                  <X size={13} />
+                                </button>
+                              </>
+                            )}
+                            {pr.status === "APPROVED" && isPurchase && (
+                              <button
+                                onClick={() => handleOpenRfq(pr)}
+                                title="Create RFQ"
+                                className="p-1 hover:bg-blue-50 text-blue-600 hover:text-blue-700 rounded border border-transparent hover:border-blue-200 cursor-pointer"
+                              >
+                                <ArrowRight size={13} />
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card List View */}
+            <div className="md:hidden divide-y divide-onyx/5">
+              {filteredPrs.length === 0 ? (
+                <div className="text-center py-8 text-onyx/40 font-medium">
+                  No purchase requisitions found.
+                </div>
+              ) : (
+                filteredPrs.map((pr) => (
+                  <div key={pr.id} className="p-4 space-y-3 bg-white">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-sm text-onyx/85">{pr.number}</span>
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        pr.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
+                        pr.status === "SUBMITTED" ? "bg-yellow-100 text-yellow-800" :
+                        pr.status === "APPROVED" ? "bg-green-100 text-green-800" :
+                        pr.status === "RFQ_ISSUED" ? "bg-blue-100 text-blue-800" :
+                        pr.status === "PO_RAISED" ? "bg-purple-100 text-purple-800" :
+                        pr.status === "REJECTED" ? "bg-red-100 text-red-800" : "bg-gray-100 text-gray-800"
+                      }`}>
+                        {pr.status.replace("_", " ")}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-y-2 text-xs text-onyx/60">
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Items Count</span>
+                        <span className="font-semibold text-onyx/85">{pr.lines.length} items</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Date Raised</span>
+                        <span className="font-semibold text-onyx/85" suppressHydrationWarning>{new Date(pr.createdAt).toLocaleDateString()}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Approved By</span>
+                        <span className="font-semibold text-onyx/85">{pr.approvedBy || "-"}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Approved Date</span>
+                        <span className="font-semibold text-onyx/85" suppressHydrationWarning>{pr.approvedAt ? new Date(pr.approvedAt).toLocaleDateString() : "-"}</span>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end space-x-2 pt-2 border-t border-onyx/5">
+                      <button
+                        onClick={() => {
+                          setSelectedPr(pr);
+                          setSelectedRfq(null);
+                          setIsDetailOpen(true);
+                        }}
+                        className="flex items-center space-x-1 px-2.5 py-1.5 hover:bg-cream-dark border border-onyx/10 rounded text-xs text-onyx/75 cursor-pointer"
+                      >
+                        <Eye size={13} />
+                        <span>View Details</span>
+                      </button>
+                      {(pr.status === "DRAFT" || pr.status === "SUBMITTED") && canApprove && (
+                        <>
+                          <button
+                            onClick={() => handleApprovePr(pr.id)}
+                            className="flex items-center space-x-1 px-2.5 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded text-xs cursor-pointer font-bold"
+                          >
+                            <Check size={13} />
+                            <span>Approve</span>
+                          </button>
                           <button
                             onClick={() => {
-                              setSelectedRfq(rfq);
-                              setSelectedPr(null);
-                              setIsDetailOpen(true);
+                              setRejectPrId(pr.id);
+                              setRejectRemarks("");
+                              setIsRejectPrOpen(true);
                             }}
-                            className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer"
+                            className="flex items-center space-x-1 px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded text-xs cursor-pointer font-bold"
                           >
-                            <Eye size={13} />
+                            <X size={13} />
+                            <span>Reject</span>
                           </button>
-                          {rfq.status !== "AWARDED" && isPurchase && (
-                            <button
-                              onClick={() => handleOpenQuote(rfq)}
-                              title="Log Vendor Quote"
-                              className="p-1 hover:bg-saffron-light text-saffron-dark rounded border border-transparent hover:border-saffron-dark/20 cursor-pointer"
-                            >
-                              <DollarSign size={13} />
-                            </button>
-                          )}
-                          {rfq.quotations.length > 0 && (
-                            <button
-                              onClick={() => handleOpenCompare(rfq)}
-                              title="Comparative Cost Statement"
-                              className="p-1 hover:bg-green-50 text-green-600 hover:text-green-700 rounded border border-transparent hover:border-green-200 cursor-pointer font-bold flex items-center space-x-0.5"
-                            >
-                              <TrendingDown size={13} />
-                              <span className="text-[10px]">Compare</span>
-                            </button>
-                          )}
-                        </div>
+                        </>
+                      )}
+                      {pr.status === "APPROVED" && isPurchase && (
+                        <button
+                          onClick={() => handleOpenRfq(pr)}
+                          className="flex items-center space-x-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-xs cursor-pointer font-bold"
+                        >
+                          <ArrowRight size={13} />
+                          <span>Create RFQ</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Desktop Table View */}
+            <div className="overflow-x-auto hidden md:block">
+              <table className="w-full dense-table text-left border-collapse">
+                <thead>
+                  <tr>
+                    <th>RFQ Number</th>
+                    <th>Source PR</th>
+                    <th className="text-center font-bold">Items</th>
+                    <th className="text-center font-bold">Quotes Logged</th>
+                    <th>Date Issued</th>
+                    <th className="text-center">Status</th>
+                    <th className="text-center font-bold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRfqs.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="text-center py-8 text-onyx/40 font-medium">
+                        No RFQs issued.
                       </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          )}
-        </div>
+                  ) : (
+                    filteredRfqs.map((rfq) => (
+                      <tr key={rfq.id}>
+                        <td className="font-mono font-bold text-xs text-onyx/85">{rfq.number}</td>
+                        <td className="font-mono text-xs text-onyx/60">{rfq.prNumber || "Manual"}</td>
+                        <td className="text-center font-semibold">{rfq.lines.length} items</td>
+                        <td className="text-center font-bold text-saffron-dark">{rfq.quotations.length} quote(s)</td>
+                        <td suppressHydrationWarning>{new Date(rfq.createdAt).toLocaleDateString()}</td>
+                        <td className="text-center">
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            rfq.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
+                            rfq.status === "QUOTES_RECEIVED" ? "bg-blue-100 text-blue-800" :
+                            rfq.status === "AWARDED" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+                          }`}>
+                            {rfq.status.replace("_", " ")}
+                          </span>
+                        </td>
+                        <td className="text-center">
+                          <div className="flex items-center justify-center space-x-1.5">
+                            <button
+                              onClick={() => {
+                                setSelectedRfq(rfq);
+                                setSelectedPr(null);
+                                setIsDetailOpen(true);
+                              }}
+                              className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer"
+                            >
+                              <Eye size={13} />
+                            </button>
+                            {rfq.status !== "AWARDED" && isPurchase && (
+                              <button
+                                onClick={() => handleOpenQuote(rfq)}
+                                title="Log Vendor Quote"
+                                className="p-1 hover:bg-saffron-light text-saffron-dark rounded border border-transparent hover:border-saffron-dark/20 cursor-pointer"
+                              >
+                                <DollarSign size={13} />
+                              </button>
+                            )}
+                            {rfq.quotations.length > 0 && (
+                              <button
+                                onClick={() => handleOpenCompare(rfq)}
+                                title="Comparative Cost Statement"
+                                className="p-1 hover:bg-green-50 text-green-600 hover:text-green-700 rounded border border-transparent hover:border-green-200 cursor-pointer font-bold flex items-center space-x-0.5"
+                              >
+                                <TrendingDown size={13} />
+                                <span className="text-[10px]">Compare</span>
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Mobile Card List View */}
+            <div className="md:hidden divide-y divide-onyx/5">
+              {filteredRfqs.length === 0 ? (
+                <div className="text-center py-8 text-onyx/40 font-medium">
+                  No RFQs issued.
+                </div>
+              ) : (
+                filteredRfqs.map((rfq) => (
+                  <div key={rfq.id} className="p-4 space-y-3 bg-white">
+                    <div className="flex items-center justify-between">
+                      <span className="font-mono font-bold text-sm text-onyx/85">{rfq.number}</span>
+                      <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                        rfq.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
+                        rfq.status === "QUOTES_RECEIVED" ? "bg-blue-100 text-blue-800" :
+                        rfq.status === "AWARDED" ? "bg-green-100 text-green-800" : "bg-yellow-100 text-yellow-800"
+                      }`}>
+                        {rfq.status.replace("_", " ")}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-y-2 text-xs text-onyx/60">
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Source PR</span>
+                        <span className="font-mono font-semibold text-onyx/85">{rfq.prNumber || "Manual"}</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Items Count</span>
+                        <span className="font-semibold text-onyx/85">{rfq.lines.length} items</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Quotes Logged</span>
+                        <span className="font-bold text-saffron-dark">{rfq.quotations.length} quote(s)</span>
+                      </div>
+                      <div>
+                        <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Date Issued</span>
+                        <span className="font-semibold text-onyx/85" suppressHydrationWarning>{new Date(rfq.createdAt).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-onyx/5">
+                      <button
+                        onClick={() => {
+                          setSelectedRfq(rfq);
+                          setSelectedPr(null);
+                          setIsDetailOpen(true);
+                        }}
+                        className="flex items-center space-x-1 px-2.5 py-1.5 hover:bg-cream-dark border border-onyx/10 rounded text-xs text-onyx/75 cursor-pointer"
+                      >
+                        <Eye size={12} />
+                        <span>Details</span>
+                      </button>
+                      {rfq.status !== "AWARDED" && isPurchase && (
+                        <button
+                          onClick={() => handleOpenQuote(rfq)}
+                          className="flex items-center space-x-1 px-2.5 py-1.5 bg-saffron hover:bg-saffron-dark text-onyx font-bold rounded text-xs cursor-pointer"
+                        >
+                          <DollarSign size={12} />
+                          <span>Log Quote</span>
+                        </button>
+                      )}
+                      {rfq.quotations.length > 0 && (
+                        <button
+                          onClick={() => handleOpenCompare(rfq)}
+                          className="flex items-center space-x-1 px-2.5 py-1.5 bg-green-50 hover:bg-green-100 text-green-700 border border-green-200 rounded text-xs cursor-pointer font-bold"
+                        >
+                          <TrendingDown size={12} />
+                          <span>Compare</span>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </>
+        )}
       </div>
 
       {/* Manual PR Modal */}
