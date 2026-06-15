@@ -108,6 +108,7 @@ model Vendor {
   company     Company      @relation(fields: [companyId], references: [id])
 
   pos         PurchaseOrder[]
+  quotations  Quotation[]
 
   @@unique([companyId, code])
   @@index([companyId, status])
@@ -197,6 +198,7 @@ model Quotation {
   packingCharges Float @default(0)
   awarded   Boolean @default(false)
   rfq       Rfq    @relation(fields: [rfqId], references: [id])
+  vendor    Vendor @relation(fields: [vendorId], references: [id])
   lines     QuotationLine[]
   @@schema("purchase")
 
