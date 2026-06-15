@@ -63,10 +63,11 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
 
   // Close the mobile sidebar whenever the pathname changes (e.g. after clicking a link)
   useEffect(() => {
-    if (onClose) {
+    if (isOpen && onClose) {
       onClose();
     }
-  }, [pathname, onClose]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   const handleSignOut = () => {
     signOut({ callbackUrl: "/auth/signin" });
