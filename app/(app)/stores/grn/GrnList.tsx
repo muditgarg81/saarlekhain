@@ -658,7 +658,8 @@ export default function GrnList({
       </div>
 
       {/* GRN Register */}
-      <div className="glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
+      {/* GRN Register (Desktop View) */}
+      <div className="hidden md:block glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full dense-table text-left border-collapse">
             <thead>
@@ -791,6 +792,133 @@ export default function GrnList({
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile Card List View */}
+      <div className="md:hidden space-y-4">
+        {filteredGrns.length === 0 ? (
+          <div className="glass-card p-6 text-center text-onyx/40 font-medium border border-onyx/5 rounded-xl">
+            No Goods Receipt Notes found.
+          </div>
+        ) : (
+          filteredGrns.map((g) => {
+            const isSelected = selectedIds.includes(g.id);
+            return (
+              <div
+                key={g.id}
+                className={`glass-card p-4 rounded-xl border transition-all duration-150 ${
+                  isSelected ? "border-saffron bg-saffron/5" : "border-onyx/5 bg-cream"
+                }`}
+              >
+                <div className="flex items-center justify-between border-b border-onyx/5 pb-2">
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handleToggleSelect(g.id)}
+                      className="p-1 hover:bg-cream-dark rounded text-onyx/65 hover:text-onyx cursor-pointer"
+                    >
+                      {isSelected ? (
+                        <CheckSquare size={14} className="text-saffron-dark" />
+                      ) : (
+                        <Square size={14} />
+                      )}
+                    </button>
+                    <span className="font-mono font-bold text-xs text-onyx/85">{g.number}</span>
+                  </div>
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                    g.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
+                    g.status === "QC_PENDING" ? "bg-amber-100 text-amber-800 animate-pulse" :
+                    g.status === "QC_DONE" ? "bg-yellow-100 text-yellow-800" :
+                    g.status === "POSTED" ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"
+                  }`}>
+                    {g.status}
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs text-onyx/70">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Supplier</span>
+                    <span className="font-semibold text-onyx">{g.vendorName || "Free Sample"}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Source PO</span>
+                      <span className="font-mono text-onyx">{g.poNumber || "-"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Store</span>
+                      <span className="font-semibold text-onyx">{g.storeName}</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Invoice/Challan</span>
+                      <div>
+                        {g.invoiceNo && <p className="font-semibold text-xs">Inv: {g.invoiceNo}</p>}
+                        {g.dcNo && <p className="text-[9px] text-onyx/50 mt-0.5">DC: {g.dcNo}</p>}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Items</span>
+                      <span className="font-semibold text-onyx">{g.lines.length} items</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Date Received</span>
+                    <span className="font-semibold text-onyx" suppressHydrationWarning>
+                      {new Date(g.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-2 border-t border-onyx/5">
+                  <button
+                    onClick={() => {
+                      setSelectedGrn(g);
+                      setIsDetailOpen(true);
+                    }}
+                    title="View Detail"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                  >
+                    <Eye size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleOpenEditGrn(g)}
+                    title="Edit GRN"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                  >
+                    <Edit size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteGrn(g.id)}
+                    disabled={actionLoading}
+                    title="Delete GRN"
+                    className="p-1.5 hover:bg-red-50 border border-transparent hover:border-red-200 rounded text-red-600 hover:text-red-700 cursor-pointer disabled:opacity-50 inline-flex"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                  <button
+                    onClick={() => handlePrintGrn(g)}
+                    title="Print GRN Voucher"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                  >
+                    <Printer size={14} />
+                  </button>
+                  {["DRAFT", "QC_DONE"].includes(g.status) && (
+                    <button
+                      onClick={() => handlePostGrn(g.id)}
+                      disabled={actionLoading}
+                      title="Commit & Post Stock"
+                      className="p-1.5 hover:bg-green-50 text-green-600 hover:text-green-700 rounded border border-transparent hover:border-green-200 cursor-pointer disabled:opacity-50 inline-flex font-bold"
+                    >
+                      <Check size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Create GRN Modal */}

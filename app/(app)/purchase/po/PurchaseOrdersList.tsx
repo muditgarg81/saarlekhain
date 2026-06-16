@@ -998,7 +998,8 @@ export default function PurchaseOrdersList({
       </div>
 
       {/* Table */}
-      <div className="glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
+      {/* Table (Desktop View) */}
+      <div className="hidden md:block glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full dense-table text-left border-collapse">
             <thead>
@@ -1142,6 +1143,142 @@ export default function PurchaseOrdersList({
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile Card List View */}
+      <div className="md:hidden space-y-4">
+        {filteredPOs.length === 0 ? (
+          <div className="glass-card p-6 text-center text-onyx/40 font-medium border border-onyx/5 rounded-xl">
+            No purchase orders found.
+          </div>
+        ) : (
+          filteredPOs.map((po) => {
+            return (
+              <div
+                key={po.id}
+                className="glass-card p-4 rounded-xl border border-onyx/5 bg-cream shadow-sm space-y-3"
+              >
+                <div className="flex items-center justify-between border-b border-onyx/5 pb-2">
+                  <div className="flex items-center space-x-2">
+                    <span className="font-mono font-bold text-xs text-onyx/85">
+                      {po.number}
+                      {po.version > 1 && (
+                        <span className="ml-1.5 px-1 py-0.5 bg-saffron/20 border border-saffron/40 text-[9px] font-bold rounded">
+                          v{po.version}
+                        </span>
+                      )}
+                    </span>
+                  </div>
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                    po.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
+                    po.status === "PENDING_APPROVAL" ? "bg-yellow-100 text-yellow-800 animate-pulse" :
+                    po.status === "APPROVED" ? "bg-green-100 text-green-800" :
+                    po.status === "SENT" ? "bg-blue-100 text-blue-800" :
+                    po.status === "CANCELLED" ? "bg-red-100 text-red-800" : "bg-purple-100 text-purple-800"
+                  }`}>
+                    {po.status.replace("_", " ")}
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs text-onyx/70">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Supplier</span>
+                    <span className="font-semibold text-onyx">{po.vendorName}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">PO Type</span>
+                      <span className="font-semibold text-onyx">{po.type}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Landed Value</span>
+                      <span className="font-mono font-bold text-onyx/85">
+                        ₹{po.totalValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Order Date</span>
+                      <span className="font-semibold text-onyx" suppressHydrationWarning>
+                        {new Date(po.orderDate).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-2 border-t border-onyx/5">
+                  <button
+                    onClick={() => {
+                      setSelectedPO(po);
+                      setIsDetailOpen(true);
+                    }}
+                    title="View PO Details"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                  >
+                    <Eye size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleExportPDF(po)}
+                    title="Print / Export PO PDF"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-saffron-dark hover:text-saffron-dark/80 cursor-pointer inline-flex"
+                  >
+                    <FileText size={14} />
+                  </button>
+                  {["DRAFT", "PENDING_APPROVAL"].includes(po.status) && isPurchase && (
+                    <button
+                      onClick={() => handleOpenEdit(po)}
+                      title="Edit PO"
+                      className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                  )}
+
+                  {po.status === "DRAFT" && (
+                    <button
+                      onClick={() => handleWorkflow("submit", po.id)}
+                      title="Submit for Approval"
+                      className="p-1.5 hover:bg-yellow-50 text-yellow-600 hover:text-yellow-700 rounded border border-yellow-200 cursor-pointer inline-flex"
+                    >
+                      <RefreshCw size={14} />
+                    </button>
+                  )}
+
+                  {po.status === "PENDING_APPROVAL" && canApprove && (
+                    <button
+                      onClick={() => handleWorkflow("approve", po.id)}
+                      title="Approve PO"
+                      className="p-1.5 bg-green-50 hover:bg-green-100 text-green-600 hover:text-green-700 rounded border border-green-200 cursor-pointer inline-flex font-bold"
+                    >
+                      <Check size={14} />
+                    </button>
+                  )}
+
+                  {["APPROVED", "SENT"].includes(po.status) && isPurchase && (
+                    <button
+                      onClick={() => handleOpenAmend(po)}
+                      title="Amend PO (Creates new version)"
+                      className="p-1.5 hover:bg-saffron-light text-saffron-dark rounded border border-transparent hover:border-saffron-dark/20 cursor-pointer inline-flex"
+                    >
+                      <Edit3 size={14} />
+                    </button>
+                  )}
+
+                  {["DRAFT", "PENDING_APPROVAL", "APPROVED", "SENT"].includes(po.status) && isPurchase && (
+                    <button
+                      onClick={() => handleWorkflow("cancel", po.id)}
+                      title="Cancel PO"
+                      className="p-1.5 hover:bg-red-50 text-red-600 hover:text-red-700 rounded border border-transparent hover:border-red-200 cursor-pointer inline-flex"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* PO Create Modal */}

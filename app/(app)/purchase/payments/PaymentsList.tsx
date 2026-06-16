@@ -517,7 +517,8 @@ export default function PaymentsList({
       </div>
 
       {/* Table */}
-      <div className="glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
+      {/* Table (Desktop View) */}
+      <div className="hidden md:block glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full dense-table text-left border-collapse">
             <thead>
@@ -572,7 +573,16 @@ export default function PaymentsList({
                       <td className="font-semibold text-onyx">{pay.vendorName}</td>
                       <td className="font-mono text-xs text-onyx/60">{pay.invoiceNo || "On Account"}</td>
                       <td>{pay.mode}</td>
-                      <td className="font-mono text-xs">{pay.reference || "-"}</td>
+                      <td className="font-mono text-xs">
+                        {pay.reference?.startsWith("ADVANCE PAY PENDING") ? (
+                          <span className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wider animate-pulse inline-flex items-center space-x-1 shadow-sm">
+                            <AlertCircle size={10} className="text-amber-600 animate-bounce" />
+                            <span>{pay.reference}</span>
+                          </span>
+                        ) : (
+                          pay.reference || "-"
+                        )}
+                      </td>
                       <td className="font-mono font-bold">₹{pay.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
                       <td suppressHydrationWarning>{new Date(pay.paidOn).toLocaleDateString()}</td>
                       <td className="text-center space-x-1">
@@ -618,6 +628,120 @@ export default function PaymentsList({
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile Card List View */}
+      <div className="md:hidden space-y-4">
+        {filteredPayments.length === 0 ? (
+          <div className="glass-card p-6 text-center text-onyx/40 font-medium border border-onyx/5 rounded-xl">
+            No payment vouchers recorded.
+          </div>
+        ) : (
+          filteredPayments.map((pay) => {
+            const isSelected = selectedIds.includes(pay.id);
+            return (
+              <div
+                key={pay.id}
+                className={`glass-card p-4 rounded-xl border transition-all duration-150 ${
+                  isSelected ? "border-saffron bg-saffron/5" : "border-onyx/5 bg-cream"
+                }`}
+              >
+                <div className="flex items-center justify-between border-b border-onyx/5 pb-2 mb-2">
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => handleToggleSelect(pay.id)}
+                      className="text-onyx/60 hover:text-onyx cursor-pointer"
+                    >
+                      {isSelected ? (
+                        <CheckSquare size={16} className="text-saffron fill-saffron/10" />
+                      ) : (
+                        <Square size={16} />
+                      )}
+                    </button>
+                    <span className="font-mono font-bold text-xs text-onyx/85">{pay.number}</span>
+                  </div>
+                  <span className="font-mono font-bold text-xs text-saffron-dark">
+                    ₹{pay.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs text-onyx/70">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Supplier</span>
+                    <span className="font-semibold text-onyx">{pay.vendorName}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Invoice Ref</span>
+                      <span className="font-semibold text-onyx">{pay.invoiceNo || "On Account"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Payment Mode</span>
+                      <span className="font-semibold text-onyx">{pay.mode || "-"}</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Txn/Chq Ref</span>
+                      <span className="font-mono">
+                        {pay.reference?.startsWith("ADVANCE PAY PENDING") ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 text-[9px] font-bold uppercase tracking-wider animate-pulse">
+                            {pay.reference}
+                          </span>
+                        ) : (
+                          pay.reference || "-"
+                        )}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Paid On</span>
+                      <span className="font-semibold text-onyx" suppressHydrationWarning>
+                        {new Date(pay.paidOn).toLocaleDateString()}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-2 mt-3 border-t border-onyx/5">
+                  <button
+                    onClick={() => {
+                      setSelectedPayment(pay);
+                      setIsDetailOpen(true);
+                    }}
+                    title="View Details"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                  >
+                    <Eye size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleEditOpen(pay)}
+                    title="Edit Voucher"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                  >
+                    <Edit size={14} />
+                  </button>
+                  <button
+                    onClick={() => {
+                      setSelectedPayment(pay);
+                      setIsPrintModalOpen(true);
+                    }}
+                    title="Print Voucher"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                  >
+                    <Printer size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleDelete(pay.id)}
+                    title="Delete Voucher"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-red-600 hover:text-red-800 cursor-pointer inline-flex"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Record Payment Voucher Modal */}

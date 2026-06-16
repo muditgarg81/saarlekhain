@@ -749,8 +749,10 @@ export default function OutwardsList({
       </div>
 
       {/* Display Registers */}
+      {/* Display Registers */}
       <div className="glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
+        {/* Desktop View */}
+        <div className="hidden md:block overflow-x-auto">
           {activeTab === "issues" ? (
             /* Issues Table */
             <table className="w-full dense-table text-left border-collapse">
@@ -1000,6 +1002,251 @@ export default function OutwardsList({
                 )}
               </tbody>
             </table>
+          )}
+        </div>
+
+        {/* Mobile View */}
+        <div className="md:hidden overflow-hidden">
+          {activeTab === "issues" ? (
+            /* Issues Mobile List */
+            <div className="divide-y divide-onyx/5">
+              {filteredIssues.length === 0 ? (
+                <div className="text-center py-8 text-onyx/40 font-medium">
+                  No material issues found.{" "}
+                  <button 
+                    onClick={() => setIsCreateIssueOpen(true)} 
+                    type="button"
+                    className="text-saffron-dark hover:underline font-bold cursor-pointer bg-transparent border-none p-0 inline-block align-baseline"
+                  >
+                    Issue items directly
+                  </button>
+                  {" "}or{" "}
+                  <a href="/stores/indents" className="text-saffron-dark hover:underline font-bold">
+                    issue against an indent
+                  </a>.
+                </div>
+              ) : (
+                filteredIssues.map((iss) => {
+                  const isSelected = selectedIds.includes(iss.id);
+                  return (
+                    <div
+                      key={iss.id}
+                      className={`p-4 space-y-3 bg-white transition-colors duration-150 ${
+                        isSelected ? "bg-saffron/5" : ""
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleToggleSelect(iss.id)}
+                            className="text-onyx/60 hover:text-onyx cursor-pointer"
+                          >
+                            {isSelected ? (
+                              <CheckSquare size={16} className="text-saffron fill-saffron/10" />
+                            ) : (
+                              <Square size={16} />
+                            )}
+                          </button>
+                          <span className="font-mono font-bold text-xs text-onyx/85">{iss.number}</span>
+                        </div>
+                        <span className="font-semibold text-onyx/60 text-xs">{iss.storeName}</span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-y-2 text-xs text-onyx/70">
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Recipient Dept</span>
+                          <span className="font-semibold text-onyx/85">{iss.deptName || "N/A"}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Issued To</span>
+                          <span className="font-semibold text-onyx/85">{iss.issuedTo || "N/A"}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Source Indent</span>
+                          <span className="font-mono text-onyx/85">{iss.indentNumber || "-"}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Items Count</span>
+                          <span className="font-semibold text-onyx/85">{iss.lines.length} items</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Issued By</span>
+                          <span className="font-semibold text-onyx/85">{iss.postedBy}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Date Issued</span>
+                          <span className="font-semibold text-onyx/85" suppressHydrationWarning>{new Date(iss.postedAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end space-x-2 pt-2 border-t border-onyx/5">
+                        <button
+                          onClick={() => {
+                            setSelectedIssue(iss);
+                            setSelectedGp(null);
+                            setIsDetailOpen(true);
+                          }}
+                          title="View Details"
+                          className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx inline-flex"
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleOpenEditIssue(iss)}
+                          title="Edit Issue"
+                          className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx inline-flex cursor-pointer"
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button
+                          onClick={() => handlePrint("issue", iss)}
+                          title="Print Slip"
+                          className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx inline-flex cursor-pointer"
+                        >
+                          <Printer size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteIssue(iss.id)}
+                          title="Delete Issue"
+                          className="p-1.5 hover:bg-red-50 text-red-650 hover:text-red-700 rounded border border-transparent hover:border-red-200 inline-flex cursor-pointer"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          ) : (
+            /* Gatepasses Mobile List */
+            <div className="divide-y divide-onyx/5">
+              {filteredGatePasses.length === 0 ? (
+                <div className="text-center py-8 text-onyx/40 font-medium">
+                  No gate passes issued.
+                </div>
+              ) : (
+                filteredGatePasses.map((gp) => {
+                  const isSelected = selectedIds.includes(gp.id);
+                  const isGpEditable = gp.status === "OPEN";
+                  const isOverdue = gp.type === "RETURNABLE" && 
+                                    ["OPEN", "PARTIALLY_RETURNED"].includes(gp.status) && 
+                                    gp.dueBack && new Date(gp.dueBack) < new Date();
+                  return (
+                    <div
+                      key={gp.id}
+                      className={`p-4 space-y-3 bg-white transition-colors duration-150 ${
+                        isSelected ? "bg-saffron/5" : ""
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => handleToggleSelect(gp.id)}
+                            className="text-onyx/60 hover:text-onyx cursor-pointer"
+                          >
+                            {isSelected ? (
+                              <CheckSquare size={16} className="text-saffron fill-saffron/10" />
+                            ) : (
+                              <Square size={16} />
+                            )}
+                          </button>
+                          <span className="font-mono font-bold text-xs text-onyx/85">{gp.number}</span>
+                        </div>
+                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                          isOverdue ? "bg-red-100 text-red-800 animate-pulse" :
+                          gp.status === "OPEN" ? "bg-yellow-100 text-yellow-800" :
+                          gp.status === "RETURNED" ? "bg-green-100 text-green-800" : "bg-orange-100 text-orange-800"
+                        }`}>
+                          {isOverdue ? "Overdue" : gp.status.replace("_", " ")}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-y-2 text-xs text-onyx/70">
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider text-onyx/40">GP Type</span>
+                          <span className="font-semibold text-onyx/85">{gp.type}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Supplier / Cust</span>
+                          <span className="font-semibold text-onyx/85">{gp.vendorName || "N/A"}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Purpose</span>
+                          <span className="font-semibold text-onyx/85">{gp.purpose || "-"}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Items</span>
+                          <span className="font-semibold text-onyx/85">{gp.lines.length} items</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Date Issued</span>
+                          <span className="font-semibold text-onyx/85" suppressHydrationWarning>{new Date(gp.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <div>
+                          <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Due Back</span>
+                          <span className="font-semibold text-onyx/85" suppressHydrationWarning>{gp.dueBack ? new Date(gp.dueBack).toLocaleDateString() : "-"}</span>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-end space-x-2 pt-2 border-t border-onyx/5">
+                        <button
+                          onClick={() => {
+                            setSelectedGp(gp);
+                            setSelectedIssue(null);
+                            setIsDetailOpen(true);
+                          }}
+                          title="View Details"
+                          className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx inline-flex"
+                        >
+                          <Eye size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleOpenEditGp(gp)}
+                          disabled={!isGpEditable}
+                          title={isGpEditable ? "Edit Gate Pass" : "Cannot edit returned/partially-returned gate pass"}
+                          className={`p-1.5 rounded border border-transparent inline-flex cursor-pointer ${
+                            isGpEditable 
+                              ? "hover:bg-cream-dark hover:border-onyx/5 text-onyx/65 hover:text-onyx" 
+                              : "text-onyx/30 cursor-not-allowed"
+                          }`}
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button
+                          onClick={() => handlePrint("gp", gp)}
+                          title="Print Gate Pass"
+                          className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx inline-flex cursor-pointer"
+                        >
+                          <Printer size={14} />
+                        </button>
+                        {gp.type === "RETURNABLE" && ["OPEN", "PARTIALLY_RETURNED"].includes(gp.status) && isStore && (
+                          <button
+                            onClick={() => handleOpenReturn(gp)}
+                            title="Log Material Return"
+                            className="p-1.5 hover:bg-green-50 text-green-600 hover:text-green-700 rounded border border-transparent hover:border-green-200 cursor-pointer inline-flex"
+                          >
+                            <CheckCircle size={14} />
+                          </button>
+                        )}
+                        <button
+                          onClick={() => handleDeleteGp(gp.id)}
+                          disabled={!isGpEditable}
+                          title={isGpEditable ? "Delete Gate Pass" : "Cannot delete returned/partially-returned gate pass"}
+                          className={`p-1.5 rounded border border-transparent inline-flex cursor-pointer ${
+                            isGpEditable 
+                              ? "hover:bg-red-50 hover:border-red-200 text-red-650 hover:text-red-750" 
+                              : "text-onyx/30 cursor-not-allowed"
+                          }`}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           )}
         </div>
       </div>

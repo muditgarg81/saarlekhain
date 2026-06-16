@@ -404,7 +404,8 @@ export default function IndentsList({ initialIndents, items, stores, departments
       </div>
 
       {/* Indents Table */}
-      <div className="glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
+      {/* Indents Table (Desktop View) */}
+      <div className="hidden md:block glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full dense-table text-left border-collapse">
             <thead>
@@ -563,6 +564,166 @@ export default function IndentsList({ initialIndents, items, stores, departments
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile Card List View */}
+      <div className="md:hidden space-y-4">
+        {filteredIndents.length === 0 ? (
+          <div className="glass-card p-6 text-center text-onyx/40 font-medium border border-onyx/5 rounded-xl">
+            No material indents found.
+          </div>
+        ) : (
+          filteredIndents.map((ind) => {
+            return (
+              <div
+                key={ind.id}
+                className="glass-card p-4 rounded-xl border border-onyx/5 bg-cream shadow-sm space-y-3"
+              >
+                <div className="flex items-center justify-between border-b border-onyx/5 pb-2">
+                  <div className="flex items-center space-x-2">
+                    {["APPROVED", "PARTIALLY_ISSUED"].includes(ind.status) ? (
+                      <input
+                        type="checkbox"
+                        checked={selectedIndentIds.includes(ind.id)}
+                        onChange={() => toggleSelectIndent(ind.id)}
+                        className="rounded text-saffron focus:ring-saffron"
+                      />
+                    ) : (
+                      <div className="w-4 h-4 border border-dashed border-onyx/10 rounded-sm bg-onyx/5" title="Only Approved or Partially Issued indents can be converted" />
+                    )}
+                    <span className="font-mono font-bold text-xs text-onyx/85">{ind.number}</span>
+                  </div>
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                    ind.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
+                    ind.status === "SUBMITTED" ? "bg-yellow-100 text-yellow-800" :
+                    ind.status === "APPROVED" ? "bg-green-100 text-green-800" :
+                    ind.status === "REJECTED" ? "bg-red-100 text-red-800" :
+                    ind.status === "PARTIALLY_ISSUED" ? "bg-orange-100 text-orange-800 animate-pulse" :
+                    ind.status === "ISSUED" ? "bg-blue-100 text-blue-800" : "bg-purple-100 text-purple-800"
+                  }`}>
+                    {ind.status.replace("_", " ")}
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs text-onyx/70">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Requested By</span>
+                      <span className="font-semibold text-onyx">{ind.requestedBy}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Department</span>
+                      <span className="font-semibold text-onyx">{ind.department || "N/A"}</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Priority</span>
+                      <span className={`inline-block px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                        ind.priority === "URGENT" 
+                          ? "bg-red-100 text-red-800" 
+                          : (ind.priority === "HIGH" ? "bg-amber-100 text-amber-800" : "bg-blue-100 text-blue-800")
+                      }`}>
+                        {ind.priority}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Lines</span>
+                      <span className="font-semibold text-onyx">{ind.lines.length} items</span>
+                    </div>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Purpose</span>
+                    <span className="font-semibold text-onyx/80">{ind.purpose || "N/A"}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Date Raised</span>
+                    <span className="font-semibold text-onyx" suppressHydrationWarning>
+                      {new Date(ind.createdAt).toLocaleDateString()}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-2 border-t border-onyx/5">
+                  <button
+                    onClick={() => {
+                      setSelectedIndent(ind);
+                      setIsDetailOpen(true);
+                    }}
+                    title="View Items"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx"
+                    type="button"
+                  >
+                    <Eye size={14} />
+                  </button>
+
+                  {ind.status === "DRAFT" && (
+                    <>
+                      <button
+                        onClick={() => handleOpenEdit(ind)}
+                        title="Edit Indent"
+                        className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer"
+                        type="button"
+                      >
+                        <Edit3 size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleWorkflowAction("submit", ind)}
+                        title="Submit for Approval"
+                        className="p-1.5 hover:bg-yellow-50 text-yellow-600 hover:text-yellow-700 rounded border border-yellow-200 cursor-pointer"
+                        type="button"
+                      >
+                        <RefreshCw size={14} />
+                      </button>
+                    </>
+                  )}
+
+                  {ind.status === "SUBMITTED" && isApprover && (
+                    <>
+                      <button
+                        onClick={() => handleWorkflowAction("approve", ind)}
+                        title="Approve"
+                        className="p-1.5 hover:bg-green-50 text-green-600 hover:text-green-700 rounded border border-green-200"
+                        type="button"
+                      >
+                        <Check size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleWorkflowAction("reject", ind)}
+                        title="Reject"
+                        className="p-1.5 hover:bg-red-50 text-red-600 hover:text-red-700 rounded border border-red-200"
+                        type="button"
+                      >
+                        <XCircle size={14} />
+                      </button>
+                    </>
+                  )}
+
+                  {["APPROVED", "PARTIALLY_ISSUED"].includes(ind.status) && isStore && (
+                    <>
+                      <button
+                        onClick={() => handleOpenIssue(ind)}
+                        title="Issue Material"
+                        className="p-1.5 hover:bg-blue-50 text-blue-600 hover:text-blue-700 rounded border border-transparent hover:border-blue-200"
+                        type="button"
+                      >
+                        <Truck size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleWorkflowAction("convert_pr", ind)}
+                        title="Convert Shortages to PR"
+                        className="p-1.5 hover:bg-purple-50 text-purple-600 hover:text-purple-700 rounded border border-transparent hover:border-purple-200"
+                        type="button"
+                      >
+                        <ArrowRight size={14} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Raise Indent Modal */}

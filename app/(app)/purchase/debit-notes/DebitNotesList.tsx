@@ -697,8 +697,8 @@ export default function DebitNotesList({ notes: initialNotes, vendors, user }: D
           </div>
         </div>
 
-        {/* Data Table */}
-        <div className="border border-onyx/10 rounded-xl overflow-hidden shadow-xs bg-white">
+        {/* Data Table (Desktop View) */}
+        <div className="hidden md:block border border-onyx/10 rounded-xl overflow-hidden shadow-xs bg-white">
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse text-xs">
               <thead className="bg-cream-dark/50 border-b border-onyx/10 text-onyx font-bold uppercase tracking-wider text-[10px]">
@@ -839,6 +839,134 @@ export default function DebitNotesList({ notes: initialNotes, vendors, user }: D
               </tbody>
             </table>
           </div>
+        </div>
+
+        {/* Mobile Card List View */}
+        <div className="md:hidden space-y-4">
+          {filteredNotes.length === 0 ? (
+            <div className="border border-onyx/10 rounded-xl p-6 text-center text-onyx/40 bg-white">
+              No debit or credit notes found matching the filters.
+            </div>
+          ) : (
+            filteredNotes.map((note) => {
+              const isSelected = selectedIds.includes(note.id);
+              return (
+                <div
+                  key={note.id}
+                  className={`border rounded-xl p-4 transition-colors bg-white shadow-xs space-y-3 ${
+                    isSelected ? "border-saffron bg-saffron/5" : "border-onyx/10"
+                  }`}
+                >
+                  <div className="flex items-center justify-between border-b border-onyx/5 pb-2">
+                    <div className="flex items-center space-x-2">
+                      <button
+                        onClick={() => handleToggleSelect(note.id)}
+                        className="text-onyx/60 hover:text-onyx cursor-pointer"
+                      >
+                        {isSelected ? (
+                          <CheckSquare size={16} className="text-saffron fill-saffron/10" />
+                        ) : (
+                          <Square size={16} />
+                        )}
+                      </button>
+                      <span className="font-mono font-bold text-xs text-onyx">{note.number}</span>
+                    </div>
+                    <span className="font-mono font-bold text-xs text-saffron-dark">
+                      ₹{note.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-xs text-onyx/70">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Supplier / Vendor</span>
+                      <span className="font-semibold text-onyx">{note.vendorName}</span>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Reference Context</span>
+                        {note.refType === "GRN_REJECTION" ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-red-50 text-red-700 text-[9px] font-bold border border-red-100">
+                            QC REJECTION
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 text-[9px] font-bold border border-zinc-200">
+                            MANUAL ADJUSTMENT
+                          </span>
+                        )}
+                      </div>
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Status</span>
+                        {note.posted ? (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-green-100 text-green-800 border border-green-200">
+                            Posted
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                            Draft
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Date Raised</span>
+                      <span className="font-semibold text-onyx" suppressHydrationWarning>
+                        {new Date(note.createdAt).toLocaleDateString("en-IN", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric"
+                        })}
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end space-x-2 pt-2 border-t border-onyx/5">
+                    <button
+                      onClick={() => handleOpenPrint(note)}
+                      className="p-1.5 hover:bg-cream-dark/50 text-onyx/65 hover:text-onyx rounded cursor-pointer inline-flex border border-transparent hover:border-onyx/5"
+                      title="Print voucher"
+                    >
+                      <Printer size={14} />
+                    </button>
+                    
+                    {!note.posted && isFinance && (
+                      <>
+                        <button
+                          onClick={() => handleOpenEdit(note)}
+                          className="p-1.5 hover:bg-cream-dark/50 text-blue-600 hover:text-blue-800 rounded cursor-pointer inline-flex border border-transparent hover:border-onyx/5"
+                          title="Edit note"
+                          disabled={loading}
+                        >
+                          <Edit size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleDeleteNote(note.id, note.number)}
+                          className="p-1.5 hover:bg-cream-dark/50 text-red-600 hover:text-red-800 rounded cursor-pointer inline-flex border border-transparent hover:border-onyx/5"
+                          title="Delete note"
+                          disabled={loading}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                        <button
+                          onClick={() => handlePostNote(note.id, note.number)}
+                          className="px-2 py-1 bg-saffron hover:bg-saffron-dark text-[10px] font-bold text-onyx rounded shadow-2xs cursor-pointer transition-all ml-1"
+                          disabled={loading}
+                        >
+                          Post
+                        </button>
+                      </>
+                    )}
+
+                    {note.posted && (
+                      <span className="text-[10px] text-green-600 font-bold flex items-center gap-1 select-none pr-1">
+                        <Check size={12} />
+                        <span>Audited</span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              );
+            })
+          )}
         </div>
       </div>
 

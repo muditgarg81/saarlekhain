@@ -1027,7 +1027,8 @@ export default function ItemMasterList({ initialItems, categories, departments }
       )}
 
       {/* Dense Table */}
-      <div className="glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
+      {/* Dense Table (Desktop View) */}
+      <div className="hidden md:block glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full dense-table text-left border-collapse">
             <thead>
@@ -1175,6 +1176,137 @@ export default function ItemMasterList({ initialItems, categories, departments }
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile Card List View */}
+      <div className="md:hidden space-y-4">
+        {filteredItems.length === 0 ? (
+          <div className="glass-card p-6 text-center text-onyx/40 font-medium border border-onyx/5 rounded-xl">
+            No items found matching the selected criteria.
+          </div>
+        ) : (
+          filteredItems.map((item) => {
+            const cat = categories.find(c => c.id === item.categoryId);
+            return (
+              <div
+                key={item.id}
+                className="glass-card p-4 rounded-xl border border-onyx/5 bg-cream shadow-sm space-y-3"
+              >
+                <div className="flex items-center justify-between border-b border-onyx/5 pb-2">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={selectedItemIds.includes(item.id)}
+                      onChange={() => toggleSelectItem(item.id)}
+                      className="rounded text-saffron focus:ring-saffron"
+                    />
+                    <span className="font-mono font-bold text-xs text-onyx/85">{item.code}</span>
+                  </div>
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                    item.status === "ACTIVE" 
+                      ? "bg-green-100 text-green-800" 
+                      : "bg-gray-100 text-gray-800"
+                  }`}>
+                    {item.status}
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs text-onyx/70">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Item Name</span>
+                    <span className="font-semibold text-onyx">{item.name}</span>
+                    {item.make && (
+                      <span className="text-[10px] text-onyx/40 block mt-0.5">Brand: {item.make}</span>
+                    )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Category</span>
+                      <span className="font-semibold text-onyx">{cat?.name || "N/A"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Department</span>
+                      <span className="font-semibold text-onyx">{getDepartmentName(item.departmentId)}</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Type</span>
+                      <span className="font-semibold text-onyx">{item.type.replace("_", " ")}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Base UOM</span>
+                      <span className="font-semibold text-onyx">{item.baseUom}</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Reorder Level</span>
+                      {isEditingReorders ? (
+                        <input
+                          type="number"
+                          min="0"
+                          step="any"
+                          value={tempReorders[item.id] !== undefined ? tempReorders[item.id] : ""}
+                          onChange={(e) => {
+                            const raw = e.target.value;
+                            setTempReorders(prev => ({
+                              ...prev,
+                              [item.id]: raw === "" ? "" as any : parseFloat(raw)
+                            }));
+                          }}
+                          disabled={isSavingReorders}
+                          className="w-20 px-2 py-0.5 text-right bg-white border border-onyx/20 rounded focus:outline-none focus:border-saffron focus:ring-1 focus:ring-saffron text-xs font-mono font-bold transition-all"
+                        />
+                      ) : (
+                        <span className="font-semibold font-mono">{item.reorderLevel}</span>
+                      )}
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">QC Check</span>
+                      {item.qcRequired ? (
+                        <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-100 text-amber-800">
+                          Required
+                        </span>
+                      ) : (
+                        <span className="text-[9px] text-onyx/40">Standard</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-2 border-t border-onyx/5">
+                  <button
+                    onClick={() => {
+                      setSelectedItem(item);
+                      setIsDetailOpen(true);
+                    }}
+                    title="View Specs"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx inline-flex"
+                  >
+                    <Eye size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleOpenEdit(item)}
+                    title="Edit"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx inline-flex"
+                  >
+                    <Edit3 size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleToggleStatus(item)}
+                    title={item.status === "ACTIVE" ? "Deactivate" : "Activate"}
+                    className={`p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded inline-flex ${
+                      item.status === "ACTIVE" ? "text-red-600 hover:text-red-700" : "text-green-600 hover:text-green-700"
+                    }`}
+                  >
+                    <Power size={14} />
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
       </>
       )}

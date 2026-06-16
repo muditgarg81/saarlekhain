@@ -378,7 +378,7 @@ export default function ReorderBasketList({
       </div>
 
       {/* Suggestions Table */}
-      <div className="glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
+      <div className="hidden md:block glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full dense-table text-left border-collapse">
             <thead>
@@ -554,6 +554,204 @@ export default function ReorderBasketList({
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile Card List View */}
+      <div className="md:hidden space-y-4">
+        {filtered.length === 0 ? (
+          <div className="glass-card p-6 text-center text-onyx/40 font-medium border border-onyx/5 rounded-xl">
+            <TrendingDown className="mx-auto text-onyx/20 mb-2" size={32} />
+            No reorder suggestions pending review.
+          </div>
+        ) : (
+          filtered.map((s) => {
+            const isEditing = editingId === s.id;
+            const isUrgent = s.priority === "URGENT";
+            const isSelected = selectedIds.includes(s.id);
+            const value = (s.approvedQty ?? s.suggestedQty) * (s.lastPurchasePrice || 0);
+
+            return (
+              <div
+                key={s.id}
+                className={`glass-card p-4 rounded-xl border transition-all duration-150 ${
+                  isUrgent ? "bg-red-50/20" : "bg-cream"
+                } ${
+                  isSelected ? "border-saffron bg-saffron/5" : "border-onyx/5"
+                }`}
+              >
+                {/* Header: Checkbox, Code, ABC Class, Status/Priority */}
+                <div className="flex items-center justify-between border-b border-onyx/5 pb-2 mb-2">
+                  <div className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => toggleSelect(s.id)}
+                      className="rounded text-saffron focus:ring-saffron w-4 h-4 cursor-pointer"
+                    />
+                    <span className="font-mono font-bold text-xs text-onyx/85">[{s.itemCode}]</span>
+                  </div>
+                  <div className="flex items-center space-x-1.5">
+                    {s.abcClass && (
+                      <span className={`px-1 rounded text-[8px] font-extrabold ${
+                        s.abcClass === "A" ? "bg-red-100 text-red-800" :
+                        s.abcClass === "B" ? "bg-amber-100 text-amber-800" : "bg-zinc-100 text-zinc-800"
+                      }`}>
+                        Class {s.abcClass}
+                      </span>
+                    )}
+                    {isEditing ? (
+                      <select
+                        value={editForm.priority}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, priority: e.target.value }))}
+                        className="text-[10px] p-1 border border-onyx/20 rounded bg-white"
+                      >
+                        <option value="NORMAL">Normal</option>
+                        <option value="URGENT">Urgent</option>
+                      </select>
+                    ) : (
+                      <span className={`inline-flex items-center px-1.5 py-0.25 rounded text-[9px] font-bold ${
+                        isUrgent ? "bg-red-100 text-red-800" : "bg-zinc-150 text-zinc-700"
+                      }`}>
+                        {s.priority}
+                      </span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Body Content */}
+                <div className="space-y-2.5 text-xs text-onyx/70">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Item Name</span>
+                    <span className="font-semibold text-onyx">{s.itemName}</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Store</span>
+                      <span className="font-semibold text-onyx">{s.storeName}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Reorder Level</span>
+                      <span className="font-mono font-semibold text-onyx">{s.reorderLevel}</span>
+                    </div>
+                  </div>
+
+                  {/* Stock metrics grid */}
+                  <div className="grid grid-cols-4 gap-1 bg-cream-dark/25 p-2 rounded-lg text-center font-mono">
+                    <div>
+                      <span className="text-[8px] uppercase font-bold text-onyx/40 tracking-wider block">On-Hand</span>
+                      <span className="text-[11px] font-bold text-onyx">{s.onHand}</span>
+                    </div>
+                    <div>
+                      <span className="text-[8px] uppercase font-bold text-onyx/40 tracking-wider block">On Order</span>
+                      <span className="text-[11px] font-bold text-blue-600">+{s.onOrder}</span>
+                    </div>
+                    <div>
+                      <span className="text-[8px] uppercase font-bold text-onyx/40 tracking-wider block">Pipeline</span>
+                      <span className="text-[11px] font-bold text-amber-600">+{s.inPipeline}</span>
+                    </div>
+                    <div>
+                      <span className="text-[8px] uppercase font-bold text-onyx/40 tracking-wider block">Net Avail</span>
+                      <span className="text-[11px] font-extrabold text-onyx">{s.netAvailable}</span>
+                    </div>
+                  </div>
+
+                  {/* Qty & Vendor Edit Section */}
+                  <div className="grid grid-cols-2 gap-3 pt-1">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Suggested / Approved Qty</span>
+                      {isEditing ? (
+                        <div className="flex items-center space-x-1.5 mt-1">
+                          <span className="text-[10px] font-mono text-onyx/50">{s.suggestedQty} /</span>
+                          <input
+                            type="number"
+                            value={editForm.approvedQty}
+                            onChange={(e) => setEditForm(prev => ({ ...prev, approvedQty: parseFloat(e.target.value) || 0 }))}
+                            className="w-20 p-1 text-xs border border-onyx/20 rounded font-mono font-bold text-right bg-white"
+                          />
+                        </div>
+                      ) : (
+                        <div className="font-semibold text-onyx mt-0.5">
+                          <span className="font-mono text-onyx/50">{s.suggestedQty}</span>
+                          <span className="text-onyx/50 mx-1">→</span>
+                          <span className="font-mono font-bold text-green-700">{s.approvedQty ?? s.suggestedQty}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Preferred Vendor</span>
+                      {isEditing ? (
+                        <select
+                          value={editForm.preferredVendorId || ""}
+                          onChange={(e) => setEditForm(prev => ({ ...prev, preferredVendorId: e.target.value || null }))}
+                          className="text-[10px] p-1 border border-onyx/20 rounded w-full bg-white mt-1"
+                        >
+                          <option value="">No vendor</option>
+                          {vendors.map(v => (
+                            <option key={v.id} value={v.id}>{v.name}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <div className="mt-0.5">
+                          <span className="font-semibold text-onyx">{s.preferredVendorName || "No preferred vendor"}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Pricing and total value */}
+                  {!isEditing && s.lastPurchasePrice && (
+                    <div className="bg-cream-dark/15 px-2 py-1 rounded text-[10px] font-mono flex justify-between items-center text-onyx/60">
+                      <span>Last Price: ₹{s.lastPurchasePrice.toFixed(2)}</span>
+                      <span className="font-bold">Total Val: ₹{value.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions footer */}
+                <div className="flex items-center justify-end space-x-2 pt-2 mt-3 border-t border-onyx/5">
+                  {isEditing ? (
+                    <>
+                      <button
+                        onClick={() => saveEdit(s.id)}
+                        disabled={actionLoading}
+                        className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-bold shadow-sm cursor-pointer flex items-center space-x-1"
+                      >
+                        <Check size={12} />
+                        <span>Save</span>
+                      </button>
+                      <button
+                        onClick={() => setEditingId(null)}
+                        className="px-2.5 py-1.5 border border-onyx/10 rounded text-xs font-semibold hover:bg-cream-dark/40 cursor-pointer flex items-center space-x-1"
+                      >
+                        <X size={12} />
+                        <span>Cancel</span>
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => startEdit(s)}
+                        title="Edit Suggestion"
+                        className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                      >
+                        <Edit2 size={13} />
+                      </button>
+                      <button
+                        onClick={() => setRejectId(s.id)}
+                        title="Reject Suggestion"
+                        className="p-1.5 hover:bg-red-50 border border-transparent hover:border-red-100 rounded text-red-500 hover:text-red-700 cursor-pointer inline-flex"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Reject Suggestion Dialog */}

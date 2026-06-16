@@ -498,7 +498,8 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
       </div>
 
       {/* Table */}
-      <div className="glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
+      {/* Table (Desktop View) */}
+      <div className="hidden md:block glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full dense-table text-left border-collapse">
             <thead>
@@ -626,6 +627,135 @@ export default function VendorsList({ initialVendors, user }: VendorsListProps) 
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile Card List View */}
+      <div className="md:hidden space-y-4">
+        {filteredVendors.length === 0 ? (
+          <div className="glass-card p-6 text-center text-onyx/40 font-medium border border-onyx/5 rounded-xl">
+            No vendors registered.
+          </div>
+        ) : (
+          filteredVendors.map((v) => {
+            return (
+              <div
+                key={v.id}
+                className="glass-card p-4 rounded-xl border border-onyx/5 bg-cream shadow-sm space-y-3"
+              >
+                <div className="flex items-center justify-between border-b border-onyx/5 pb-2">
+                  <span className="font-mono font-bold text-xs text-onyx/85">{v.code}</span>
+                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                    v.status === "APPROVED" ? "bg-green-100 text-green-800" :
+                    v.status === "PENDING_APPROVAL" ? "bg-yellow-100 text-yellow-800" :
+                    v.status === "HOLD" ? "bg-orange-100 text-orange-800" : "bg-red-100 text-red-800"
+                  }`}>
+                    {v.status.replace("_", " ")}
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs text-onyx/70">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Vendor Name</span>
+                    <span className="font-semibold text-onyx">{v.name}</span>
+                  </div>
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Address</span>
+                    <span className="font-semibold text-onyx/80">{v.address || "-"}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Category</span>
+                      <span className="font-bold text-[9px] uppercase px-1.5 py-0.5 bg-cream-dark/40 rounded inline-block">
+                        {v.category || "General"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">GSTIN</span>
+                      <span className="font-mono">{v.gstin || "-"}</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Credit (Days)</span>
+                      <span className="font-semibold text-onyx">{v.creditDays} days</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Bank Account</span>
+                      <div className="flex items-center space-x-1">
+                        {canSeeBankDetails ? (
+                          <Unlock size={12} className="text-green-600 shrink-0" />
+                        ) : (
+                          <Lock size={12} className="text-onyx/30 shrink-0" />
+                        )}
+                        <span className="font-mono">{maskBankNo(v.bankDetails?.accountNo)}</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-2 border-t border-onyx/5">
+                  <button
+                    onClick={() => {
+                      setSelectedVendor(v);
+                      setIsDetailOpen(true);
+                    }}
+                    title="View Info"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                  >
+                    <Eye size={14} />
+                  </button>
+                  <button
+                    onClick={() => handleOpenEdit(v)}
+                    title="Edit Vendor"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                  >
+                    <Edit3 size={14} />
+                  </button>
+
+                  {canApprove && v.status === "PENDING_APPROVAL" && (
+                    <button
+                      onClick={() => handleStatusChange(v.id, "APPROVED")}
+                      title="Approve Vendor"
+                      className="p-1.5 hover:bg-green-50 text-green-600 hover:text-green-700 rounded border border-green-200 cursor-pointer inline-flex"
+                    >
+                      <Check size={14} />
+                    </button>
+                  )}
+
+                  {canApprove && v.status === "APPROVED" && (
+                    <button
+                      onClick={() => handleStatusChange(v.id, "HOLD")}
+                      title="Put on Hold"
+                      className="p-1.5 hover:bg-orange-50 text-orange-600 hover:text-orange-700 rounded border border-orange-200 cursor-pointer inline-flex"
+                    >
+                      <ShieldAlert size={14} />
+                    </button>
+                  )}
+
+                  {canApprove && v.status === "HOLD" && (
+                    <button
+                      onClick={() => handleStatusChange(v.id, "APPROVED")}
+                      title="Release Hold"
+                      className="p-1.5 hover:bg-green-50 text-green-600 hover:text-green-700 rounded border border-green-200 cursor-pointer inline-flex"
+                    >
+                      <ShieldCheck size={14} />
+                    </button>
+                  )}
+
+                  {canApprove && (
+                    <button
+                      onClick={() => handleDelete(v.id)}
+                      title="Delete Vendor"
+                      className="p-1.5 hover:bg-red-50 text-red-600 hover:text-red-700 rounded border border-transparent hover:border-red-200 cursor-pointer inline-flex"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Add / Edit Vendor Modal */}

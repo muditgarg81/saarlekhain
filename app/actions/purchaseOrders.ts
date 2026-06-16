@@ -245,6 +245,48 @@ export async function submitForApproval(poId: string) {
   }
 }
 
+async function getNextSequenceTx(
+  tx: any,
+  companyId: string,
+  docType: "PAY"
+): Promise<string> {
+  const sequence = await tx.docSequence.upsert({
+    where: {
+      companyId_docType: {
+        companyId,
+        docType,
+      },
+    },
+    update: {
+      nextValue: {
+        increment: 1,
+      },
+    },
+    create: {
+      companyId,
+      docType,
+      nextValue: 2,
+    },
+  });
+  const currentValue = sequence.nextValue - 1;
+  const paddedValue = String(currentValue).padStart(5, "0");
+  return `${docType}-${paddedValue}`;
+}
+
+function isAdvancePaymentTerm(terms: string | null | undefined): boolean {
+  if (!terms) return false;
+  const normalized = terms.trim().toLowerCase();
+  return (
+    normalized === "adv" ||
+    normalized === "advance" ||
+    normalized === "advance payment" ||
+    normalized === "net 0" ||
+    normalized === "net0" ||
+    normalized.includes("advance") ||
+    /net\s*0/i.test(normalized)
+  );
+}
+
 export async function approvePO(poId: string) {
   const session = await auth();
   if (!session || !session.user) return { success: false, error: "Unauthorized" };
@@ -259,6 +301,10 @@ export async function approvePO(poId: string) {
       include: { lines: true },
     });
     if (!po) return { success: false, error: "PO not found" };
+
+    if (po.status === PoStatus.APPROVED) {
+      return { success: false, error: "PO is already approved" };
+    }
 
     // Run server-side value approval limit check
     const totalVal = calculateTotalValue(po.lines, po.otherCharges);
@@ -285,10 +331,44 @@ export async function approvePO(poId: string) {
       });
 
       await logAudit(tx, companyId, actorId, "APPROVE", "PurchaseOrder", poId, po, updated);
+
+      // Check if PO payment terms qualify for automatic advance payment voucher creation
+      if (isAdvancePaymentTerm(po.paymentTerms)) {
+        const referenceCode = `ADVANCE PAY PENDING (PO: ${po.number})`;
+        
+        // Prevent duplicate generation by checking if a voucher for this PO already exists
+        const existingPay = await tx.paymentVoucher.findFirst({
+          where: {
+            companyId,
+            vendorId: po.vendorId,
+            reference: referenceCode,
+          },
+        });
+
+        if (!existingPay) {
+          const number = await getNextSequenceTx(tx, companyId, "PAY");
+          const pay = await tx.paymentVoucher.create({
+            data: {
+              companyId,
+              number,
+              vendorId: po.vendorId,
+              invoiceId: null,
+              amount: totalVal,
+              paidOn: new Date(),
+              mode: "ADVANCE",
+              reference: referenceCode,
+              recordedById: actorId,
+            },
+          });
+          await logAudit(tx, companyId, actorId, "RECORD_PAYMENT", "PaymentVoucher", pay.id, null, pay);
+        }
+      }
+
       return updated;
     });
 
     revalidatePath("/purchase/po");
+    revalidatePath("/purchase/payments");
     return { success: true, po: result };
   } catch (err: any) {
     console.error("Error approving PO:", err);

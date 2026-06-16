@@ -278,7 +278,8 @@ export default function InspectionList({ initialInspections, userRole }: Inspect
       </div>
 
       {/* Inspection List Table */}
-      <div className="glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
+      {/* Inspection List Table (Desktop View) */}
+      <div className="hidden md:block glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full dense-table text-left border-collapse">
             <thead>
@@ -357,6 +358,91 @@ export default function InspectionList({ initialInspections, userRole }: Inspect
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile Card List View */}
+      <div className="md:hidden space-y-4">
+        {filteredInspections.length === 0 ? (
+          <div className="glass-card p-6 text-center text-onyx/40 font-medium border border-onyx/5 rounded-xl">
+            No QC inspection records found.
+          </div>
+        ) : (
+          filteredInspections.map((insp) => {
+            return (
+              <div
+                key={insp.id}
+                className="glass-card p-4 rounded-xl border border-onyx/5 bg-cream shadow-sm space-y-3"
+              >
+                <div className="flex items-center justify-between border-b border-onyx/5 pb-2">
+                  <span className="font-mono font-bold text-xs text-onyx/85">{insp.number}</span>
+                  {insp.disposition ? (
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                      insp.disposition === "ACCEPT" ? "bg-green-100 text-green-800" :
+                      insp.disposition === "REJECT" ? "bg-red-100 text-red-800" : "bg-amber-100 text-amber-800"
+                    }`}>
+                      {insp.disposition.replace("_", " ")}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-yellow-100 text-yellow-800 uppercase animate-pulse">
+                      Pending QC
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-2 text-xs text-onyx/70">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Item</span>
+                    <span className="font-semibold text-onyx">{insp.itemName}</span>
+                    <span className="font-mono text-onyx/60 block mt-0.5">Code: {insp.itemCode}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Source GRN</span>
+                      <span className="font-mono text-onyx">{insp.grnNumber}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Qty to Inspect</span>
+                      <span className="font-mono font-bold text-onyx">{insp.receivedQty}</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Sample Size</span>
+                      <span className="font-semibold text-onyx">{insp.sampleSize} units</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">MTC Ref</span>
+                      <span className="font-semibold text-onyx">{insp.mtcRef || "-"}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-2 border-t border-onyx/5">
+                  <button
+                    onClick={() => {
+                      setSelectedInspection(insp);
+                      setIsDetailOpen(true);
+                    }}
+                    title="View Results"
+                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx inline-flex"
+                  >
+                    <Eye size={14} />
+                  </button>
+
+                  {!insp.disposition && isQC && (
+                    <button
+                      onClick={() => handleOpenRecord(insp)}
+                      title="Record QC Tests"
+                      className="p-1.5 hover:bg-amber-50 text-amber-600 hover:text-amber-700 rounded border border-transparent hover:border-amber-200 cursor-pointer inline-flex font-bold"
+                    >
+                      <ClipboardList size={14} />
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Record Inspection Modal */}

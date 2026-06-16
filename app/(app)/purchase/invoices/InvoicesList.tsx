@@ -320,7 +320,8 @@ export default function InvoicesList({
       </div>
 
       {/* Register Table */}
-      <div className="glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
+      {/* Register Table (Desktop View) */}
+      <div className="hidden md:block glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full dense-table text-left border-collapse">
             <thead>
@@ -383,6 +384,85 @@ export default function InvoicesList({
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Mobile Card List View */}
+      <div className="md:hidden space-y-4">
+        {filteredInvoices.length === 0 ? (
+          <div className="glass-card p-6 text-center text-onyx/40 font-medium border border-onyx/5 rounded-xl">
+            No supplier invoices recorded.
+          </div>
+        ) : (
+          filteredInvoices.map((inv) => {
+            return (
+              <div
+                key={inv.id}
+                className="glass-card p-4 rounded-xl border border-onyx/5 bg-cream shadow-sm space-y-3"
+              >
+                <div className="flex items-center justify-between border-b border-onyx/5 pb-2">
+                  <span className="font-mono font-bold text-xs text-onyx/85">{inv.invoiceNo}</span>
+                  <span className={`inline-flex items-center space-x-1 px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                    inv.matchStatus === "MATCHED" ? "bg-green-150 text-green-800 border border-green-200" :
+                    inv.matchStatus === "MISMATCH" ? "bg-red-150 text-red-800 border border-red-200 animate-pulse" :
+                    "bg-yellow-150 text-yellow-800 border border-yellow-200"
+                  }`}>
+                    {inv.matchStatus === "MATCHED" && <CheckCircle size={10} />}
+                    {inv.matchStatus === "MISMATCH" && <AlertTriangle size={10} />}
+                    {inv.matchStatus === "ON_HOLD" && <Clock size={10} />}
+                    <span>{inv.matchStatus}</span>
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-xs text-onyx/70">
+                  <div>
+                    <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Supplier</span>
+                    <span className="font-semibold text-onyx">{inv.vendorName}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Linked PO</span>
+                      <span className="font-mono text-onyx">{inv.poNumber || "Direct"}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Amount</span>
+                      <span className="font-mono font-bold text-onyx/85">
+                        ₹{inv.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Invoice Date</span>
+                      <span className="font-semibold text-onyx" suppressHydrationWarning>
+                        {new Date(inv.invoiceDate).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Due Date</span>
+                      <span className="font-semibold text-onyx" suppressHydrationWarning>
+                        {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString() : "-"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-2 pt-2 border-t border-onyx/5">
+                  <button
+                    onClick={() => {
+                      setSelectedInvoice(inv);
+                      setOverrideReason("");
+                      setIsDetailOpen(true);
+                    }}
+                    className="flex items-center space-x-1 px-2.5 py-1.5 hover:bg-cream-dark border border-onyx/10 rounded text-xs text-onyx/75 cursor-pointer"
+                  >
+                    <Eye size={13} />
+                    <span>View Details</span>
+                  </button>
+                </div>
+              </div>
+            );
+          })
+        )}
       </div>
 
       {/* Record Invoice Modal */}
