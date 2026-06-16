@@ -105,10 +105,20 @@ export async function GET(
       }
     }
 
+    // Format quotations with vendor name
+    const formattedQuotations = rfq.quotations.map((q) => {
+      const vendor = vendors.find((v) => v.id === q.vendorId);
+      return {
+        ...q,
+        vendorName: vendor?.name || "Unknown Vendor",
+      };
+    });
+
     return NextResponse.json({
       rfq: {
         ...rfq,
         lines: formattedLines,
+        quotations: formattedQuotations,
       },
       allocations,
       proposedAllocations,
