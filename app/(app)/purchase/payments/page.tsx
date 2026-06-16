@@ -34,7 +34,7 @@ export default async function PaymentsPage() {
   const userRole = (session.user as any).role || "VIEWER";
 
   // Fetch Payment Vouchers, Supplier Invoices, Vendors, Users, debit note matching records,
-  // Payment Requests, POs, and GRNs concurrently
+  // Payment Requests, POs, GRNs, and Items concurrently
   const [
     payments,
     invoices,
@@ -45,7 +45,8 @@ export default async function PaymentsPage() {
     debitCreditNotes,
     paymentRequests,
     pos,
-    grns
+    grns,
+    items
   ] = await Promise.all([
     db.paymentVoucher.findMany({
       where: { companyId },
@@ -57,7 +58,7 @@ export default async function PaymentsPage() {
     }),
     db.vendor.findMany({
       where: { companyId, deletedAt: null },
-      select: { id: true, name: true, code: true, creditDays: true },
+      select: { id: true, name: true, code: true, creditDays: true, address: true, gstin: true, pan: true },
       orderBy: { code: "asc" },
     }),
     db.user.findMany({
@@ -80,12 +81,23 @@ export default async function PaymentsPage() {
     }),
     db.purchaseOrder.findMany({
       where: { companyId, deletedAt: null },
-      include: { lines: true },
+      include: {
+        lines: true,
+        amendments: {
+          orderBy: { version: "desc" },
+        },
+        vendor: true,
+      },
+      orderBy: { orderDate: "desc" },
     }),
     db.grn.findMany({
       where: { companyId, status: "POSTED", deletedAt: null },
       include: { lines: true },
       orderBy: { postedAt: "desc" },
+    }),
+    db.item.findMany({
+      where: { companyId, deletedAt: null },
+      select: { id: true, code: true, name: true },
     })
   ]);
 
@@ -179,6 +191,77 @@ export default async function PaymentsPage() {
     };
   });
 
+  // Map POs into full structures for viewing
+  const mappedPOs = pos.map((po) => {
+    const vendor = vendors.find((v) => v.id === po.vendorId);
+    const approver = users.find((u) => u.id === po.approvedById);
+
+    // Calculate total value
+    const totalTaxable = po.lines.reduce((sum, line) => {
+      return sum + line.qty * line.rate * (1 - line.discount / 100);
+    }, 0);
+    let totalValue = 0;
+    po.lines.forEach((line) => {
+      const basic = line.qty * line.rate;
+      const discount = basic * (line.discount / 100);
+      const taxable = basic - discount;
+      const allocatedOtherCharges = totalTaxable > 0 ? po.otherCharges * (taxable / totalTaxable) : 0;
+      const landed = (taxable + allocatedOtherCharges) * (1 + line.gstRate / 100);
+      totalValue += landed;
+    });
+
+    return {
+      id: po.id,
+      number: po.number,
+      vendorId: po.vendorId,
+      vendorName: vendor?.name || "Unknown Vendor",
+      vendorAddress: vendor?.address || "",
+      vendorGstin: vendor?.gstin || "",
+      vendorPan: vendor?.pan || "",
+      type: po.type,
+      status: po.status,
+      orderDate: po.orderDate.toISOString(),
+      deliveryDate: po.deliveryDate ? po.deliveryDate.toISOString() : null,
+      paymentTerms: po.paymentTerms,
+      freightTerms: po.freightTerms,
+      shipTo: po.shipTo,
+      termsConditions: po.termsConditions,
+      termsPresetId: po.termsPresetId,
+      termsVersion: po.termsVersion,
+      resolvedTermsText: po.resolvedTermsText,
+      version: po.version,
+      otherCharges: po.otherCharges,
+      approvedBy: approver ? (approver.name || approver.email) : null,
+      approvedAt: po.approvedAt ? po.approvedAt.toISOString() : null,
+      totalValue,
+      lines: po.lines.map((line) => {
+        const item = items.find((i) => i.id === line.itemId);
+        return {
+          id: line.id,
+          itemId: line.itemId,
+          itemName: item?.name || "Unknown Item",
+          itemCode: item?.code || "N/A",
+          qty: line.qty,
+          rate: line.rate,
+          discount: line.discount,
+          gstRate: line.gstRate,
+          receivedQty: line.receivedQty,
+        };
+      }),
+      amendments: po.amendments.map((am) => {
+        const creator = users.find((u) => u.id === am.createdById);
+        return {
+          id: am.id,
+          version: am.version,
+          reason: am.reason,
+          createdAt: am.createdAt.toISOString(),
+          createdBy: creator ? (creator.name || creator.email) : "System",
+          snapshot: am.snapshot,
+        };
+      }),
+    };
+  });
+
   // Filter approved POs for dropdown (where it has approved status or not deleted)
   const approvedPos = pos
     .filter((po) => po.status === "APPROVED")
@@ -255,6 +338,7 @@ export default async function PaymentsPage() {
       paymentRequests={mappedRequests}
       approvedPos={approvedPos}
       pendingGrns={pendingGrns}
+      allPos={mappedPOs}
     />
   );
 }

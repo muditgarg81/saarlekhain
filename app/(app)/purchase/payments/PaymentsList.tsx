@@ -34,7 +34,8 @@ import {
   Download,
   CheckSquare,
   Square,
-  Check
+  Check,
+  FileText
 } from "lucide-react";
 
 interface PaymentRecord {
@@ -79,6 +80,7 @@ interface PaymentsListProps {
   paymentRequests: any[];
   approvedPos: any[];
   pendingGrns: any[];
+  allPos?: any[];
 }
 
 function amountToWords(amount: number): string {
@@ -131,7 +133,8 @@ export default function PaymentsList({
   userRole,
   paymentRequests,
   approvedPos,
-  pendingGrns
+  pendingGrns,
+  allPos = []
 }: PaymentsListProps) {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"VOUCHERS" | "REQUESTS" | "DUE_GRNS">("VOUCHERS");
@@ -144,6 +147,10 @@ export default function PaymentsList({
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+  // PO Detail States
+  const [selectedPO, setSelectedPO] = useState<any | null>(null);
+  const [isPODetailOpen, setIsPODetailOpen] = useState(false);
 
   // Payment Request States
   const [isReqOpen, setIsReqOpen] = useState(false);
@@ -635,6 +642,89 @@ export default function PaymentsList({
     (grn.poNumber?.toLowerCase() || "").includes(search.toLowerCase())
   );
 
+  const computePoTotals = (
+    lines: { qty: number; rate: number; discount: number; gstRate: number }[],
+    otherCharges = 0
+  ) => {
+    let basicTotal = 0;
+    let discountTotal = 0;
+    let gstTotal = 0;
+    let grandTotal = 0;
+
+    const totalTaxable = lines.reduce((sum, line) => {
+      return sum + line.qty * line.rate * (1 - line.discount / 100);
+    }, 0);
+
+    lines.forEach((line) => {
+      const basic = line.qty * line.rate;
+      const discount = basic * (line.discount / 100);
+      const taxable = basic - discount;
+      const allocatedOtherCharges = totalTaxable > 0 ? otherCharges * (taxable / totalTaxable) : 0;
+      const gst = (taxable + allocatedOtherCharges) * (line.gstRate / 100);
+      const landed = taxable + allocatedOtherCharges + gst;
+
+      basicTotal += basic;
+      discountTotal += discount;
+      gstTotal += gst;
+      grandTotal += landed;
+    });
+
+    return {
+      basicTotal,
+      discountTotal,
+      gstTotal,
+      grandTotal,
+    };
+  };
+
+  const calculateLandedCost = (
+    qty: number,
+    rate: number,
+    discount: number,
+    gstRate: number,
+    totalTaxable: number,
+    otherCharges: number
+  ) => {
+    const basic = qty * rate;
+    const discounted = basic * (1 - discount / 100);
+    const allocatedOtherCharges = totalTaxable > 0 ? otherCharges * (discounted / totalTaxable) : 0;
+    return (discounted + allocatedOtherCharges) * (1 + gstRate / 100);
+  };
+
+  const renderMarkdownToHtml = (md: string) => {
+    if (!md) return "";
+    let html = md
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
+    // Bold
+    html = html.replace(/\*\*(.*?)\*\*/g, "<strong>$1</strong>");
+    html = html.replace(/__(.*?)__/g, "<strong>$1</strong>");
+
+    // Italic
+    html = html.replace(/\*(.*?)\*/g, "<em>$1</em>");
+    html = html.replace(/_(.*?)_/g, "<em>$1</em>");
+
+    // Code
+    html = html.replace(/`(.*?)`/g, "<code class='px-1 bg-onyx/5 font-mono text-[10px] text-saffron-dark font-bold rounded'>$1</code>");
+
+    // Bullet points
+    html = html.split("\n").map(line => {
+      if (line.trim().startsWith("- ")) {
+        return `<li class="ml-4 list-disc text-xs text-onyx/75 mb-1">${line.trim().substring(2)}</li>`;
+      }
+      return line;
+    }).join("\n");
+
+    // Newlines to br or paragraphs
+    html = html.split("\n\n").map(para => {
+      return `<p class="mb-2 leading-relaxed">${para.replace(/\n/g, "<br />")}</p>`;
+    }).join("");
+
+    return html;
+  };
+
   const totalPayments = payments.reduce((sum, p) => sum + p.amount, 0);
 
   return (
@@ -841,14 +931,42 @@ export default function PaymentsList({
                             )}
                           </td>
                           <td className="font-mono text-xs">
-                            {isPending ? (
-                              <span className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wider animate-pulse inline-flex items-center space-x-1 shadow-sm">
-                                <AlertCircle size={10} className="text-amber-600 animate-bounce" />
-                                <span>{pay.reference}</span>
-                              </span>
-                            ) : (
-                              pay.reference || "-"
-                            )}
+                            {(() => {
+                              const poMatch = pay.reference?.match(/PO:\s*([A-Za-z0-9-]+)/i);
+                              const poNum = poMatch ? poMatch[1] : null;
+                              if (poNum) {
+                                return (
+                                  <div className="flex items-center space-x-1.5">
+                                    <span className={isPending ? "text-amber-800 font-bold" : ""}>
+                                      {pay.reference}
+                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const matchedPo = allPos.find((p) => p.number === poNum);
+                                        if (matchedPo) {
+                                          setSelectedPO(matchedPo);
+                                          setIsPODetailOpen(true);
+                                        }
+                                      }}
+                                      title={`View PO ${poNum}`}
+                                      className="px-1.5 py-0.5 bg-saffron hover:bg-saffron-dark text-[9px] font-mono font-bold rounded text-onyx hover:underline cursor-pointer inline-flex items-center"
+                                    >
+                                      <Eye size={8} className="mr-0.5 shrink-0" />
+                                      <span>PO</span>
+                                    </button>
+                                  </div>
+                                );
+                              }
+                              return isPending ? (
+                                <span className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wider animate-pulse inline-flex items-center space-x-1 shadow-sm">
+                                  <AlertCircle size={10} className="text-amber-600 animate-bounce" />
+                                  <span>{pay.reference}</span>
+                                </span>
+                              ) : (
+                                pay.reference || "-"
+                              );
+                            })()}
                           </td>
                           <td className="font-mono font-bold">₹{pay.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
                           <td suppressHydrationWarning>{new Date(pay.paidOn).toLocaleDateString()}</td>
@@ -1082,7 +1200,25 @@ export default function PaymentsList({
                         <tr key={req.id}>
                           <td className="font-mono font-bold text-xs text-onyx/85">{req.number}</td>
                           <td className="font-semibold text-onyx">{req.vendorName}</td>
-                          <td className="font-mono text-xs text-onyx/60">{req.poNumber || "-"}</td>
+                          <td className="font-mono text-xs">
+                            {req.poNumber ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const matchedPo = allPos.find((p) => p.number === req.poNumber || p.id === req.poId);
+                                  if (matchedPo) {
+                                    setSelectedPO(matchedPo);
+                                    setIsPODetailOpen(true);
+                                  }
+                                }}
+                                className="hover:underline text-saffron-dark font-semibold text-xs cursor-pointer"
+                              >
+                                {req.poNumber}
+                              </button>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
                           <td className="font-mono text-xs text-onyx/60">{req.grnNumber || "-"}</td>
                           <td className="text-xs font-semibold">
                             {req.type === "ADVANCE" ? "Advance" : req.type === "AGAINST_BILL" ? "Against GRN" : "Others"}
@@ -1229,7 +1365,19 @@ export default function PaymentsList({
                           {req.poNumber && (
                             <div>
                               <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">PO Ref</span>
-                              <span className="font-mono text-onyx">{req.poNumber}</span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const matchedPo = allPos.find((p) => p.number === req.poNumber || p.id === req.poId);
+                                  if (matchedPo) {
+                                    setSelectedPO(matchedPo);
+                                    setIsPODetailOpen(true);
+                                  }
+                                }}
+                                className="hover:underline text-saffron-dark font-semibold font-mono text-xs cursor-pointer text-left"
+                              >
+                                {req.poNumber}
+                              </button>
                             </div>
                           )}
                           {req.grnNumber && (
@@ -1350,7 +1498,25 @@ export default function PaymentsList({
                         <tr key={grn.id} className={grn.isOverdue ? "bg-red-50/20" : ""}>
                           <td className="font-mono font-bold text-xs text-onyx/85">{grn.number}</td>
                           <td className="font-semibold text-onyx">{grn.vendorName}</td>
-                          <td className="font-mono text-xs text-onyx/60">{grn.poNumber}</td>
+                          <td className="font-mono text-xs">
+                            {grn.poNumber ? (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const matchedPo = allPos.find((p) => p.number === grn.poNumber || p.id === grn.poId);
+                                  if (matchedPo) {
+                                    setSelectedPO(matchedPo);
+                                    setIsPODetailOpen(true);
+                                  }
+                                }}
+                                className="hover:underline text-saffron-dark font-semibold text-xs cursor-pointer"
+                              >
+                                {grn.poNumber}
+                              </button>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
                           <td className="font-mono font-bold text-onyx">₹{grn.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
                           <td suppressHydrationWarning>{new Date(grn.postedAt).toLocaleDateString()}</td>
                           <td suppressHydrationWarning className="font-semibold text-onyx">{new Date(grn.dueDate).toLocaleDateString()}</td>
@@ -1437,7 +1603,19 @@ export default function PaymentsList({
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">PO Number</span>
-                          <span className="font-mono text-onyx">{grn.poNumber}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const matchedPo = allPos.find((p) => p.number === grn.poNumber || p.id === grn.poId);
+                              if (matchedPo) {
+                                setSelectedPO(matchedPo);
+                                setIsPODetailOpen(true);
+                              }
+                            }}
+                            className="hover:underline text-saffron-dark font-semibold font-mono text-xs cursor-pointer text-left"
+                          >
+                            {grn.poNumber}
+                          </button>
                         </div>
                         <div>
                           <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Posted On</span>
@@ -2012,7 +2190,32 @@ export default function PaymentsList({
                 </div>
                 <div>
                   <span className="font-semibold text-onyx/50">Transaction Ref:</span>
-                  <p className="font-mono font-bold text-onyx mt-0.5">{selectedPayment.reference || "N/A"}</p>
+                  <div className="flex items-center space-x-1.5 mt-0.5">
+                    <span className="font-mono font-bold text-onyx">{selectedPayment.reference || "N/A"}</span>
+                    {(() => {
+                      const poMatch = selectedPayment.reference?.match(/PO:\s*([A-Za-z0-9-]+)/i);
+                      const poNum = poMatch ? poMatch[1] : null;
+                      if (poNum) {
+                        return (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const matchedPo = allPos.find((p) => p.number === poNum);
+                              if (matchedPo) {
+                                setSelectedPO(matchedPo);
+                                setIsPODetailOpen(true);
+                              }
+                            }}
+                            className="px-1.5 py-0.5 bg-saffron hover:bg-saffron-dark text-[9px] font-mono font-bold rounded text-onyx hover:underline cursor-pointer transition-colors inline-flex items-center space-x-0.5"
+                          >
+                            <Eye size={8} />
+                            <span>View PO</span>
+                          </button>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </div>
                 </div>
               </div>
 
@@ -2044,6 +2247,208 @@ export default function PaymentsList({
                 className="w-full py-2.5 bg-onyx text-cream-light font-bold rounded-lg text-xs hover:bg-onyx-light cursor-pointer"
               >
                 Close View
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== PO DETAIL SIDE DRAWER ==================== */}
+      {isPODetailOpen && selectedPO && (
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-xs flex justify-end z-[60]">
+          <div className="w-full max-w-xl bg-cream h-full border-l border-onyx/10 flex flex-col shadow-2xl p-6 relative animate-in slide-in-from-right duration-200">
+            <button onClick={() => setIsPODetailOpen(false)} className="absolute top-6 right-6 text-onyx/40 hover:text-onyx cursor-pointer">
+              <X size={20} />
+            </button>
+
+            {/* Header */}
+            <div className="space-y-2 mt-4 pb-4 border-b border-onyx/5">
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] font-mono font-bold bg-saffron px-2 py-0.5 rounded text-onyx">
+                  {selectedPO.number}
+                </span>
+                <span className="text-[10px] font-mono font-bold bg-cream-dark/50 px-2 py-0.5 rounded text-onyx">
+                  Version {selectedPO.version}
+                </span>
+                <span className="text-[10px] font-mono font-bold bg-green-100 text-green-800 border border-green-200 px-2 py-0.5 rounded uppercase">
+                  {selectedPO.status}
+                </span>
+              </div>
+              <h3 className="font-heading text-xl font-extrabold text-onyx">
+                Purchase Order Details
+              </h3>
+              <p className="text-xs text-onyx/50">Supplier: {selectedPO.vendorName}</p>
+            </div>
+
+            {/* General Info */}
+            <div className="py-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs border-b border-onyx/5 bg-cream-dark/20 p-3.5 rounded-lg mt-4">
+              <div>
+                <span className="font-semibold text-onyx/50">PO Type:</span>
+                <p className="font-bold text-onyx mt-0.5">{selectedPO.type}</p>
+              </div>
+              <div>
+                <span className="font-semibold text-onyx/50">Payment Terms:</span>
+                <p className="font-bold text-onyx mt-0.5">{selectedPO.paymentTerms || "N/A"}</p>
+              </div>
+              <div>
+                <span className="font-semibold text-onyx/50">Freight Terms:</span>
+                <p className="font-bold text-onyx mt-0.5">{selectedPO.freightTerms || "N/A"}</p>
+              </div>
+              <div>
+                <span className="font-semibold text-onyx/50">Delivery Date:</span>
+                <p className="font-bold text-onyx mt-0.5">
+                  <span suppressHydrationWarning>{selectedPO.deliveryDate ? new Date(selectedPO.deliveryDate).toLocaleDateString() : "N/A"}</span>
+                </p>
+              </div>
+              <div>
+                <span className="font-semibold text-onyx/50">Supplier GSTIN:</span>
+                <p className="font-bold text-onyx mt-0.5">{selectedPO.vendorGstin || "N/A"}</p>
+              </div>
+              <div>
+                <span className="font-semibold text-onyx/50">Supplier PAN:</span>
+                <p className="font-bold text-onyx mt-0.5">{selectedPO.vendorPan || "N/A"}</p>
+              </div>
+              <div className="col-span-2">
+                <span className="font-semibold text-onyx/50">Supplier Address:</span>
+                <p className="font-bold text-onyx mt-0.5 whitespace-pre-line">{selectedPO.vendorAddress || "N/A"}</p>
+              </div>
+              <div className="col-span-2">
+                <span className="font-semibold text-onyx/50">Ship-To Address:</span>
+                <p className="font-bold text-onyx mt-0.5">{selectedPO.shipTo || "N/A"}</p>
+              </div>
+            </div>
+
+            {/* Lines & T&C */}
+            <div className="flex-1 overflow-y-auto py-6 space-y-6">
+              {/* Lines */}
+              <div className="space-y-3">
+                <h4 className="text-[10px] font-mono font-bold uppercase tracking-wider text-onyx/40">
+                  Item Lines Registered
+                </h4>
+
+                <div className="border border-onyx/5 rounded-lg overflow-hidden">
+                  <table className="w-full text-left text-xs border-collapse bg-white">
+                    <thead className="bg-cream-dark/50 text-[10px] uppercase font-bold tracking-wider text-onyx/50">
+                      <tr>
+                        <th className="p-2.5">Item Description</th>
+                        <th className="p-2.5 text-right">Rate</th>
+                        <th className="p-2.5 text-right">Qty</th>
+                        <th className="p-2.5 text-right">Landed Cost</th>
+                        <th className="p-2.5 text-right">Recd Qty</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedPO.lines.map((line: any) => {
+                        const totalTaxable = selectedPO.lines.reduce((sum: number, l: any) => {
+                          return sum + l.qty * l.rate * (1 - l.discount / 100);
+                        }, 0);
+                        const landed = calculateLandedCost(
+                          line.qty,
+                          line.rate,
+                          line.discount,
+                          line.gstRate,
+                          totalTaxable,
+                          selectedPO.otherCharges
+                        );
+                        return (
+                          <tr key={line.id} className="border-t border-onyx/5">
+                            <td className="p-2.5 text-onyx font-medium">[{line.itemCode}] {line.itemName}</td>
+                            <td className="p-2.5 text-right font-mono text-onyx">₹{line.rate.toFixed(2)}</td>
+                            <td className="p-2.5 text-right font-mono font-bold text-onyx">{line.qty}</td>
+                            <td className="p-2.5 text-right font-mono text-onyx">₹{landed.toFixed(2)}</td>
+                            <td className="p-2.5 text-right font-mono font-bold text-blue-700">{line.receivedQty}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Totals Breakdown */}
+                {(() => {
+                  const totals = computePoTotals(selectedPO.lines, selectedPO.otherCharges);
+                  return (
+                    <div className="p-3 bg-cream-dark/30 border border-onyx/5 rounded-lg space-y-1.5 text-xs">
+                      <div className="flex justify-between">
+                        <span className="text-onyx/60 font-semibold">Basic Total Value:</span>
+                        <span className="font-mono text-onyx">₹{totals.basicTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      {totals.discountTotal > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-onyx/60 font-semibold">Total Discount (-):</span>
+                          <span className="font-mono text-red-600 font-bold">-₹{totals.discountTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+                      {selectedPO.otherCharges > 0 && (
+                        <div className="flex justify-between">
+                          <span className="text-onyx/60 font-semibold">Other Charges (+):</span>
+                          <span className="font-mono text-onyx">₹{selectedPO.otherCharges.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between">
+                        <span className="text-onyx/60 font-semibold">Total GST (+):</span>
+                        <span className="font-mono text-onyx">₹{totals.gstTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                      </div>
+                      <div className="border-t border-onyx/10 pt-1.5 flex justify-between font-bold">
+                        <span className="text-onyx">Net Landed Total:</span>
+                        <span className="font-mono text-saffron-dark text-sm">₹{totals.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Terms & Conditions Block */}
+                <div className="space-y-2">
+                  <h4 className="text-[10px] font-mono font-bold uppercase tracking-wider text-onyx/40">
+                    Terms & Conditions
+                  </h4>
+                  {(() => {
+                    const resolved = selectedPO.resolvedTermsText || selectedPO.termsConditions;
+                    if (resolved) {
+                      return (
+                        <div 
+                          className="p-4 bg-white border border-onyx/5 rounded-lg text-xs text-onyx/85 prose prose-sm max-w-none leading-relaxed overflow-y-auto max-h-[20vh]"
+                          dangerouslySetInnerHTML={{ __html: renderMarkdownToHtml(resolved) }}
+                        />
+                      );
+                    }
+                    return (
+                      <div className="p-3 bg-white border border-onyx/5 rounded-lg text-xs text-onyx/85 whitespace-pre-wrap leading-relaxed font-mono">
+                        No specific terms & conditions defined for this Purchase Order.
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Version/Amendment History */}
+              {selectedPO.amendments && selectedPO.amendments.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="text-[10px] font-mono font-bold uppercase tracking-wider text-onyx/40">
+                    PO Amendment History
+                  </h4>
+                  <div className="space-y-3">
+                    {selectedPO.amendments.map((am: any) => (
+                      <div key={am.id} className="p-3 bg-cream-dark/25 border border-onyx/5 rounded-lg text-xs space-y-2">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-onyx">Amendment v{am.version}</span>
+                          <span suppressHydrationWarning className="text-[10px] text-onyx/40">{new Date(am.createdAt).toLocaleDateString()}</span>
+                        </div>
+                        <p className="text-onyx/70 italic">"{am.reason || "No reason given"}"</p>
+                        <p className="text-[10px] text-onyx/40 font-mono">Amended by: {am.createdBy}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-onyx/5">
+              <button 
+                onClick={() => setIsPODetailOpen(false)}
+                className="w-full py-2.5 bg-onyx text-cream-light font-bold rounded-lg text-xs hover:bg-onyx-light cursor-pointer"
+              >
+                Close Details
               </button>
             </div>
           </div>
