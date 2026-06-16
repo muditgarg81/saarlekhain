@@ -6,6 +6,7 @@ import { getNextSequence } from "@/lib/sequences";
 import { postLedgerEntry } from "@/lib/stock";
 import { revalidatePath } from "next/cache";
 import { GrnStatus, LedgerTxnType, PoStatus, GrnSource } from "@prisma/client";
+import { recalculateInvoiceMatchStatus } from "./invoices";
 
 interface GrnLineInput {
   itemId: string;
@@ -187,20 +188,34 @@ export async function postGrn(id: string) {
   const actorId = (session.user as any).id;
 
   try {
-    const grn = await db.grn.findFirst({
-      where: { id, companyId },
-      include: { lines: true }
-    });
-    if (!grn) return { success: false, error: "GRN not found" };
-    
-    // Can only post if DRAFT (no QC) or QC_DONE
-    const canPost = grn.status === GrnStatus.DRAFT || grn.status === GrnStatus.QC_DONE;
-    if (!canPost) {
-      return { success: false, error: "GRN must be in DRAFT or QC DONE status to post" };
-    }
-
     const result = await db.$transaction(async (tx) => {
-      // 1. Post ledger entries for each line's accepted quantity
+      // 1. Lock and update status atomically to prevent race conditions (double posting)
+      const updated = await tx.grn.updateMany({
+        where: {
+          id,
+          companyId,
+          deletedAt: null,
+          status: { in: [GrnStatus.DRAFT, GrnStatus.QC_DONE] }
+        },
+        data: {
+          status: GrnStatus.POSTED,
+          postedById: actorId,
+          postedAt: new Date(),
+        }
+      });
+
+      if (updated.count === 0) {
+        throw new Error("GRN must be in DRAFT or QC DONE status to post");
+      }
+
+      // 2. Fetch the GRN with its lines inside the transaction boundary
+      const grn = await tx.grn.findUnique({
+        where: { id },
+        include: { lines: true }
+      });
+      if (!grn) throw new Error("GRN not found");
+
+      // 3. Post ledger entries for each line's accepted quantity
       for (const line of grn.lines) {
         if (line.acceptedQty <= 0) continue;
 
@@ -237,7 +252,7 @@ export async function postGrn(id: string) {
         });
       }
 
-      // 2. If this is linked to a PO, verify if the PO is now fully received
+      // 4. If this is linked to a PO, verify if the PO is now fully received
       if (grn.poId) {
         const poLines = await tx.poLine.findMany({
           where: { poId: grn.poId }
@@ -253,16 +268,15 @@ export async function postGrn(id: string) {
           where: { id: grn.poId },
           data: { status: nextPoStatus }
         });
+
+        // Recalculate invoice matching status
+        await recalculateInvoiceMatchStatus(tx, companyId, grn.poId);
       }
 
-      // 3. Update GRN status to POSTED
-      const updatedGrn = await tx.grn.update({
+      // Fetch the updated GRN to log its current state accurately in the audit log
+      const fullyUpdatedGrn = await tx.grn.findUnique({
         where: { id },
-        data: {
-          status: GrnStatus.POSTED,
-          postedById: actorId,
-          postedAt: new Date(),
-        }
+        include: { lines: true }
       });
 
       // Audit Log
@@ -273,11 +287,11 @@ export async function postGrn(id: string) {
           action: "POST_GRN",
           entity: "Grn",
           entityId: grn.id,
-          after: JSON.parse(JSON.stringify(updatedGrn))
+          after: JSON.parse(JSON.stringify(fullyUpdatedGrn))
         }
       });
 
-      return updatedGrn;
+      return fullyUpdatedGrn;
     });
 
     revalidatePath("/stores/grn");
@@ -307,12 +321,6 @@ export async function updateGrn(
   const actorId = (session.user as any).id;
 
   try {
-    const original = await db.grn.findFirst({
-      where: { id, companyId, deletedAt: null },
-      include: { lines: true }
-    });
-    if (!original) return { success: false, error: "GRN not found" };
-
     // Get item QC requirements
     const itemIds = data.lines.map(l => l.itemId);
     const qcItems = await db.item.findMany({
@@ -323,7 +331,19 @@ export async function updateGrn(
     const anyQcRequired = data.lines.some(l => qcRequiredMap.get(l.itemId) === true);
 
     const result = await db.$transaction(async (tx) => {
-      // 1. If POSTED, revert original stock ledger and PO received quantities
+      // 1. Lock the GRN row and retrieve the original state atomically using update
+      const original = await tx.grn.update({
+        where: { id, companyId, deletedAt: null },
+        data: {
+          storeId: data.storeId,
+          dcNo: data.dcNo || null,
+          dcDate: data.dcDate ? new Date(data.dcDate) : null,
+          invoiceNo: data.invoiceNo || null,
+        },
+        include: { lines: true }
+      });
+
+      // 2. If POSTED, revert original stock ledger and PO received quantities
       if (original.status === GrnStatus.POSTED) {
         await tx.stockLedger.deleteMany({
           where: { companyId, refType: "GRN", refId: id }
@@ -347,7 +367,7 @@ export async function updateGrn(
         }
       }
 
-      // 2. Delete old inspections & results
+      // 3. Delete old inspections & results
       const inspections = await tx.inspection.findMany({
         where: { grnId: id, companyId }
       });
@@ -361,12 +381,12 @@ export async function updateGrn(
         });
       }
 
-      // 3. Delete old GRN lines
+      // 4. Delete old GRN lines
       await tx.grnLine.deleteMany({
         where: { grnId: id }
       });
 
-      // 4. Create new lines (and upsert batches)
+      // 5. Create new lines (and upsert batches)
       const lineCreates = [];
       for (const line of data.lines) {
         let batchId = null;
@@ -414,7 +434,7 @@ export async function updateGrn(
         });
       }
 
-      // 5. Update the GRN header and lines
+      // 6. Update the GRN header and lines
       let nextStatus = original.status;
       if (original.status !== GrnStatus.POSTED) {
         nextStatus = anyQcRequired ? GrnStatus.QC_PENDING : GrnStatus.DRAFT;
@@ -423,10 +443,6 @@ export async function updateGrn(
       const updatedGrn = await tx.grn.update({
         where: { id },
         data: {
-          storeId: data.storeId,
-          dcNo: data.dcNo || null,
-          dcDate: data.dcDate ? new Date(data.dcDate) : null,
-          invoiceNo: data.invoiceNo || null,
           status: nextStatus,
           lines: {
             create: lineCreates
@@ -437,7 +453,7 @@ export async function updateGrn(
         }
       });
 
-      // 6. If QC items exist, create inspections
+      // 7. If QC items exist, create inspections
       if (nextStatus === GrnStatus.QC_PENDING) {
         for (const line of updatedGrn.lines) {
           const qcReq = qcRequiredMap.get(line.itemId) === true;
@@ -468,7 +484,7 @@ export async function updateGrn(
         }
       }
 
-      // 7. If POSTED, write new stock ledger entries and update PO line received quantities
+      // 8. If POSTED, write new stock ledger entries and update PO line received quantities
       if (updatedGrn.status === GrnStatus.POSTED) {
         for (const line of updatedGrn.lines) {
           if (line.acceptedQty <= 0) continue;
@@ -522,7 +538,13 @@ export async function updateGrn(
         }
       }
 
-      // 8. Audit Log
+      // Recalculate invoice matching status if linked to a PO
+      const poId = original.poId || updatedGrn.poId;
+      if (poId) {
+        await recalculateInvoiceMatchStatus(tx, companyId, poId);
+      }
+
+      // 9. Audit Log
       await tx.auditLog.create({
         data: {
           companyId,
@@ -557,15 +579,15 @@ export async function deleteGrn(id: string) {
   const actorId = (session.user as any).id;
 
   try {
-    const original = await db.grn.findFirst({
-      where: { id, companyId, deletedAt: null },
-      include: { lines: true }
-    });
-
-    if (!original) return { success: false, error: "GRN not found" };
-
     await db.$transaction(async (tx) => {
-      // 1. If POSTED, revert stock ledger entries and PO quantities
+      // 1. Soft delete the GRN as the first step to lock the row and prevent concurrent modification
+      const original = await tx.grn.update({
+        where: { id, companyId, deletedAt: null },
+        data: { deletedAt: new Date() },
+        include: { lines: true }
+      });
+
+      // 2. If POSTED, revert stock ledger entries and PO quantities
       if (original.status === GrnStatus.POSTED) {
         // Delete stock ledger entries
         await tx.stockLedger.deleteMany({
@@ -607,7 +629,7 @@ export async function deleteGrn(id: string) {
         }
       }
 
-      // 2. Delete inspections and inspection results
+      // 3. Delete inspections and inspection results
       const inspections = await tx.inspection.findMany({
         where: { grnId: id, companyId }
       });
@@ -621,16 +643,15 @@ export async function deleteGrn(id: string) {
         });
       }
 
-      // 3. Delete any rejected material records associated with this GRN
+      // 4. Delete any rejected material records associated with this GRN
       await tx.rejectedMaterial.deleteMany({
         where: { grnNumber: original.number, companyId }
       });
 
-      // 4. Soft delete the GRN
-      const updated = await tx.grn.update({
-        where: { id },
-        data: { deletedAt: new Date() }
-      });
+      // Recalculate invoice matching status if linked to a PO
+      if (original.poId) {
+        await recalculateInvoiceMatchStatus(tx, companyId, original.poId);
+      }
 
       // Audit Log
       await tx.auditLog.create({
@@ -641,7 +662,7 @@ export async function deleteGrn(id: string) {
           entity: "Grn",
           entityId: id,
           before: original as any,
-          after: updated as any
+          after: { ...original, deletedAt: new Date() } as any
         }
       });
     });

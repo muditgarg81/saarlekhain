@@ -14,14 +14,16 @@ export interface StockInfo {
 export async function getItemStock(
   companyId: string,
   itemId: string,
-  storeId?: string
+  storeId?: string,
+  tx?: any
 ): Promise<number> {
+  const client = tx || db;
   const where: any = { companyId, itemId };
   if (storeId) {
     where.storeId = storeId;
   }
 
-  const result = await db.stockLedger.aggregate({
+  const result = await client.stockLedger.aggregate({
     where,
     _sum: {
       qty: true,
@@ -37,9 +39,11 @@ export async function getItemStock(
  */
 export async function getItemValuation(
   companyId: string,
-  itemId: string
+  itemId: string,
+  tx?: any
 ): Promise<StockInfo> {
-  const ledger = await db.stockLedger.findMany({
+  const client = tx || db;
+  const ledger = await client.stockLedger.findMany({
     where: { companyId, itemId },
     orderBy: { createdAt: "asc" },
   });
@@ -104,11 +108,11 @@ export async function postLedgerEntry(
   // If rate is not specified for a stock addition, fetch current average rate
   let finalRate = data.rate;
   if (!finalRate && data.qty > 0) {
-    const valuation = await getItemValuation(data.companyId, data.itemId);
+    const valuation = await getItemValuation(data.companyId, data.itemId, tx);
     finalRate = valuation.valuationRate;
   } else if (!finalRate && data.qty < 0) {
     // For stock issue, rate is always the current average valuation rate
-    const valuation = await getItemValuation(data.companyId, data.itemId);
+    const valuation = await getItemValuation(data.companyId, data.itemId, tx);
     finalRate = valuation.valuationRate;
   }
 

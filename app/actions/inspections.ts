@@ -36,27 +36,31 @@ export async function submitInspectionResult(
   if (!canInspect) return { success: false, error: "Access Denied: You do not have QC inspection rights." };
 
   try {
-    const inspection = await db.inspection.findFirst({
-      where: { id: inspectionId, companyId },
-      include: { grn: { include: { lines: true } } }
-    });
-    if (!inspection) return { success: false, error: "QC Inspection record not found" };
-
-    const grn = inspection.grn;
-    const grnLine = grn.lines.find(l => l.id === inspection.grnLineId);
-    if (!grnLine) return { success: false, error: "Linked GRN line not found" };
-
-    // Validate quantities
-    const totalQty = grnLine.receivedQty;
-    if (data.acceptedQty + data.rejectedQty !== totalQty) {
-      return { 
-        success: false, 
-        error: `Sum of Accepted (${data.acceptedQty}) and Rejected (${data.rejectedQty}) quantity must equal Received quantity (${totalQty})` 
-      };
-    }
-
     const result = await db.$transaction(async (tx) => {
-      // 1. Update/Create inspection parameter results
+      // 1. Fetch inspection & parent GRN details inside transaction
+      const inspection = await tx.inspection.findFirst({
+        where: { id: inspectionId, companyId },
+        include: { grn: { include: { lines: true } } }
+      });
+      if (!inspection) throw new Error("QC Inspection record not found");
+
+      const grn = inspection.grn;
+      const grnLine = grn.lines.find(l => l.id === inspection.grnLineId);
+      if (!grnLine) throw new Error("Linked GRN line not found");
+
+      // 2. Lock the parent GRN row to serialize QC inspection submissions for the same GRN
+      await tx.grn.update({
+        where: { id: grn.id },
+        data: { status: grn.status } // Dummy status update to lock row
+      });
+
+      // 3. Validate quantities
+      const totalQty = grnLine.receivedQty;
+      if (data.acceptedQty + data.rejectedQty !== totalQty) {
+        throw new Error(`Sum of Accepted (${data.acceptedQty}) and Rejected (${data.rejectedQty}) quantity must equal Received quantity (${totalQty})`);
+      }
+
+      // 4. Update/Create inspection parameter results
       for (const res of data.results) {
         if (res.id.startsWith("new_")) {
           await tx.inspectionResult.create({
@@ -80,7 +84,7 @@ export async function submitInspectionResult(
         }
       }
 
-      // 2. Update Inspection header
+      // 5. Update Inspection header
       const updatedInspection = await tx.inspection.update({
         where: { id: inspectionId },
         data: {
@@ -93,7 +97,7 @@ export async function submitInspectionResult(
         include: { results: true }
       });
 
-      // 3. Update GRN Line quantities
+      // 6. Update GRN Line quantities
       await tx.grnLine.update({
         where: { id: inspection.grnLineId },
         data: {
@@ -102,16 +106,12 @@ export async function submitInspectionResult(
         }
       });
 
-      // 3.5 Create/Update RejectedMaterial record if rejectedQty > 0
+      // 7. Create/Update RejectedMaterial record if rejectedQty > 0
       if (data.rejectedQty > 0) {
-        const dbGrn = await tx.grn.findUnique({
-          where: { id: inspection.grnId }
-        });
-
         let vendorName = "Unknown Vendor";
-        if (dbGrn?.vendorId) {
+        if (grn.vendorId) {
           const vendorObj = await tx.vendor.findUnique({
-            where: { id: dbGrn.vendorId }
+            where: { id: grn.vendorId }
           });
           if (vendorObj) vendorName = vendorObj.name;
         }
@@ -127,12 +127,12 @@ export async function submitInspectionResult(
             vendorName,
             itemCode: item?.code || "N/A",
             itemName: item?.name || "Unknown Item",
-            grnNumber: dbGrn?.number || "N/A",
+            grnNumber: grn.number,
           },
           create: {
             companyId,
             grnLineId: inspection.grnLineId,
-            grnNumber: dbGrn?.number || "N/A",
+            grnNumber: grn.number,
             itemCode: item?.code || "N/A",
             itemName: item?.name || "Unknown Item",
             vendorName,
@@ -142,13 +142,11 @@ export async function submitInspectionResult(
         });
       }
 
-      // 4. Verify if all QC-required lines in the parent GRN are completed
-      // Fetch all inspections associated with this GRN
+      // 8. Verify if all QC-required lines in the parent GRN are completed
       const grnInspections = await tx.inspection.findMany({
         where: { grnId: grn.id }
       });
 
-      // If all inspections have a disposition set, then QC is fully completed
       const allQcDone = grnInspections.every(i => i.id === inspectionId ? !!data.disposition : !!i.disposition);
 
       if (allQcDone) {
@@ -158,7 +156,7 @@ export async function submitInspectionResult(
         });
       }
 
-      // 5. Audit Log
+      // 9. Audit Log
       await tx.auditLog.create({
         data: {
           companyId,
