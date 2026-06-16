@@ -950,37 +950,48 @@ export default function PaymentsList({
                           <td className="font-semibold text-onyx">{pay.vendorName}</td>
                           <td className="font-mono text-xs text-onyx/60">{pay.invoiceNo || "On Account"}</td>
                           <td>
-                            {isPending ? (
-                              <span className="text-onyx/30 italic">Unspecified</span>
+                            {pay.mode ? (
+                              <span>{pay.mode}</span>
                             ) : (
-                              pay.mode
+                              <span className="text-onyx/30 italic">Unspecified</span>
                             )}
                           </td>
-                          <td className="font-mono text-xs">
+                          <td className="font-mono text-xs py-2">
                             {(() => {
-                              const poMatch = pay.reference?.match(/PO:\s*([A-Za-z0-9-]+)/i);
+                              const poMatch = pay.reference?.match(/\(PO:\s*([A-Za-z0-9-]+)\)/i) || pay.reference?.match(/PO:\s*([A-Za-z0-9-]+)/i);
                               const poNum = poMatch ? poMatch[1] : null;
                               if (poNum) {
+                                const mainRef = pay.reference?.replace(/\s*\(?PO:\s*[A-Za-z0-9-]+\)?/i, "").trim() || "";
                                 return (
-                                  <div className="flex items-center space-x-1.5">
-                                    <span className={isPending ? "text-amber-800 font-bold" : ""}>
-                                      {pay.reference}
-                                    </span>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        const matchedPo = allPos.find((p) => p.number === poNum);
-                                        if (matchedPo) {
-                                          setSelectedPO(matchedPo);
-                                          setIsPODetailOpen(true);
-                                        }
-                                      }}
-                                      title={`View PO ${poNum}`}
-                                      className="px-1.5 py-0.5 bg-saffron hover:bg-saffron-dark text-[9px] font-mono font-bold rounded text-onyx hover:underline cursor-pointer inline-flex items-center"
-                                    >
-                                      <Eye size={8} className="mr-0.5 shrink-0" />
-                                      <span>PO</span>
-                                    </button>
+                                  <div className="flex flex-col space-y-1">
+                                    {isPending ? (
+                                      <span className="px-2 py-1 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wider animate-pulse inline-flex items-center space-x-1 shadow-sm w-fit">
+                                        <AlertCircle size={10} className="text-amber-600 animate-bounce" />
+                                        <span>{mainRef || "ADVANCE PAY PENDING"}</span>
+                                      </span>
+                                    ) : (
+                                      <span className="font-semibold text-onyx">
+                                        {mainRef || "-"}
+                                      </span>
+                                    )}
+                                    <div className="flex items-center space-x-1.5 text-[10px] text-onyx/50 font-sans mt-0.5">
+                                      <span>PO: {poNum}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const matchedPo = allPos.find((p) => p.number === poNum);
+                                          if (matchedPo) {
+                                            setSelectedPO(matchedPo);
+                                            setIsPODetailOpen(true);
+                                          }
+                                        }}
+                                        title={`View PO ${poNum}`}
+                                        className="px-1.5 py-0.5 bg-saffron hover:bg-saffron-dark text-[9px] font-mono font-bold rounded text-onyx hover:underline cursor-pointer inline-flex items-center"
+                                      >
+                                        <Eye size={8} className="mr-0.5 shrink-0" />
+                                        <span>PO</span>
+                                      </button>
+                                    </div>
                                   </div>
                                 );
                               }
@@ -1103,20 +1114,54 @@ export default function PaymentsList({
                         </div>
                         <div>
                           <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Payment Mode</span>
-                          <span className="font-semibold text-onyx">{isPending ? "Unspecified" : (pay.mode || "-")}</span>
+                          <span className="font-semibold text-onyx">{pay.mode || "Unspecified"}</span>
                         </div>
                       </div>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
                           <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Txn/Chq Ref</span>
                           <span className="font-mono">
-                            {isPending ? (
-                              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 text-[9px] font-bold uppercase tracking-wider animate-pulse">
-                                {pay.reference}
-                              </span>
-                            ) : (
-                              pay.reference || "-"
-                            )}
+                            {(() => {
+                              const poMatch = pay.reference?.match(/\(PO:\s*([A-Za-z0-9-]+)\)/i) || pay.reference?.match(/PO:\s*([A-Za-z0-9-]+)/i);
+                              const poNum = poMatch ? poMatch[1] : null;
+                              if (poNum) {
+                                const mainRef = pay.reference?.replace(/\s*\(?PO:\s*[A-Za-z0-9-]+\)?/i, "").trim() || "";
+                                return (
+                                  <div className="flex flex-col space-y-0.5">
+                                    {isPending ? (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 text-[9px] font-bold uppercase tracking-wider animate-pulse w-fit">
+                                        {mainRef || "PENDING"}
+                                      </span>
+                                    ) : (
+                                      <span className="text-onyx font-semibold">{mainRef || "-"}</span>
+                                    )}
+                                    <div className="flex items-center space-x-1 text-[10px] text-onyx/50 font-sans">
+                                      <span>PO: {poNum}</span>
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const matchedPo = allPos.find((p) => p.number === poNum);
+                                          if (matchedPo) {
+                                            setSelectedPO(matchedPo);
+                                            setIsPODetailOpen(true);
+                                          }
+                                        }}
+                                        className="px-1 py-0.2 bg-saffron hover:bg-saffron-dark text-[8px] font-mono font-bold rounded text-onyx cursor-pointer"
+                                      >
+                                        PO
+                                      </button>
+                                    </div>
+                                  </div>
+                                );
+                              }
+                              return isPending ? (
+                                <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 text-[9px] font-bold uppercase tracking-wider animate-pulse">
+                                  {pay.reference}
+                                </span>
+                              ) : (
+                                pay.reference || "-"
+                              );
+                            })()}
                           </span>
                         </div>
                         <div>
