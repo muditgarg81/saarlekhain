@@ -10,7 +10,7 @@ import { db } from "./db";
  */
 export async function getNextSequence(
   companyId: string,
-  docType: "IND" | "PR" | "RFQ" | "PO" | "GRN" | "ISS" | "MRN" | "GP" | "INSP" | "DN" | "CN" | "PAY"
+  docType: "IND" | "PR" | "RFQ" | "PO" | "GRN" | "ISS" | "MRN" | "GP" | "INSP" | "DN" | "CN" | "PAY" | "PRQ"
 ): Promise<string> {
   return await db.$transaction(async (tx) => {
     const sequence = await tx.docSequence.upsert({

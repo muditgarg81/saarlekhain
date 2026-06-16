@@ -191,3 +191,55 @@ export async function bulkDeletePayments(ids: string[]) {
     return { success: false, error: err.message || "Failed to bulk delete payment vouchers" };
   }
 }
+
+export async function confirmPendingPayment(
+  id: string,
+  data: {
+    paidOn: string;
+    mode: string;
+    reference: string;
+  }
+) {
+  const session = await auth();
+  if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  const companyId = (session.user as any).companyId;
+  const actorId = (session.user as any).id;
+
+  try {
+    const original = await db.paymentVoucher.findFirst({
+      where: { id, companyId }
+    });
+
+    if (!original) return { success: false, error: "Payment Voucher not found" };
+    if (!original.reference?.startsWith("ADVANCE PAY PENDING")) {
+      return { success: false, error: "Only pending advance payment vouchers can be confirmed" };
+    }
+
+    const poMatch = original.reference.match(/\(PO:\s*([^\)]+)\)/i);
+    const suffix = poMatch ? ` (PO: ${poMatch[1]})` : "";
+    const updatedReference = `${data.reference}${suffix}`;
+
+    const result = await db.$transaction(async (tx) => {
+      const pay = await tx.paymentVoucher.update({
+        where: { id },
+        data: {
+          paidOn: new Date(data.paidOn),
+          mode: data.mode,
+          reference: updatedReference,
+        }
+      });
+
+      // Audit Log
+      await logAudit(tx, companyId, actorId, "CONFIRM_PENDING_PAYMENT", "PaymentVoucher", pay.id, original, pay);
+
+      return pay;
+    });
+
+    revalidatePath("/purchase/payments");
+    return { success: true, payment: result };
+  } catch (err: any) {
+    console.error("Error confirming pending payment voucher:", err);
+    return { success: false, error: err.message || "Failed to confirm pending payment voucher" };
+  }
+}

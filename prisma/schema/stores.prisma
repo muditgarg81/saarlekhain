@@ -363,6 +363,7 @@ model Grn {
   createdAt   DateTime  @default(now())
   lines       GrnLine[]
   inspections Inspection[]
+  paymentRequests PaymentRequest[]
 
   @@unique([companyId, number])
   @@index([companyId, status])

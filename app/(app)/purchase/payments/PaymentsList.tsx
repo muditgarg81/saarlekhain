@@ -5,8 +5,16 @@ import {
   recordPayment, 
   updatePayment, 
   deletePayment, 
-  bulkDeletePayments 
+  bulkDeletePayments,
+  confirmPendingPayment
 } from "@/app/actions/payments";
+import {
+  createPaymentRequest,
+  updatePaymentRequest,
+  deletePaymentRequest,
+  reviewPaymentRequest,
+  confirmPaymentRequest
+} from "@/app/actions/paymentRequests";
 import { limitYearTo4Digits } from "@/lib/date";
 import { 
   Search, 
@@ -25,7 +33,8 @@ import {
   Printer,
   Download,
   CheckSquare,
-  Square
+  Square,
+  Check
 } from "lucide-react";
 
 interface PaymentRecord {
@@ -67,6 +76,9 @@ interface PaymentsListProps {
   invoices: Invoice[];
   vendors: Vendor[];
   userRole: string;
+  paymentRequests: any[];
+  approvedPos: any[];
+  pendingGrns: any[];
 }
 
 function amountToWords(amount: number): string {
@@ -116,19 +128,58 @@ export default function PaymentsList({
   payments,
   invoices,
   vendors,
-  userRole
+  userRole,
+  paymentRequests,
+  approvedPos,
+  pendingGrns
 }: PaymentsListProps) {
   const [search, setSearch] = useState("");
+  const [activeTab, setActiveTab] = useState<"VOUCHERS" | "REQUESTS" | "DUE_GRNS">("VOUCHERS");
 
   // Modals & States
   const [isOpen, setIsOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedPayment, setSelectedPayment] = useState<PaymentRecord | null>(null);
 
-
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
+
+  // Payment Request States
+  const [isReqOpen, setIsReqOpen] = useState(false);
+  const [isEditReqOpen, setIsEditReqOpen] = useState(false);
+  const [newRequest, setNewRequest] = useState({
+    vendorId: "",
+    poId: "",
+    grnId: "",
+    type: "ADVANCE" as "ADVANCE" | "AGAINST_BILL" | "OTHERS",
+    amount: 0,
+    remarks: ""
+  });
+  const [editRequest, setEditRequest] = useState({
+    id: "",
+    vendorId: "",
+    poId: "",
+    grnId: "",
+    type: "ADVANCE" as "ADVANCE" | "AGAINST_BILL" | "OTHERS",
+    amount: 0,
+    remarks: ""
+  });
+
+  // Confirm Payment modal state
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState<{
+    type: "REQUEST" | "PENDING_VOUCHER";
+    id: string;
+    amount: number;
+    vendorName: string;
+  } | null>(null);
+
+  const [confirmForm, setConfirmForm] = useState({
+    paidOn: new Date().toISOString().split("T")[0],
+    mode: "NEFT",
+    reference: ""
+  });
 
   // Form states
   const [newPayment, setNewPayment] = useState({
@@ -304,6 +355,134 @@ export default function PaymentsList({
     }
   };
 
+  const handleCreateRequest = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newRequest.vendorId || newRequest.amount <= 0) {
+      alert("Please select vendor and enter a positive payment request amount");
+      return;
+    }
+    setActionLoading(true);
+    setErrorMsg(null);
+    const res = await createPaymentRequest({
+      vendorId: newRequest.vendorId,
+      poId: newRequest.poId || null,
+      grnId: newRequest.grnId || null,
+      type: newRequest.type,
+      amount: newRequest.amount,
+      remarks: newRequest.remarks || null
+    });
+    setActionLoading(false);
+    if (res.success) {
+      setIsReqOpen(false);
+      window.location.reload();
+    } else {
+      setErrorMsg(res.error || "Failed to create payment request");
+    }
+  };
+
+  const handleEditReqOpen = (req: any) => {
+    setEditRequest({
+      id: req.id,
+      vendorId: req.vendorId,
+      poId: req.poId || "",
+      grnId: req.grnId || "",
+      type: req.type,
+      amount: req.amount,
+      remarks: req.remarks || ""
+    });
+    setIsEditReqOpen(true);
+  };
+
+  const handleUpdateRequestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editRequest.vendorId || editRequest.amount <= 0) {
+      alert("Please select vendor and enter a positive payment request amount");
+      return;
+    }
+    setActionLoading(true);
+    setErrorMsg(null);
+    const res = await updatePaymentRequest(editRequest.id, {
+      vendorId: editRequest.vendorId,
+      poId: editRequest.poId || null,
+      grnId: editRequest.grnId || null,
+      type: editRequest.type,
+      amount: editRequest.amount,
+      remarks: editRequest.remarks || null
+    });
+    setActionLoading(false);
+    if (res.success) {
+      setIsEditReqOpen(false);
+      window.location.reload();
+    } else {
+      setErrorMsg(res.error || "Failed to update payment request");
+    }
+  };
+
+  const handleDeleteRequest = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this payment request? This cannot be undone.")) return;
+    setActionLoading(true);
+    const res = await deletePaymentRequest(id);
+    setActionLoading(false);
+    if (res.success) {
+      window.location.reload();
+    } else {
+      alert(res.error || "Failed to delete payment request");
+    }
+  };
+
+  const handleReviewRequest = async (id: string, status: "APPROVED" | "REJECTED") => {
+    if (!confirm(`Are you sure you want to ${status.toLowerCase()} this payment request?`)) return;
+    setActionLoading(true);
+    const res = await reviewPaymentRequest(id, status);
+    setActionLoading(false);
+    if (res.success) {
+      window.location.reload();
+    } else {
+      alert(res.error || `Failed to ${status.toLowerCase()} payment request`);
+    }
+  };
+
+  const handleConfirmOpen = (target: {
+    type: "REQUEST" | "PENDING_VOUCHER";
+    id: string;
+    amount: number;
+    vendorName: string;
+  }) => {
+    setConfirmTarget(target);
+    setConfirmForm({
+      paidOn: new Date().toISOString().split("T")[0],
+      mode: "NEFT",
+      reference: ""
+    });
+    setIsConfirmOpen(true);
+  };
+
+  const handleConfirmSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!confirmTarget) return;
+    if (!confirmForm.reference.trim()) {
+      alert("Please enter a transaction/cheque reference");
+      return;
+    }
+    setActionLoading(true);
+    setErrorMsg(null);
+
+    let res;
+    if (confirmTarget.type === "REQUEST") {
+      res = await confirmPaymentRequest(confirmTarget.id, confirmForm);
+    } else {
+      res = await confirmPendingPayment(confirmTarget.id, confirmForm);
+    }
+
+    setActionLoading(false);
+    if (res.success) {
+      setIsConfirmOpen(false);
+      window.location.reload();
+    } else {
+      setErrorMsg(res.error || "Failed to confirm payment");
+    }
+  };
+
   // CSV Export
   const handleExportCSV = (targetIds?: string[]) => {
     const idsToExport = targetIds || (selectedIds.length > 0 ? selectedIds : filteredPayments.map(p => p.id));
@@ -442,6 +621,20 @@ export default function PaymentsList({
     (pay.reference?.toLowerCase() || "").includes(search.toLowerCase())
   );
 
+  const filteredRequests = paymentRequests.filter(req => 
+    req.number.toLowerCase().includes(search.toLowerCase()) ||
+    req.vendorName.toLowerCase().includes(search.toLowerCase()) ||
+    (req.remarks?.toLowerCase() || "").includes(search.toLowerCase()) ||
+    (req.poNumber?.toLowerCase() || "").includes(search.toLowerCase()) ||
+    (req.grnNumber?.toLowerCase() || "").includes(search.toLowerCase())
+  );
+
+  const filteredGrns = pendingGrns.filter(grn => 
+    grn.number.toLowerCase().includes(search.toLowerCase()) ||
+    grn.vendorName.toLowerCase().includes(search.toLowerCase()) ||
+    (grn.poNumber?.toLowerCase() || "").includes(search.toLowerCase())
+  );
+
   const totalPayments = payments.reduce((sum, p) => sum + p.amount, 0);
 
   return (
@@ -476,28 +669,87 @@ export default function PaymentsList({
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h2 className="text-xl font-bold tracking-tight text-onyx">Supplier Payments Register</h2>
-          <p className="text-xs text-onyx/50 mt-1">Immutable journal log of payables outflows. Real-time bank transfer commands are not executed.</p>
+          <p className="text-xs text-onyx/50 mt-1">Manage payment vouchers, log vendor payment requests, and track overdue bills.</p>
         </div>
         <div className="flex items-center space-x-3">
-          <button
-            onClick={() => {
-              setErrorMsg(null);
-              setNewPayment({
-                vendorId: "",
-                invoiceId: "",
-                amount: 0,
-                paidOn: new Date().toISOString().split("T")[0],
-                mode: "NEFT",
-                reference: ""
-              });
-              setIsOpen(true);
-            }}
-            className="flex items-center space-x-2 px-3.5 py-2 bg-saffron hover:bg-saffron-dark rounded-lg text-xs font-bold text-onyx shadow-md transition-all duration-150 cursor-pointer"
-          >
-            <Plus size={15} />
-            <span>Record Payment Voucher</span>
-          </button>
+          {activeTab === "VOUCHERS" && (
+            <button
+              onClick={() => {
+                setErrorMsg(null);
+                setNewPayment({
+                  vendorId: "",
+                  invoiceId: "",
+                  amount: 0,
+                  paidOn: new Date().toISOString().split("T")[0],
+                  mode: "NEFT",
+                  reference: ""
+                });
+                setIsOpen(true);
+              }}
+              className="flex items-center space-x-2 px-3.5 py-2 bg-saffron hover:bg-saffron-dark rounded-lg text-xs font-bold text-onyx shadow-md transition-all duration-150 cursor-pointer"
+            >
+              <Plus size={15} />
+              <span>Record Payment Voucher</span>
+            </button>
+          )}
+          {activeTab === "REQUESTS" && (
+            <button
+              onClick={() => {
+                setErrorMsg(null);
+                setNewRequest({
+                  vendorId: "",
+                  poId: "",
+                  grnId: "",
+                  type: "ADVANCE",
+                  amount: 0,
+                  remarks: ""
+                });
+                setIsReqOpen(true);
+              }}
+              className="flex items-center space-x-2 px-3.5 py-2 bg-saffron hover:bg-saffron-dark rounded-lg text-xs font-bold text-onyx shadow-md transition-all duration-150 cursor-pointer"
+            >
+              <Plus size={15} />
+              <span>Add Payment Request</span>
+            </button>
+          )}
         </div>
+      </div>
+
+      {/* Sub Tabs */}
+      <div className="flex border-b border-onyx/10 space-x-6 text-xs font-bold uppercase tracking-wider text-onyx/65 pb-0.5">
+        <button
+          onClick={() => {
+            setActiveTab("VOUCHERS");
+            setSelectedIds([]);
+          }}
+          className={`pb-2 px-1 border-b-2 cursor-pointer transition-all ${
+            activeTab === "VOUCHERS" ? "border-saffron text-onyx font-extrabold" : "border-transparent hover:text-onyx"
+          }`}
+        >
+          Payment Vouchers ({payments.length})
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("REQUESTS");
+            setSelectedIds([]);
+          }}
+          className={`pb-2 px-1 border-b-2 cursor-pointer transition-all ${
+            activeTab === "REQUESTS" ? "border-saffron text-onyx font-extrabold" : "border-transparent hover:text-onyx"
+          }`}
+        >
+          Payment Requests ({paymentRequests.length})
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("DUE_GRNS");
+            setSelectedIds([]);
+          }}
+          className={`pb-2 px-1 border-b-2 cursor-pointer transition-all ${
+            activeTab === "DUE_GRNS" ? "border-saffron text-onyx font-extrabold" : "border-transparent hover:text-onyx"
+          }`}
+        >
+          Due / Overdue Bills (GRNs) ({pendingGrns.length})
+        </button>
       </div>
 
       {/* Filter and Search */}
@@ -508,7 +760,13 @@ export default function PaymentsList({
           </span>
           <input
             type="text"
-            placeholder="Search by voucher number, supplier, reference..."
+            placeholder={
+              activeTab === "VOUCHERS"
+                ? "Search by voucher number, supplier, reference..."
+                : activeTab === "REQUESTS"
+                ? "Search by request number, supplier, PO/GRN, remarks..."
+                : "Search by GRN number, supplier, PO..."
+            }
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full text-xs pl-9 pr-4 py-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron transition-all duration-200"
@@ -516,48 +774,162 @@ export default function PaymentsList({
         </div>
       </div>
 
-      {/* Table */}
-      {/* Table (Desktop View) */}
-      <div className="hidden md:block glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full dense-table text-left border-collapse">
-            <thead>
-              <tr>
-                <th className="p-3 w-10 text-center">
-                  <button
-                    onClick={handleToggleSelectAll}
-                    className="text-onyx/65 hover:text-onyx cursor-pointer"
+      {/* ==================== VOUCHERS TAB ==================== */}
+      {activeTab === "VOUCHERS" && (
+        <>
+          {/* Table (Desktop View) */}
+          <div className="hidden md:block glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full dense-table text-left border-collapse">
+                <thead>
+                  <tr>
+                    <th className="p-3 w-10 text-center">
+                      <button
+                        onClick={handleToggleSelectAll}
+                        className="text-onyx/65 hover:text-onyx cursor-pointer"
+                      >
+                        {filteredPayments.length > 0 && filteredPayments.every(p => selectedIds.includes(p.id)) ? (
+                          <CheckSquare size={16} className="text-saffron fill-saffron/10" />
+                        ) : (
+                          <Square size={16} />
+                        )}
+                      </button>
+                    </th>
+                    <th>Voucher No</th>
+                    <th>Supplier Name</th>
+                    <th>Invoice Ref</th>
+                    <th>Payment Mode</th>
+                    <th>Txn/Chq Ref</th>
+                    <th>Amount</th>
+                    <th>Paid On</th>
+                    <th className="text-center w-36">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredPayments.length === 0 ? (
+                    <tr>
+                      <td colSpan={9} className="text-center py-8 text-onyx/40 font-medium">
+                        No payment vouchers recorded.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredPayments.map((pay) => {
+                      const isSelected = selectedIds.includes(pay.id);
+                      const isPending = pay.reference?.startsWith("ADVANCE PAY PENDING");
+                      return (
+                        <tr key={pay.id} className={isSelected ? "bg-saffron/5" : ""}>
+                          <td className="p-3 text-center">
+                            <button
+                              onClick={() => handleToggleSelect(pay.id)}
+                              className="text-onyx/60 hover:text-onyx cursor-pointer"
+                            >
+                              {isSelected ? (
+                                <CheckSquare size={16} className="text-saffron fill-saffron/10" />
+                              ) : (
+                                <Square size={16} />
+                              )}
+                            </button>
+                          </td>
+                          <td className="font-mono font-bold text-xs text-onyx/85">{pay.number}</td>
+                          <td className="font-semibold text-onyx">{pay.vendorName}</td>
+                          <td className="font-mono text-xs text-onyx/60">{pay.invoiceNo || "On Account"}</td>
+                          <td>
+                            {isPending ? (
+                              <span className="text-onyx/30 italic">Unspecified</span>
+                            ) : (
+                              pay.mode
+                            )}
+                          </td>
+                          <td className="font-mono text-xs">
+                            {isPending ? (
+                              <span className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wider animate-pulse inline-flex items-center space-x-1 shadow-sm">
+                                <AlertCircle size={10} className="text-amber-600 animate-bounce" />
+                                <span>{pay.reference}</span>
+                              </span>
+                            ) : (
+                              pay.reference || "-"
+                            )}
+                          </td>
+                          <td className="font-mono font-bold">₹{pay.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                          <td suppressHydrationWarning>{new Date(pay.paidOn).toLocaleDateString()}</td>
+                          <td className="text-center space-x-1">
+                            <button
+                              onClick={() => {
+                                setSelectedPayment(pay);
+                                setIsDetailOpen(true);
+                              }}
+                              title="View Details"
+                              className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                            >
+                              <Eye size={13} />
+                            </button>
+                            {isPending && (
+                              <button
+                                onClick={() => handleConfirmOpen({
+                                  type: "PENDING_VOUCHER",
+                                  id: pay.id,
+                                  amount: pay.amount,
+                                  vendorName: pay.vendorName
+                                })}
+                                title="Confirm Payment Details"
+                                className="p-1 hover:bg-green-50 border border-transparent hover:border-green-150 rounded text-green-600 hover:text-green-700 cursor-pointer inline-flex"
+                              >
+                                <Check size={13} />
+                              </button>
+                            )}
+                            <button
+                              onClick={() => handleEditOpen(pay)}
+                              title="Edit Voucher"
+                              className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                            >
+                              <Edit size={13} />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setSelectedPayment(pay);
+                                setIsPrintModalOpen(true);
+                              }}
+                              title="Print Voucher"
+                              className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                            >
+                              <Printer size={13} />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(pay.id)}
+                              title="Delete Voucher"
+                              className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-red-600 hover:text-red-800 cursor-pointer inline-flex"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Mobile Card List View */}
+          <div className="md:hidden space-y-4">
+            {filteredPayments.length === 0 ? (
+              <div className="glass-card p-6 text-center text-onyx/40 font-medium border border-onyx/5 rounded-xl animate-pulse">
+                No payment vouchers recorded.
+              </div>
+            ) : (
+              filteredPayments.map((pay) => {
+                const isSelected = selectedIds.includes(pay.id);
+                const isPending = pay.reference?.startsWith("ADVANCE PAY PENDING");
+                return (
+                  <div
+                    key={pay.id}
+                    className={`glass-card p-4 rounded-xl border transition-all duration-150 ${
+                      isSelected ? "border-saffron bg-saffron/5" : "border-onyx/5 bg-cream"
+                    }`}
                   >
-                    {filteredPayments.length > 0 && filteredPayments.every(p => selectedIds.includes(p.id)) ? (
-                      <CheckSquare size={16} className="text-saffron fill-saffron/10" />
-                    ) : (
-                      <Square size={16} />
-                    )}
-                  </button>
-                </th>
-                <th>Voucher No</th>
-                <th>Supplier Name</th>
-                <th>Invoice Ref</th>
-                <th>Payment Mode</th>
-                <th>Txn/Chq Ref</th>
-                <th>Amount</th>
-                <th>Paid On</th>
-                <th className="text-center w-36">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredPayments.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="text-center py-8 text-onyx/40 font-medium">
-                    No payment vouchers recorded.
-                  </td>
-                </tr>
-              ) : (
-                filteredPayments.map((pay) => {
-                  const isSelected = selectedIds.includes(pay.id);
-                  return (
-                    <tr key={pay.id} className={isSelected ? "bg-saffron/5" : ""}>
-                      <td className="p-3 text-center">
+                    <div className="flex items-center justify-between border-b border-onyx/5 pb-2 mb-2">
+                      <div className="flex items-center space-x-2">
                         <button
                           onClick={() => handleToggleSelect(pay.id)}
                           className="text-onyx/60 hover:text-onyx cursor-pointer"
@@ -568,181 +940,569 @@ export default function PaymentsList({
                             <Square size={16} />
                           )}
                         </button>
-                      </td>
-                      <td className="font-mono font-bold text-xs text-onyx/85">{pay.number}</td>
-                      <td className="font-semibold text-onyx">{pay.vendorName}</td>
-                      <td className="font-mono text-xs text-onyx/60">{pay.invoiceNo || "On Account"}</td>
-                      <td>{pay.mode}</td>
-                      <td className="font-mono text-xs">
-                        {pay.reference?.startsWith("ADVANCE PAY PENDING") ? (
-                          <span className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200 uppercase tracking-wider animate-pulse inline-flex items-center space-x-1 shadow-sm">
-                            <AlertCircle size={10} className="text-amber-600 animate-bounce" />
-                            <span>{pay.reference}</span>
+                        <span className="font-mono font-bold text-xs text-onyx/85">{pay.number}</span>
+                      </div>
+                      <span className="font-mono font-bold text-xs text-saffron-dark">
+                        ₹{pay.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 text-xs text-onyx/70">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Supplier</span>
+                        <span className="font-semibold text-onyx">{pay.vendorName}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Invoice Ref</span>
+                          <span className="font-semibold text-onyx">{pay.invoiceNo || "On Account"}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Payment Mode</span>
+                          <span className="font-semibold text-onyx">{isPending ? "Unspecified" : (pay.mode || "-")}</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Txn/Chq Ref</span>
+                          <span className="font-mono">
+                            {isPending ? (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 text-[9px] font-bold uppercase tracking-wider animate-pulse">
+                                {pay.reference}
+                              </span>
+                            ) : (
+                              pay.reference || "-"
+                            )}
                           </span>
-                        ) : (
-                          pay.reference || "-"
-                        )}
-                      </td>
-                      <td className="font-mono font-bold">₹{pay.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                      <td suppressHydrationWarning>{new Date(pay.paidOn).toLocaleDateString()}</td>
-                      <td className="text-center space-x-1">
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Paid On</span>
+                          <span className="font-semibold text-onyx" suppressHydrationWarning>
+                            {new Date(pay.paidOn).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end space-x-2 pt-2 mt-3 border-t border-onyx/5">
+                      <button
+                        onClick={() => {
+                          setSelectedPayment(pay);
+                          setIsDetailOpen(true);
+                        }}
+                        title="View Details"
+                        className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                      >
+                        <Eye size={14} />
+                      </button>
+                      {isPending && (
                         <button
-                          onClick={() => {
-                            setSelectedPayment(pay);
-                            setIsDetailOpen(true);
-                          }}
-                          title="View Details"
-                          className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                          onClick={() => handleConfirmOpen({
+                            type: "PENDING_VOUCHER",
+                            id: pay.id,
+                            amount: pay.amount,
+                            vendorName: pay.vendorName
+                          })}
+                          title="Confirm Payment Details"
+                          className="p-1.5 hover:bg-green-50 border border-transparent hover:border-green-100 rounded text-green-600 hover:text-green-800 cursor-pointer inline-flex"
                         >
-                          <Eye size={13} />
+                          <Check size={14} />
                         </button>
-                        <button
-                          onClick={() => handleEditOpen(pay)}
-                          title="Edit Voucher"
-                          className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
-                        >
-                          <Edit size={13} />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setSelectedPayment(pay);
-                            setIsPrintModalOpen(true);
-                          }}
-                          title="Print Voucher"
-                          className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
-                        >
-                          <Printer size={13} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(pay.id)}
-                          title="Delete Voucher"
-                          className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-red-600 hover:text-red-800 cursor-pointer inline-flex"
-                        >
-                          <Trash2 size={13} />
-                        </button>
+                      )}
+                      <button
+                        onClick={() => handleEditOpen(pay)}
+                        title="Edit Voucher"
+                        className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                      >
+                        <Edit size={14} />
+                      </button>
+                      <button
+                        onClick={() => {
+                          setSelectedPayment(pay);
+                          setIsPrintModalOpen(true);
+                        }}
+                        title="Print Voucher"
+                        className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                      >
+                        <Printer size={14} />
+                      </button>
+                      <button
+                        onClick={() => handleDelete(pay.id)}
+                        title="Delete Voucher"
+                        className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-red-600 hover:text-red-800 cursor-pointer inline-flex"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ==================== REQUESTS TAB ==================== */}
+      {activeTab === "REQUESTS" && (
+        <>
+          {/* Table (Desktop View) */}
+          <div className="hidden md:block glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full dense-table text-left border-collapse">
+                <thead>
+                  <tr>
+                    <th>Request No</th>
+                    <th>Supplier Name</th>
+                    <th>PO Ref</th>
+                    <th>GRN Ref</th>
+                    <th>Type</th>
+                    <th>Amount</th>
+                    <th>Status</th>
+                    <th>Remarks</th>
+                    <th>Recorded By</th>
+                    <th className="text-center w-36">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRequests.length === 0 ? (
+                    <tr>
+                      <td colSpan={10} className="text-center py-8 text-onyx/40 font-medium">
+                        No payment requests logged.
                       </td>
                     </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
+                  ) : (
+                    filteredRequests.map((req) => {
+                      const isPending = req.status === "PENDING";
+                      const isApproved = req.status === "APPROVED";
+                      const isRejected = req.status === "REJECTED";
+                      const isPaid = req.status === "PAID";
+                      const canApprove = ["OWNER", "ADMIN", "ACCOUNTS", "PURCHASE_MANAGER"].includes(userRole);
 
-      {/* Mobile Card List View */}
-      <div className="md:hidden space-y-4">
-        {filteredPayments.length === 0 ? (
-          <div className="glass-card p-6 text-center text-onyx/40 font-medium border border-onyx/5 rounded-xl">
-            No payment vouchers recorded.
+                      return (
+                        <tr key={req.id}>
+                          <td className="font-mono font-bold text-xs text-onyx/85">{req.number}</td>
+                          <td className="font-semibold text-onyx">{req.vendorName}</td>
+                          <td className="font-mono text-xs text-onyx/60">{req.poNumber || "-"}</td>
+                          <td className="font-mono text-xs text-onyx/60">{req.grnNumber || "-"}</td>
+                          <td className="text-xs font-semibold">
+                            {req.type === "ADVANCE" ? "Advance" : req.type === "AGAINST_BILL" ? "Against GRN" : "Others"}
+                          </td>
+                          <td className="font-mono font-bold text-onyx">₹{req.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                          <td>
+                            <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                              isPending ? "bg-amber-100 text-amber-800 animate-pulse border border-amber-200" :
+                              isApproved ? "bg-green-100 text-green-800 border border-green-200" :
+                              isRejected ? "bg-red-100 text-red-800 border border-red-200" :
+                              "bg-blue-100 text-blue-800 border border-blue-200"
+                            }`}>
+                              {req.status}
+                            </span>
+                          </td>
+                          <td className="text-onyx/60 truncate max-w-xs" title={req.remarks || ""}>{req.remarks || "-"}</td>
+                          <td>{req.recordedBy}</td>
+                          <td className="text-center space-x-1">
+                            {isPending && (
+                              <>
+                                <button
+                                  onClick={() => handleEditReqOpen(req)}
+                                  title="Edit Request"
+                                  className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                                >
+                                  <Edit size={13} />
+                                </button>
+                                <button
+                                  onClick={() => handleDeleteRequest(req.id)}
+                                  title="Delete Request"
+                                  className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-red-600 hover:text-red-800 cursor-pointer inline-flex"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                                {canApprove && (
+                                  <>
+                                    <button
+                                      onClick={() => handleReviewRequest(req.id, "APPROVED")}
+                                      title="Approve Request"
+                                      className="p-1 hover:bg-green-50 border border-transparent hover:border-green-100 rounded text-green-600 hover:text-green-700 cursor-pointer inline-flex"
+                                    >
+                                      <CheckCircle size={13} />
+                                    </button>
+                                    <button
+                                      onClick={() => handleReviewRequest(req.id, "REJECTED")}
+                                      title="Reject Request"
+                                      className="p-1 hover:bg-red-50 border border-transparent hover:border-red-100 rounded text-red-500 hover:text-red-700 cursor-pointer inline-flex"
+                                    >
+                                      <X size={13} />
+                                    </button>
+                                  </>
+                                )}
+                              </>
+                            )}
+                            {isApproved && (
+                              <button
+                                onClick={() => handleConfirmOpen({
+                                  type: "REQUEST",
+                                  id: req.id,
+                                  amount: req.amount,
+                                  vendorName: req.vendorName
+                                })}
+                                title="Confirm Payment & Log Voucher"
+                                className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-bold shadow-sm transition inline-flex items-center space-x-1 cursor-pointer"
+                              >
+                                <CreditCard size={10} />
+                                <span>Confirm Pay</span>
+                              </button>
+                            )}
+                            {isRejected && (
+                              <button
+                                onClick={() => handleDeleteRequest(req.id)}
+                                title="Delete Request"
+                                className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-red-600 hover:text-red-800 cursor-pointer inline-flex"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            )}
+                            {isPaid && (
+                              <span className="text-[10px] text-zinc-400 font-semibold italic">Disbursed</span>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        ) : (
-          filteredPayments.map((pay) => {
-            const isSelected = selectedIds.includes(pay.id);
-            return (
-              <div
-                key={pay.id}
-                className={`glass-card p-4 rounded-xl border transition-all duration-150 ${
-                  isSelected ? "border-saffron bg-saffron/5" : "border-onyx/5 bg-cream"
-                }`}
-              >
-                <div className="flex items-center justify-between border-b border-onyx/5 pb-2 mb-2">
-                  <div className="flex items-center space-x-2">
-                    <button
-                      onClick={() => handleToggleSelect(pay.id)}
-                      className="text-onyx/60 hover:text-onyx cursor-pointer"
-                    >
-                      {isSelected ? (
-                        <CheckSquare size={16} className="text-saffron fill-saffron/10" />
-                      ) : (
-                        <Square size={16} />
-                      )}
-                    </button>
-                    <span className="font-mono font-bold text-xs text-onyx/85">{pay.number}</span>
-                  </div>
-                  <span className="font-mono font-bold text-xs text-saffron-dark">
-                    ₹{pay.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
-                  </span>
-                </div>
 
-                <div className="space-y-2 text-xs text-onyx/70">
-                  <div>
-                    <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Supplier</span>
-                    <span className="font-semibold text-onyx">{pay.vendorName}</span>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Invoice Ref</span>
-                      <span className="font-semibold text-onyx">{pay.invoiceNo || "On Account"}</span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Payment Mode</span>
-                      <span className="font-semibold text-onyx">{pay.mode || "-"}</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Txn/Chq Ref</span>
-                      <span className="font-mono">
-                        {pay.reference?.startsWith("ADVANCE PAY PENDING") ? (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200 text-[9px] font-bold uppercase tracking-wider animate-pulse">
-                            {pay.reference}
-                          </span>
-                        ) : (
-                          pay.reference || "-"
-                        )}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Paid On</span>
-                      <span className="font-semibold text-onyx" suppressHydrationWarning>
-                        {new Date(pay.paidOn).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center justify-end space-x-2 pt-2 mt-3 border-t border-onyx/5">
-                  <button
-                    onClick={() => {
-                      setSelectedPayment(pay);
-                      setIsDetailOpen(true);
-                    }}
-                    title="View Details"
-                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
-                  >
-                    <Eye size={14} />
-                  </button>
-                  <button
-                    onClick={() => handleEditOpen(pay)}
-                    title="Edit Voucher"
-                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
-                  >
-                    <Edit size={14} />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setSelectedPayment(pay);
-                      setIsPrintModalOpen(true);
-                    }}
-                    title="Print Voucher"
-                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
-                  >
-                    <Printer size={14} />
-                  </button>
-                  <button
-                    onClick={() => handleDelete(pay.id)}
-                    title="Delete Voucher"
-                    className="p-1.5 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-red-600 hover:text-red-800 cursor-pointer inline-flex"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
+          {/* Mobile Card List View */}
+          <div className="md:hidden space-y-4">
+            {filteredRequests.length === 0 ? (
+              <div className="glass-card p-6 text-center text-onyx/40 font-medium border border-onyx/5 rounded-xl">
+                No payment requests logged.
               </div>
-            );
-          })
-        )}
-      </div>
+            ) : (
+              filteredRequests.map((req) => {
+                const isPending = req.status === "PENDING";
+                const isApproved = req.status === "APPROVED";
+                const isRejected = req.status === "REJECTED";
+                const isPaid = req.status === "PAID";
+                const canApprove = ["OWNER", "ADMIN", "ACCOUNTS", "PURCHASE_MANAGER"].includes(userRole);
+
+                return (
+                  <div
+                    key={req.id}
+                    className="glass-card p-4 rounded-xl border border-onyx/5 bg-cream space-y-3"
+                  >
+                    <div className="flex items-center justify-between border-b border-onyx/5 pb-2">
+                      <span className="font-mono font-bold text-xs text-onyx/85">{req.number}</span>
+                      <span className="font-mono font-bold text-xs text-saffron-dark">
+                        ₹{req.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 text-xs text-onyx/70">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Vendor</span>
+                        <span className="font-semibold text-onyx">{req.vendorName}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Type</span>
+                          <span className="font-semibold text-onyx">
+                            {req.type === "ADVANCE" ? "Advance" : req.type === "AGAINST_BILL" ? "Against GRN" : "Others"}
+                          </span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Status</span>
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider ${
+                            isPending ? "bg-amber-100 text-amber-800 animate-pulse border border-amber-200" :
+                            isApproved ? "bg-green-100 text-green-800 border border-green-200" :
+                            isRejected ? "bg-red-100 text-red-800 border border-red-200" :
+                            "bg-blue-100 text-blue-800 border border-blue-200"
+                          }`}>
+                            {req.status}
+                          </span>
+                        </div>
+                      </div>
+                      {(req.poNumber || req.grnNumber) && (
+                        <div className="grid grid-cols-2 gap-2">
+                          {req.poNumber && (
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">PO Ref</span>
+                              <span className="font-mono text-onyx">{req.poNumber}</span>
+                            </div>
+                          )}
+                          {req.grnNumber && (
+                            <div>
+                              <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">GRN Ref</span>
+                              <span className="font-mono text-onyx">{req.grnNumber}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                      {req.remarks && (
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Remarks</span>
+                          <p className="italic">{req.remarks}</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-onyx/5">
+                      <span className="text-[9px] text-onyx/40">By {req.recordedBy}</span>
+                      <div className="flex items-center space-x-2">
+                        {isPending && (
+                          <>
+                            <button
+                              onClick={() => handleEditReqOpen(req)}
+                              className="p-1 hover:bg-cream-dark border border-transparent rounded text-onyx/65 cursor-pointer"
+                            >
+                              <Edit size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRequest(req.id)}
+                              className="p-1 hover:bg-cream-dark border border-transparent rounded text-red-600 cursor-pointer"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                            {canApprove && (
+                              <>
+                                <button
+                                  onClick={() => handleReviewRequest(req.id, "APPROVED")}
+                                  className="p-1 hover:bg-green-50 rounded text-green-600 cursor-pointer"
+                                >
+                                  <CheckCircle size={14} />
+                                </button>
+                                <button
+                                  onClick={() => handleReviewRequest(req.id, "REJECTED")}
+                                  className="p-1 hover:bg-red-50 rounded text-red-500 cursor-pointer"
+                                >
+                                  <X size={14} />
+                                </button>
+                              </>
+                            )}
+                          </>
+                        )}
+                        {isApproved && (
+                          <button
+                            onClick={() => handleConfirmOpen({
+                              type: "REQUEST",
+                              id: req.id,
+                              amount: req.amount,
+                              vendorName: req.vendorName
+                            })}
+                            className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-bold shadow-sm flex items-center space-x-1 cursor-pointer"
+                          >
+                            <CreditCard size={12} />
+                            <span>Confirm Payment</span>
+                          </button>
+                        )}
+                        {isRejected && (
+                          <button
+                            onClick={() => handleDeleteRequest(req.id)}
+                            className="p-1.5 hover:bg-cream-dark border border-transparent rounded text-red-600 cursor-pointer"
+                          >
+                            <Trash2 size={14} />
+                          </button>
+                        )}
+                        {isPaid && (
+                          <span className="text-[10px] text-zinc-400 font-semibold italic">Disbursed</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
+
+      {/* ==================== DUE GRNS TAB ==================== */}
+      {activeTab === "DUE_GRNS" && (
+        <>
+          {/* Table (Desktop View) */}
+          <div className="hidden md:block glass-card rounded-xl border border-onyx/5 overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
+              <table className="w-full dense-table text-left border-collapse">
+                <thead>
+                  <tr>
+                    <th>GRN No</th>
+                    <th>Supplier Name</th>
+                    <th>PO Number</th>
+                    <th>Bill Value (INR)</th>
+                    <th>Posted On</th>
+                    <th>Due Date</th>
+                    <th>Payment Status</th>
+                    <th className="text-center w-48">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredGrns.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="text-center py-8 text-onyx/40 font-medium">
+                        No pending bills or approved GRNs.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredGrns.map((grn) => {
+                      return (
+                        <tr key={grn.id} className={grn.isOverdue ? "bg-red-50/20" : ""}>
+                          <td className="font-mono font-bold text-xs text-onyx/85">{grn.number}</td>
+                          <td className="font-semibold text-onyx">{grn.vendorName}</td>
+                          <td className="font-mono text-xs text-onyx/60">{grn.poNumber}</td>
+                          <td className="font-mono font-bold text-onyx">₹{grn.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                          <td suppressHydrationWarning>{new Date(grn.postedAt).toLocaleDateString()}</td>
+                          <td suppressHydrationWarning className="font-semibold text-onyx">{new Date(grn.dueDate).toLocaleDateString()}</td>
+                          <td>
+                            {grn.isOverdue ? (
+                              <span className="px-2 py-1.5 rounded-lg text-[10px] font-bold bg-red-100 text-red-800 border border-red-200 uppercase tracking-wider animate-pulse inline-flex items-center space-x-1 shadow-sm">
+                                <AlertCircle size={10} className="text-red-600 animate-bounce" />
+                                <span>OVERDUE ({grn.daysOverdue} days)</span>
+                              </span>
+                            ) : (
+                              <span className="px-2 py-1 rounded-lg text-[10px] font-bold bg-zinc-100 text-zinc-700 border border-zinc-200 uppercase tracking-wider inline-flex items-center">
+                                Due in {grn.daysUntilDue} days
+                              </span>
+                            )}
+                          </td>
+                          <td className="text-center space-x-2">
+                            <button
+                              onClick={() => {
+                                setErrorMsg(null);
+                                setNewRequest({
+                                  vendorId: grn.vendorId,
+                                  poId: grn.poId,
+                                  grnId: grn.id,
+                                  type: "AGAINST_BILL",
+                                  amount: grn.amount,
+                                  remarks: `Payment request against GRN ${grn.number}`
+                                });
+                                setIsReqOpen(true);
+                              }}
+                              className="px-2.5 py-1 border border-onyx/10 hover:bg-cream-dark text-[10px] font-bold rounded shadow-sm inline-flex items-center space-x-1 cursor-pointer"
+                            >
+                              <Plus size={10} />
+                              <span>Raise Request</span>
+                            </button>
+                            <button
+                              onClick={() => handleConfirmOpen({
+                                type: "PENDING_VOUCHER", // confirms directly creating a payment voucher for it
+                                id: grn.id, // we will generate a payment voucher directly
+                                amount: grn.amount,
+                                vendorName: grn.vendorName
+                              })}
+                              className="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-bold shadow-sm inline-flex items-center space-x-1 cursor-pointer"
+                            >
+                              <Check size={10} />
+                              <span>Confirm Pay</span>
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Mobile Card List View */}
+          <div className="md:hidden space-y-4">
+            {filteredGrns.length === 0 ? (
+              <div className="glass-card p-6 text-center text-onyx/40 font-medium border border-onyx/5 rounded-xl">
+                No pending bills or approved GRNs.
+              </div>
+            ) : (
+              filteredGrns.map((grn) => {
+                return (
+                  <div
+                    key={grn.id}
+                    className={`glass-card p-4 rounded-xl border transition-all duration-150 ${
+                      grn.isOverdue ? "border-red-200 bg-red-50/10" : "border-onyx/5 bg-cream"
+                    } space-y-3`}
+                  >
+                    <div className="flex items-center justify-between border-b border-onyx/5 pb-2">
+                      <span className="font-mono font-bold text-xs text-onyx/85">{grn.number}</span>
+                      <span className="font-mono font-bold text-xs text-saffron-dark">
+                        ₹{grn.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+
+                    <div className="space-y-2 text-xs text-onyx/70">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Supplier</span>
+                        <span className="font-semibold text-onyx">{grn.vendorName}</span>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">PO Number</span>
+                          <span className="font-mono text-onyx">{grn.poNumber}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Posted On</span>
+                          <span className="font-semibold text-onyx" suppressHydrationWarning>{new Date(grn.postedAt).toLocaleDateString()}</span>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Due Date</span>
+                          <span className="font-semibold text-onyx" suppressHydrationWarning>{new Date(grn.dueDate).toLocaleDateString()}</span>
+                        </div>
+                        <div>
+                          <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Status</span>
+                          {grn.isOverdue ? (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-red-100 text-red-800 border border-red-200 text-[9px] font-bold uppercase tracking-wider animate-pulse">
+                              OVERDUE ({grn.daysOverdue} d)
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-700 border border-zinc-200 text-[9px] font-bold uppercase tracking-wider">
+                              Due in {grn.daysUntilDue} d
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center justify-end space-x-2 pt-2 border-t border-onyx/5">
+                      <button
+                        onClick={() => {
+                          setErrorMsg(null);
+                          setNewRequest({
+                            vendorId: grn.vendorId,
+                            poId: grn.poId,
+                            grnId: grn.id,
+                            type: "AGAINST_BILL",
+                            amount: grn.amount,
+                            remarks: `Payment request against GRN ${grn.number}`
+                          });
+                          setIsReqOpen(true);
+                        }}
+                        className="px-2.5 py-1.5 border border-onyx/10 hover:bg-cream-dark text-xs font-bold rounded shadow-sm flex items-center space-x-1 cursor-pointer bg-white"
+                      >
+                        <Plus size={12} />
+                        <span>Raise Request</span>
+                      </button>
+                      <button
+                        onClick={() => handleConfirmOpen({
+                          type: "PENDING_VOUCHER",
+                          id: grn.id,
+                          amount: grn.amount,
+                          vendorName: grn.vendorName
+                        })}
+                        className="px-2.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-bold shadow-sm flex items-center space-x-1 cursor-pointer"
+                      >
+                        <Check size={12} />
+                        <span>Confirm Pay</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+        </>
+      )}
 
       {/* Record Payment Voucher Modal */}
       {isOpen && (
@@ -1286,6 +2046,445 @@ export default function PaymentsList({
                 Close View
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== ADD PAYMENT REQUEST MODAL ==================== */}
+      {isReqOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-cream max-w-xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Coins size={18} className="text-saffron" />
+                <h3 className="font-heading text-base font-bold">New Payment Request</h3>
+              </div>
+              <button onClick={() => setIsReqOpen(false)} className="hover:text-saffron cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleCreateRequest} className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
+              {errorMsg && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded text-red-800 font-semibold">
+                  {errorMsg}
+                </div>
+              )}
+
+              {/* Vendor Selector */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Select Supplier *</label>
+                <select
+                  value={newRequest.vendorId}
+                  onChange={(e) => {
+                    setNewRequest(prev => ({
+                      ...prev,
+                      vendorId: e.target.value,
+                      poId: "",
+                      grnId: "",
+                      amount: 0
+                    }));
+                  }}
+                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                  required
+                >
+                  <option value="">-- Choose Supplier --</option>
+                  {vendors.map(v => (
+                    <option key={v.id} value={v.id}>{v.name} ({v.code})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Payment Type */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Payment Type *</label>
+                <select
+                  value={newRequest.type}
+                  onChange={(e) => {
+                    setNewRequest(prev => ({
+                      ...prev,
+                      type: e.target.value as any,
+                      poId: "",
+                      grnId: "",
+                      amount: 0
+                    }));
+                  }}
+                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                  required
+                >
+                  <option value="ADVANCE">Advance (PO Pre-payment)</option>
+                  <option value="AGAINST_BILL">Against Due Bill (GRN Receipt)</option>
+                  <option value="OTHERS">Others / Misc</option>
+                </select>
+              </div>
+
+              {/* Dynamic PO or GRN selector */}
+              {newRequest.type === "ADVANCE" && newRequest.vendorId && (
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Select Purchase Order</label>
+                  <select
+                    value={newRequest.poId}
+                    onChange={(e) => setNewRequest(prev => ({ ...prev, poId: e.target.value }))}
+                    className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                  >
+                    <option value="">-- Choose PO (Optional) --</option>
+                    {approvedPos
+                      .filter(p => p.vendorId === newRequest.vendorId)
+                      .map(p => (
+                        <option key={p.id} value={p.id}>{p.number}</option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              {newRequest.type === "AGAINST_BILL" && newRequest.vendorId && (
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Select Pending GRN *</label>
+                  <select
+                    value={newRequest.grnId}
+                    onChange={(e) => {
+                      const grnId = e.target.value;
+                      const selectedGrn = pendingGrns.find(g => g.id === grnId);
+                      setNewRequest(prev => ({
+                        ...prev,
+                        grnId,
+                        poId: selectedGrn ? selectedGrn.poId : "",
+                        amount: selectedGrn ? selectedGrn.amount : 0
+                      }));
+                    }}
+                    className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                    required
+                  >
+                    <option value="">-- Choose GRN --</option>
+                    {pendingGrns
+                      .filter(g => g.vendorId === newRequest.vendorId)
+                      .map(g => (
+                        <option key={g.id} value={g.id}>
+                          {g.number} (Val: ₹{g.amount.toLocaleString("en-IN")}, Due: {g.dueDate})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Amount */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Amount (INR) *</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={newRequest.amount || ""}
+                  onChange={(e) => setNewRequest(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
+                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono"
+                  placeholder="0.00"
+                  required
+                />
+              </div>
+
+              {/* Remarks */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Remarks / Description</label>
+                <textarea
+                  value={newRequest.remarks}
+                  onChange={(e) => setNewRequest(prev => ({ ...prev, remarks: e.target.value }))}
+                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron min-h-[60px]"
+                  placeholder="Enter details like banking reference or urgency details..."
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end space-x-2 pt-4 border-t border-onyx/5">
+                <button
+                  type="button"
+                  onClick={() => setIsReqOpen(false)}
+                  className="px-4 py-2 border border-onyx/10 hover:bg-cream-dark text-xs font-bold rounded-lg cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-saffron hover:bg-saffron-dark text-onyx text-xs font-bold rounded-lg shadow-sm transition disabled:opacity-50 cursor-pointer"
+                >
+                  Submit Request
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== EDIT PAYMENT REQUEST MODAL ==================== */}
+      {isEditReqOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-cream max-w-xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Edit size={18} className="text-saffron" />
+                <h3 className="font-heading text-base font-bold">Edit Payment Request</h3>
+              </div>
+              <button onClick={() => setIsEditReqOpen(false)} className="hover:text-saffron cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleUpdateRequestSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 text-xs">
+              {errorMsg && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded text-red-800 font-semibold">
+                  {errorMsg}
+                </div>
+              )}
+
+              {/* Vendor Selector */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Supplier *</label>
+                <select
+                  value={editRequest.vendorId}
+                  onChange={(e) => {
+                    setEditRequest(prev => ({
+                      ...prev,
+                      vendorId: e.target.value,
+                      poId: "",
+                      grnId: "",
+                      amount: 0
+                    }));
+                  }}
+                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                  required
+                >
+                  <option value="">-- Choose Supplier --</option>
+                  {vendors.map(v => (
+                    <option key={v.id} value={v.id}>{v.name} ({v.code})</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Payment Type */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Payment Type *</label>
+                <select
+                  value={editRequest.type}
+                  onChange={(e) => {
+                    setEditRequest(prev => ({
+                      ...prev,
+                      type: e.target.value as any,
+                      poId: "",
+                      grnId: "",
+                      amount: 0
+                    }));
+                  }}
+                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                  required
+                >
+                  <option value="ADVANCE">Advance (PO Pre-payment)</option>
+                  <option value="AGAINST_BILL">Against Due Bill (GRN Receipt)</option>
+                  <option value="OTHERS">Others / Misc</option>
+                </select>
+              </div>
+
+              {/* Dynamic PO or GRN selector */}
+              {editRequest.type === "ADVANCE" && editRequest.vendorId && (
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Select Purchase Order</label>
+                  <select
+                    value={editRequest.poId}
+                    onChange={(e) => setNewRequest(prev => ({ ...prev, poId: e.target.value }))}
+                    className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                  >
+                    <option value="">-- Choose PO (Optional) --</option>
+                    {approvedPos
+                      .filter(p => p.vendorId === editRequest.vendorId)
+                      .map(p => (
+                        <option key={p.id} value={p.id}>{p.number}</option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              {editRequest.type === "AGAINST_BILL" && editRequest.vendorId && (
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Select Pending GRN *</label>
+                  <select
+                    value={editRequest.grnId}
+                    onChange={(e) => {
+                      const grnId = e.target.value;
+                      const selectedGrn = pendingGrns.find(g => g.id === grnId);
+                      setEditRequest(prev => ({
+                        ...prev,
+                        grnId,
+                        poId: selectedGrn ? selectedGrn.poId : "",
+                        amount: selectedGrn ? selectedGrn.amount : 0
+                      }));
+                    }}
+                    className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                    required
+                  >
+                    <option value="">-- Choose GRN --</option>
+                    {pendingGrns
+                      .filter(g => g.vendorId === editRequest.vendorId)
+                      .map(g => (
+                        <option key={g.id} value={g.id}>
+                          {g.number} (Val: ₹{g.amount.toLocaleString("en-IN")}, Due: {g.dueDate})
+                        </option>
+                      ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Amount */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Amount (INR) *</label>
+                <input
+                  type="number"
+                  step="any"
+                  value={editRequest.amount || ""}
+                  onChange={(e) => setEditRequest(prev => ({ ...prev, amount: parseFloat(e.target.value) || 0 }))}
+                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono"
+                  placeholder="0.00"
+                  required
+                />
+              </div>
+
+              {/* Remarks */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Remarks / Description</label>
+                <textarea
+                  value={editRequest.remarks}
+                  onChange={(e) => setEditRequest(prev => ({ ...prev, remarks: e.target.value }))}
+                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron min-h-[60px]"
+                  placeholder="Enter details like banking reference or urgency details..."
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end space-x-2 pt-4 border-t border-onyx/5">
+                <button
+                  type="button"
+                  onClick={() => setIsEditReqOpen(false)}
+                  className="px-4 py-2 border border-onyx/10 hover:bg-cream-dark text-xs font-bold rounded-lg cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-saffron hover:bg-saffron-dark text-onyx text-xs font-bold rounded-lg shadow-sm transition disabled:opacity-50 cursor-pointer"
+                >
+                  Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== CONFIRM PAYMENT MODAL ==================== */}
+      {isConfirmOpen && confirmTarget && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-cream max-w-md w-full flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <CreditCard size={18} className="text-saffron" />
+                <h3 className="font-heading text-base font-bold">Confirm Transaction Details</h3>
+              </div>
+              <button onClick={() => setIsConfirmOpen(false)} className="hover:text-saffron cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleConfirmSubmit} className="p-6 space-y-4 text-xs">
+              {errorMsg && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded text-red-800 font-semibold">
+                  {errorMsg}
+                </div>
+              )}
+
+              {/* Readonly details */}
+              <div className="bg-cream-dark/20 p-3 rounded-lg space-y-1.5 font-semibold text-onyx/80">
+                <div className="flex justify-between">
+                  <span>Vendor/Supplier:</span>
+                  <span className="font-bold text-onyx">{confirmTarget.vendorName}</span>
+                </div>
+                <div className="flex justify-between border-t border-onyx/5 pt-1.5">
+                  <span>Payment Amount:</span>
+                  <span className="font-mono font-bold text-saffron-dark">
+                    ₹{confirmTarget.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <div className="flex justify-between border-t border-onyx/5 pt-1.5">
+                  <span>Type:</span>
+                  <span className="font-bold text-onyx text-[10px] uppercase">
+                    {confirmTarget.type === "REQUEST" ? "Approved Request" : "Pending Advance Voucher"}
+                  </span>
+                </div>
+              </div>
+
+              {/* Paid On */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Payment Date *</label>
+                <input
+                  type="date"
+                  value={confirmForm.paidOn}
+                  onChange={(e) => setConfirmForm(prev => ({ ...prev, paidOn: limitYearTo4Digits(e.target.value) }))}
+                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono"
+                  required
+                />
+              </div>
+
+              {/* Payment Mode */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Payment Mode *</label>
+                <select
+                  value={confirmForm.mode}
+                  onChange={(e) => setConfirmForm(prev => ({ ...prev, mode: e.target.value }))}
+                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                  required
+                >
+                  <option value="NEFT">NEFT / RTGS</option>
+                  <option value="CHEQUE">Cheque / Demand Draft</option>
+                  <option value="UPI">UPI / GPay / PhonePe</option>
+                  <option value="IMPS">IMPS Bank Transfer</option>
+                  <option value="CASH">Cash</option>
+                </select>
+              </div>
+
+              {/* Reference */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Transaction Ref / Cheque No *</label>
+                <input
+                  type="text"
+                  value={confirmForm.reference}
+                  onChange={(e) => setConfirmForm(prev => ({ ...prev, reference: e.target.value }))}
+                  placeholder="e.g. UTR1023847059 or CHQ-00123"
+                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono"
+                  required
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end space-x-2 pt-4 border-t border-onyx/5">
+                <button
+                  type="button"
+                  onClick={() => setIsConfirmOpen(false)}
+                  className="px-4 py-2 border border-onyx/10 hover:bg-cream-dark text-xs font-bold rounded-lg cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg shadow-sm transition disabled:opacity-50 cursor-pointer"
+                >
+                  Confirm Payment
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -76,6 +76,21 @@ enum NoteType {
 
 }
 
+enum PaymentRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+  @@schema("purchase")
+}
+
+enum PaymentRequestType {
+  ADVANCE
+  AGAINST_BILL
+  OTHERS
+  @@schema("purchase")
+}
+
 enum InvoiceMatchStatus {
 
   PENDING
@@ -109,6 +124,7 @@ model Vendor {
 
   pos         PurchaseOrder[]
   quotations  Quotation[]
+  paymentRequests PaymentRequest[]
 
   @@unique([companyId, code])
   @@index([companyId, status])
@@ -255,6 +271,7 @@ model PurchaseOrder {
   vendor       Vendor   @relation(fields: [vendorId], references: [id])
   lines        PoLine[]
   amendments   PoAmendment[]
+  paymentRequests PaymentRequest[]
 
   @@unique([companyId, number])
   @@index([companyId, status])
@@ -700,6 +717,33 @@ model AwardAllocation {
   createdAt       DateTime    @default(now())
   @@index([companyId, rfqLineId])
   @@index([companyId, vendorId])
+  @@schema("purchase")
+}
+
+model PaymentRequest {
+  id           String               @id @default(cuid())
+  companyId    String
+  number       String               // PRQ-XXXXX
+  vendorId     String
+  poId         String?
+  grnId        String?
+  type         PaymentRequestType
+  amount       Float
+  remarks      String?
+  status       PaymentRequestStatus @default(PENDING)
+  recordedById String
+  approvedById String?
+  approvedAt   DateTime?
+  paymentVoucherId String?
+  createdAt    DateTime             @default(now())
+  updatedAt    DateTime             @updatedAt
+
+  vendor       Vendor               @relation(fields: [vendorId], references: [id])
+  po           PurchaseOrder?       @relation(fields: [poId], references: [id])
+  grn          Grn?                 @relation(fields: [grnId], references: [id])
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
   @@schema("purchase")
 }
 
