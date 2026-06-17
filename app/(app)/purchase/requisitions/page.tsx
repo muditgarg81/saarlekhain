@@ -12,11 +12,21 @@ export default async function RequisitionsPage() {
   const companyId = (session.user as any).companyId || "demo-company-id";
   const userRole = (session.user as any).role || "VIEWER";
 
-  // Fetch PRs, RFQs, Items, and Vendors concurrently
-  const [prs, rfqs, items, vendors, users, shipToLocations, rawPresets] = await Promise.all([
+  // Fetch PRs, RFQs, Items, Vendors, and Indents concurrently
+  const [prs, rfqs, items, vendors, users, shipToLocations, rawPresets, indents] = await Promise.all([
     db.purchaseRequisition.findMany({
       where: { companyId, deletedAt: null },
-      include: { lines: true },
+      include: {
+        lines: {
+          include: {
+            indentLines: {
+              include: {
+                indent: true,
+              },
+            },
+          },
+        },
+      },
       orderBy: { createdAt: "desc" },
     }),
     db.rfq.findMany({
@@ -59,7 +69,16 @@ export default async function RequisitionsPage() {
       },
       orderBy: { createdAt: "asc" }
     }),
+    db.indent.findMany({
+      where: { companyId },
+      select: { id: true, number: true },
+    }),
   ]);
+
+  const indentIdToNumberMap = new Map<string, string>();
+  indents.forEach((ind) => {
+    indentIdToNumberMap.set(ind.id, ind.number);
+  });
 
   // Merge presets (company overrides override system ones)
   const presetMap = new Map();
@@ -82,6 +101,26 @@ export default async function RequisitionsPage() {
   // Map PRs to clean UI structures
   const mappedPrs = prs.map((pr) => {
     const approver = users.find((u) => u.id === pr.approvedById);
+    
+    // Resolve all unique source indent numbers
+    const indentNumbersSet = new Set<string>();
+    if (pr.indentId) {
+      const headerIndentNum = indentIdToNumberMap.get(pr.indentId);
+      if (headerIndentNum) {
+        indentNumbersSet.add(headerIndentNum);
+      }
+    }
+
+    pr.lines.forEach((line) => {
+      line.indentLines?.forEach((il) => {
+        if (il.indent?.number) {
+          indentNumbersSet.add(il.indent.number);
+        }
+      });
+    });
+
+    const indentNumbers = Array.from(indentNumbersSet);
+
     return {
       id: pr.id,
       number: pr.number,
@@ -90,6 +129,7 @@ export default async function RequisitionsPage() {
       approvedBy: approver ? (approver.name || approver.email) : null,
       approvedAt: pr.approvedAt ? pr.approvedAt.toISOString() : null,
       remarks: pr.remarks,
+      indentNumbers,
       lines: pr.lines.map((line) => {
         const item = items.find((i) => i.id === line.itemId);
         return {

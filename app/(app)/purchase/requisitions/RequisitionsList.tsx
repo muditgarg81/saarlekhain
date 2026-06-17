@@ -55,6 +55,7 @@ interface PRRecord {
   approvedAt: string | null;
   remarks: string | null;
   lines: PRLine[];
+  indentNumbers?: string[];
 }
 
 interface RFQLine {
@@ -702,10 +703,11 @@ export default function RequisitionsList({
           <>
             {/* Desktop Table View */}
             <div className="overflow-x-auto hidden md:block">
-              <table className="w-full dense-table text-left border-collapse">
+               <table className="w-full dense-table text-left border-collapse">
                 <thead>
                   <tr>
                     <th>PR Number</th>
+                    <th>Source Indent</th>
                     <th className="text-center font-bold">Items Count</th>
                     <th>Date Raised</th>
                     <th>Approved By</th>
@@ -717,7 +719,7 @@ export default function RequisitionsList({
                 <tbody>
                   {filteredPrs.length === 0 ? (
                     <tr>
-                      <td colSpan={7} className="text-center py-8 text-onyx/40 font-medium">
+                      <td colSpan={8} className="text-center py-8 text-onyx/40 font-medium">
                         No purchase requisitions found.
                       </td>
                     </tr>
@@ -725,6 +727,9 @@ export default function RequisitionsList({
                     filteredPrs.map((pr) => (
                       <tr key={pr.id}>
                         <td className="font-mono font-bold text-xs text-onyx/85">{pr.number}</td>
+                        <td className="font-mono text-xs text-onyx/70">
+                          {pr.indentNumbers && pr.indentNumbers.length > 0 ? pr.indentNumbers.join(", ") : "-"}
+                        </td>
                         <td className="text-center font-semibold">{pr.lines.length} items</td>
                         <td suppressHydrationWarning>{new Date(pr.createdAt).toLocaleDateString()}</td>
                         <td>{pr.approvedBy || "-"}</td>
@@ -816,6 +821,12 @@ export default function RequisitionsList({
                       </span>
                     </div>
                     <div className="grid grid-cols-2 gap-y-2 text-xs text-onyx/60">
+                      <div className="col-span-2">
+                        <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Source Indent</span>
+                        <span className="font-mono font-semibold text-onyx/85">
+                          {pr.indentNumbers && pr.indentNumbers.length > 0 ? pr.indentNumbers.join(", ") : "-"}
+                        </span>
+                      </div>
                       <div>
                         <span className="block text-[10px] uppercase tracking-wider text-onyx/40">Items Count</span>
                         <span className="font-semibold text-onyx/85">{pr.lines.length} items</span>
@@ -1801,7 +1812,6 @@ export default function RequisitionsList({
               <X size={20} />
             </button>
 
-            {/* Header */}
             <div className="space-y-2 mt-4 pb-4 border-b border-onyx/5">
               <span className="text-[10px] font-mono font-bold bg-saffron px-2 py-0.5 rounded text-onyx">
                 {selectedPr ? selectedPr.number : selectedRfq!.number}
@@ -1809,8 +1819,13 @@ export default function RequisitionsList({
               <h3 className="font-heading text-xl font-extrabold text-onyx">
                 {selectedPr ? "Purchase Requisition Details" : "Request for Quote Details"}
               </h3>
-              <p className="text-xs text-onyx/50">
-                {selectedPr ? `Status: ${selectedPr.status}` : `Linked PR: ${selectedRfq!.prNumber || "None"}`}
+              <p className="text-xs text-onyx/50 flex flex-col space-y-1">
+                <span>{selectedPr ? `Status: ${selectedPr.status}` : `Linked PR: ${selectedRfq!.prNumber || "None"}`}</span>
+                {selectedPr?.indentNumbers && selectedPr.indentNumbers.length > 0 && (
+                  <span className="font-mono text-onyx/70">
+                    Source Indent(s): {selectedPr.indentNumbers.join(", ")}
+                  </span>
+                )}
               </p>
               {selectedPr && selectedPr.status === "REJECTED" && selectedPr.remarks && (
                 <div className="mt-2 p-2.5 bg-red-50 border-l-4 border-red-500 rounded text-xs text-red-800 font-semibold">

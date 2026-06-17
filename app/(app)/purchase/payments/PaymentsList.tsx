@@ -698,6 +698,10 @@ export default function PaymentsList({
     (req.grnNumber?.toLowerCase() || "").includes(search.toLowerCase())
   );
 
+  const pendingRequestsCount = paymentRequests.filter(
+    (req) => req.status === "PENDING" || req.status === "APPROVED"
+  ).length;
+
   const filteredGrns = pendingGrns.filter(grn => 
     grn.number.toLowerCase().includes(search.toLowerCase()) ||
     grn.vendorName.toLowerCase().includes(search.toLowerCase()) ||
@@ -889,7 +893,7 @@ export default function PaymentsList({
             activeTab === "REQUESTS" ? "border-saffron text-onyx font-extrabold" : "border-transparent hover:text-onyx"
           }`}
         >
-          Payment Requests ({paymentRequests.length})
+          Payment Requests ({pendingRequestsCount})
         </button>
         <button
           onClick={() => {
