@@ -80,6 +80,9 @@ interface PORecord {
   lines: LineItem[];
   amendments: AmendmentRecord[];
   otherCharges: number;
+  rfqNumbers?: string[];
+  prNumbers?: string[];
+  indentNumbers?: string[];
 }
 
 interface Item {
@@ -2067,6 +2070,34 @@ export default function PurchaseOrdersList({
                 <p className="font-bold text-onyx mt-0.5">{selectedPO.shipTo || "N/A"}</p>
               </div>
             </div>
+
+            {((selectedPO.rfqNumbers && selectedPO.rfqNumbers.length > 0) ||
+              (selectedPO.prNumbers && selectedPO.prNumbers.length > 0) ||
+              (selectedPO.indentNumbers && selectedPO.indentNumbers.length > 0)) && (
+              <div className="py-3 px-3.5 bg-saffron/5 border-l-2 border-saffron rounded-r-lg text-xs mt-3 space-y-2 font-sans">
+                <h5 className="font-bold text-onyx/75 uppercase tracking-wider text-[10px]">Reference Audit Trace</h5>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                  {selectedPO.indentNumbers && selectedPO.indentNumbers.length > 0 && (
+                    <div className="col-span-2">
+                      <span className="font-semibold text-onyx/50">Indent Number(s):</span>
+                      <p className="font-mono font-bold text-onyx mt-0.5">{selectedPO.indentNumbers.join(", ")}</p>
+                    </div>
+                  )}
+                  {selectedPO.prNumbers && selectedPO.prNumbers.length > 0 && (
+                    <div>
+                      <span className="font-semibold text-onyx/50">PR Number(s):</span>
+                      <p className="font-mono font-bold text-onyx mt-0.5">{selectedPO.prNumbers.join(", ")}</p>
+                    </div>
+                  )}
+                  {selectedPO.rfqNumbers && selectedPO.rfqNumbers.length > 0 && (
+                    <div>
+                      <span className="font-semibold text-onyx/50">RFQ Number(s):</span>
+                      <p className="font-mono font-bold text-onyx mt-0.5">{selectedPO.rfqNumbers.join(", ")}</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Main Tabs for Details vs Version History */}
             <div className="flex-1 overflow-y-auto py-6 space-y-6">

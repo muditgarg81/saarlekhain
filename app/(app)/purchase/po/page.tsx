@@ -85,6 +85,47 @@ export default async function PurchaseOrdersPage() {
     })
   ]);
 
+  // Get all unique rfqLineIds and prLineIds from all POs to map numbers
+  const allRfqLineIds = Array.from(
+    new Set(pos.flatMap((po) => po.lines.map((l) => l.rfqLineId).filter(Boolean)))
+  ) as string[];
+  const allPrLineIds = Array.from(
+    new Set(pos.flatMap((po) => po.lines.map((l) => l.prLineId).filter(Boolean)))
+  ) as string[];
+
+  const [rfqLines, prLines] = await Promise.all([
+    db.rfqLine.findMany({
+      where: { id: { in: allRfqLineIds } },
+      include: { rfq: true },
+    }),
+    db.prLine.findMany({
+      where: { id: { in: allPrLineIds } },
+      include: {
+        pr: true,
+        indentLines: {
+          include: {
+            indent: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  const rfqLineIdToNumberMap = new Map<string, string>();
+  rfqLines.forEach((rl) => {
+    if (rl.rfq) rfqLineIdToNumberMap.set(rl.id, rl.rfq.number);
+  });
+
+  const prLineIdToNumberMap = new Map<string, string>();
+  const prLineIdToIndentNumbersMap = new Map<string, string[]>();
+  prLines.forEach((pl) => {
+    if (pl.pr) prLineIdToNumberMap.set(pl.id, pl.pr.number);
+    const indentNums = pl.indentLines.map((il) => il.indent?.number).filter(Boolean) as string[];
+    if (indentNums.length > 0) {
+      prLineIdToIndentNumbersMap.set(pl.id, Array.from(new Set(indentNums)));
+    }
+  });
+
   // Merge presets (company overrides override system ones)
   const presetMap = new Map();
   for (const p of rawPresets) {
@@ -116,6 +157,30 @@ export default async function PurchaseOrdersPage() {
   // Map PO database objects to clean serializable props for the client component
   const mappedPOs = pos.map((po) => {
     const approver = users.find((u) => u.id === po.approvedById);
+    
+    const rfqNumbersSet = new Set<string>();
+    const prNumbersSet = new Set<string>();
+    const indentNumbersSet = new Set<string>();
+
+    po.lines.forEach((line) => {
+      if (line.rfqLineId) {
+        const rfqNum = rfqLineIdToNumberMap.get(line.rfqLineId);
+        if (rfqNum) rfqNumbersSet.add(rfqNum);
+      }
+      if (line.prLineId) {
+        const prNum = prLineIdToNumberMap.get(line.prLineId);
+        if (prNum) prNumbersSet.add(prNum);
+
+        const indNums = prLineIdToIndentNumbersMap.get(line.prLineId);
+        if (indNums) {
+          indNums.forEach((num) => indentNumbersSet.add(num));
+        }
+      }
+    });
+
+    const rfqNumbers = Array.from(rfqNumbersSet);
+    const prNumbers = Array.from(prNumbersSet);
+    const indentNumbers = Array.from(indentNumbersSet);
     
     const totalTaxable = po.lines.reduce((sum, line) => {
       return sum + line.qty * line.rate * (1 - line.discount / 100);
@@ -178,6 +243,9 @@ export default async function PurchaseOrdersPage() {
           snapshot: am.snapshot,
         };
       }),
+      rfqNumbers,
+      prNumbers,
+      indentNumbers,
     };
   });
 
