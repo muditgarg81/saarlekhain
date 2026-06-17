@@ -194,30 +194,33 @@ export default async function PaymentsPage() {
     .filter(inv => inv.balanceAmount > 0.01);
 
   // Map payments to clean UI structures
-  const mappedPayments = payments.map((pay) => {
-    const vendor = vendors.find((v) => v.id === pay.vendorId);
-    const invoice = invoices.find((i) => i.id === pay.invoiceId);
-    const user = users.find((u) => u.id === pay.recordedById);
-    const debitNotesAmount = invoice?.poId ? (poToDebitAmountMap.get(invoice.poId) || 0) : 0;
+  const mappedPayments = payments
+    .filter((pay) => !pay.reference?.startsWith("ADVANCE PAY PENDING"))
+    .map((pay) => {
+      const vendor = vendors.find((v) => v.id === pay.vendorId);
+      const invoice = invoices.find((i) => i.id === pay.invoiceId);
+      const user = users.find((u) => u.id === pay.recordedById);
+      const debitNotesAmount = invoice?.poId ? (poToDebitAmountMap.get(invoice.poId) || 0) : 0;
 
-    return {
-      id: pay.id,
-      number: pay.number,
-      vendorId: pay.vendorId,
-      vendorName: vendor?.name || "Unknown Vendor",
-      invoiceId: pay.invoiceId || null,
-      invoiceNo: invoice?.invoiceNo || null,
-      invoiceAmount: invoice?.amount || 0,
-      debitNotesAmount,
-      netAmount: invoice ? (invoice.amount - debitNotesAmount) : pay.amount,
-      amount: pay.amount,
-      paidOn: pay.paidOn.toISOString().split("T")[0],
-      mode: pay.mode,
-      reference: pay.reference,
-      recordedBy: user ? (user.name || user.email) : "Unknown User",
-      createdAt: pay.createdAt.toISOString(),
-    };
-  });
+      return {
+        id: pay.id,
+        number: pay.number,
+        vendorId: pay.vendorId,
+        vendorName: vendor?.name || "Unknown Vendor",
+        invoiceId: pay.invoiceId || null,
+        invoiceNo: invoice?.invoiceNo || null,
+        invoiceAmount: invoice?.amount || 0,
+        debitNotesAmount,
+        netAmount: invoice ? (invoice.amount - debitNotesAmount) : pay.amount,
+        amount: pay.amount,
+        paidOn: pay.paidOn.toISOString().split("T")[0],
+        mode: pay.mode,
+        reference: pay.reference,
+        recordedBy: user ? (user.name || user.email) : "Unknown User",
+        createdAt: pay.createdAt.toISOString(),
+      };
+    });
+
 
   // Map payment requests
   const mappedRequests = paymentRequests.map((req) => {

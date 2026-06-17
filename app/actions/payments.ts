@@ -144,6 +144,21 @@ export async function deletePayment(id: string) {
     if (!original) return { success: false, error: "Payment Voucher not found" };
 
     await db.$transaction(async (tx) => {
+      // Reset any associated payment requests
+      const prq = await tx.paymentRequest.findFirst({
+        where: { paymentVoucherId: id, companyId }
+      });
+      if (prq) {
+        const updatedPrq = await tx.paymentRequest.update({
+          where: { id: prq.id },
+          data: {
+            status: "APPROVED",
+            paymentVoucherId: null
+          }
+        });
+        await logAudit(tx, companyId, actorId, "RESET_PAYMENT_REQUEST_ON_VOUCHER_DELETE", "PaymentRequest", prq.id, prq, updatedPrq);
+      }
+
       await tx.paymentVoucher.delete({
         where: { id }
       });
@@ -175,6 +190,22 @@ export async function bulkDeletePayments(ids: string[]) {
     if (payments.length !== ids.length) return { success: false, error: "Some payment vouchers could not be found" };
 
     await db.$transaction(async (tx) => {
+      // Reset any associated payment requests
+      const prqs = await tx.paymentRequest.findMany({
+        where: { paymentVoucherId: { in: ids }, companyId }
+      });
+
+      for (const prq of prqs) {
+        const updatedPrq = await tx.paymentRequest.update({
+          where: { id: prq.id },
+          data: {
+            status: "APPROVED",
+            paymentVoucherId: null
+          }
+        });
+        await logAudit(tx, companyId, actorId, "RESET_PAYMENT_REQUEST_ON_VOUCHER_DELETE", "PaymentRequest", prq.id, prq, updatedPrq);
+      }
+
       await tx.paymentVoucher.deleteMany({
         where: { id: { in: ids } }
       });
@@ -191,6 +222,7 @@ export async function bulkDeletePayments(ids: string[]) {
     return { success: false, error: err.message || "Failed to bulk delete payment vouchers" };
   }
 }
+
 
 export async function confirmPendingPayment(
   id: string,
