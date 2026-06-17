@@ -134,7 +134,7 @@ const CAPABILITIES: CapabilityNode[] = [
   { key: "po.send", label: "Issue & Send POs", category: "Purchase Module" },
   // Accounts
   { key: "invoice.match", label: "Perform 3-Way Invoice Match", category: "Finance & Accounts" },
-  { key: "payment.record", label: "Record Payments", category: "Finance & Accounts" },
+  { key: "payment.record", label: "Record Supplier Payments", category: "Finance & Accounts" },
   { key: "ledger.view", label: "View Account Ledgers", category: "Finance & Accounts" },
   { key: "erp.writeback.approve", label: "Approve ERP Writebacks", category: "Finance & Accounts" },
   // Reports
