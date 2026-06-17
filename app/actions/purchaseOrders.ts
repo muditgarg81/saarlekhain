@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { getNextSequence } from "@/lib/sequences";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { PoType, PoStatus, PrStatus, IndentStatus, LineStatus, RfqLineStatus, RfqStatus } from "@prisma/client";
+import { PoType, PoStatus, PrStatus, IndentStatus, LineStatus, RfqLineStatus, RfqStatus, PaymentRequestStatus, PaymentRequestType } from "@prisma/client";
 import { resolvePoTerms } from "@/lib/termsResolver";
 
 const poLineSchema = z.object({
@@ -248,7 +248,7 @@ export async function submitForApproval(poId: string) {
 async function getNextSequenceTx(
   tx: any,
   companyId: string,
-  docType: "PAY"
+  docType: "PAY" | "PRQ"
 ): Promise<string> {
   const sequence = await tx.docSequence.upsert({
     where: {
@@ -332,35 +332,34 @@ export async function approvePO(poId: string) {
 
       await logAudit(tx, companyId, actorId, "APPROVE", "PurchaseOrder", poId, po, updated);
 
-      // Check if PO payment terms qualify for automatic advance payment voucher creation
+      // Check if PO payment terms qualify for automatic advance payment request creation
       if (isAdvancePaymentTerm(po.paymentTerms)) {
-        const referenceCode = `ADVANCE PAY PENDING (PO: ${po.number})`;
-        
-        // Prevent duplicate generation by checking if a voucher for this PO already exists
-        const existingPay = await tx.paymentVoucher.findFirst({
+        // Prevent duplicate generation by checking if a request for this PO already exists
+        const existingRequest = await tx.paymentRequest.findFirst({
           where: {
             companyId,
-            vendorId: po.vendorId,
-            reference: referenceCode,
+            poId: poId,
+            type: PaymentRequestType.ADVANCE,
           },
         });
 
-        if (!existingPay) {
-          const number = await getNextSequenceTx(tx, companyId, "PAY");
-          const pay = await tx.paymentVoucher.create({
+        if (!existingRequest) {
+          const number = await getNextSequenceTx(tx, companyId, "PRQ");
+          const prq = await tx.paymentRequest.create({
             data: {
               companyId,
               number,
               vendorId: po.vendorId,
-              invoiceId: null,
+              poId: poId,
+              grnId: null,
+              type: PaymentRequestType.ADVANCE,
               amount: totalVal,
-              paidOn: new Date(),
-              mode: "ADVANCE",
-              reference: referenceCode,
+              remarks: `Automatic advance request from PO ${po.number}`,
+              status: PaymentRequestStatus.PENDING,
               recordedById: actorId,
             },
           });
-          await logAudit(tx, companyId, actorId, "RECORD_PAYMENT", "PaymentVoucher", pay.id, null, pay);
+          await logAudit(tx, companyId, actorId, "CREATE_PAYMENT_REQUEST", "PaymentRequest", prq.id, null, prq);
         }
       }
 
