@@ -1090,7 +1090,7 @@ export default function PurchaseOrdersList({
                       </td>
                       <td className="text-center">
                         <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                          getPoDisplayStatus(po) === "OVERDUE" ? "bg-red-100 text-red-800" :
+                          getPoDisplayStatus(po) === "OVERDUE" ? "bg-yellow-100 text-yellow-800" :
                           po.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
                           po.status === "PENDING_APPROVAL" ? "bg-yellow-100 text-yellow-800 animate-pulse" :
                           po.status === "APPROVED" ? "bg-green-100 text-green-800" :
@@ -1205,7 +1205,7 @@ export default function PurchaseOrdersList({
                     </span>
                   </div>
                   <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                    getPoDisplayStatus(po) === "OVERDUE" ? "bg-red-100 text-red-800" :
+                    getPoDisplayStatus(po) === "OVERDUE" ? "bg-yellow-100 text-yellow-800" :
                     po.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
                     po.status === "PENDING_APPROVAL" ? "bg-yellow-100 text-yellow-800 animate-pulse" :
                     po.status === "APPROVED" ? "bg-green-100 text-green-800" :
