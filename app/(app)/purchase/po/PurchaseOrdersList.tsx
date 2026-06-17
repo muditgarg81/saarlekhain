@@ -1020,7 +1020,7 @@ export default function PurchaseOrdersList({
                 <th>Type</th>
                 <th>Order Date</th>
                 <th>Landed Value</th>
-                <th>Version</th>
+                <th>Source RFQ</th>
                 <th className="text-center">Status</th>
                 <th className="text-center">Actions</th>
               </tr>
@@ -1056,7 +1056,9 @@ export default function PurchaseOrdersList({
                       <td>{po.type}</td>
                       <td suppressHydrationWarning>{new Date(po.orderDate).toLocaleDateString()}</td>
                       <td className="font-mono font-bold">₹{po.totalValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                      <td className="font-semibold font-mono text-center">v{po.version}</td>
+                      <td className="font-mono text-xs text-onyx/70">
+                        {po.rfqNumbers && po.rfqNumbers.length > 0 ? po.rfqNumbers.join(", ") : "-"}
+                      </td>
                       <td className="text-center">
                         <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
                           po.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
@@ -1205,6 +1207,12 @@ export default function PurchaseOrdersList({
                       <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Order Date</span>
                       <span className="font-semibold text-onyx" suppressHydrationWarning>
                         {new Date(po.orderDate).toLocaleDateString()}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Source RFQ</span>
+                      <span className="font-mono font-semibold text-onyx/85">
+                        {po.rfqNumbers && po.rfqNumbers.length > 0 ? po.rfqNumbers.join(", ") : "-"}
                       </span>
                     </div>
                   </div>
