@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { 
   recordPayment, 
   updatePayment, 
@@ -35,7 +35,8 @@ import {
   CheckSquare,
   Square,
   Check,
-  FileText
+  FileText,
+  MoreVertical
 } from "lucide-react";
 
 interface PaymentRecord {
@@ -178,7 +179,7 @@ export default function PaymentsList({
   // Confirm Payment modal state
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [confirmTarget, setConfirmTarget] = useState<{
-    type: "REQUEST" | "PENDING_VOUCHER";
+    type: "REQUEST" | "PENDING_VOUCHER" | "GRN_DIRECT";
     id: string;
     amount: number;
     vendorName: string;
@@ -212,6 +213,26 @@ export default function PaymentsList({
 
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [activeDropdownId, setActiveDropdownId] = useState<string | null>(null);
+
+  // Close dropdown on click outside
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest(".dropdown-action")) {
+        setActiveDropdownId(null);
+      }
+    };
+    document.addEventListener("click", handleOutsideClick);
+    return () => {
+      document.removeEventListener("click", handleOutsideClick);
+    };
+  }, []);
+
+  // Close dropdown when active tab changes
+  useEffect(() => {
+    setActiveDropdownId(null);
+  }, [activeTab]);
 
   const filteredInvoices = invoices.filter(inv => inv.vendorId === newPayment.vendorId);
   
@@ -476,7 +497,7 @@ export default function PaymentsList({
   };
 
   const handleConfirmOpen = (target: {
-    type: "REQUEST" | "PENDING_VOUCHER";
+    type: "REQUEST" | "PENDING_VOUCHER" | "GRN_DIRECT";
     id: string;
     amount: number;
     vendorName: string;
@@ -503,6 +524,21 @@ export default function PaymentsList({
     let res;
     if (confirmTarget.type === "REQUEST") {
       res = await confirmPaymentRequest(confirmTarget.id, confirmForm);
+    } else if (confirmTarget.type === "GRN_DIRECT") {
+      const grn = pendingGrns.find(g => g.id === confirmTarget.id);
+      if (!grn) {
+        setActionLoading(false);
+        setErrorMsg("GRN not found");
+        return;
+      }
+      res = await recordPayment({
+        vendorId: grn.vendorId,
+        invoiceId: null,
+        amount: confirmTarget.amount,
+        paidOn: confirmForm.paidOn,
+        mode: confirmForm.mode,
+        reference: `${confirmForm.reference} (GRN: ${grn.number})`,
+      });
     } else {
       res = await confirmPendingPayment(confirmTarget.id, confirmForm);
     }
@@ -918,7 +954,7 @@ export default function PaymentsList({
                     <th>Txn/Chq Ref</th>
                     <th>Amount</th>
                     <th>Paid On</th>
-                    <th className="text-center w-36">Actions</th>
+                    <th className="text-center w-20">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1007,55 +1043,83 @@ export default function PaymentsList({
                           </td>
                           <td className="font-mono font-bold">₹{pay.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
                           <td suppressHydrationWarning>{new Date(pay.paidOn).toLocaleDateString()}</td>
-                          <td className="text-center space-x-1">
-                            <button
-                              onClick={() => {
-                                setSelectedPayment(pay);
-                                setIsDetailOpen(true);
-                              }}
-                              title="View Details"
-                              className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
-                            >
-                              <Eye size={13} />
-                            </button>
-                            {isPending && (
+                          <td className="text-center">
+                            <div className="relative inline-block text-left dropdown-action">
                               <button
-                                onClick={() => handleConfirmOpen({
-                                  type: "PENDING_VOUCHER",
-                                  id: pay.id,
-                                  amount: pay.amount,
-                                  vendorName: pay.vendorName
-                                })}
-                                title="Confirm Payment Details"
-                                className="p-1 hover:bg-green-50 border border-transparent hover:border-green-150 rounded text-green-600 hover:text-green-700 cursor-pointer inline-flex"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveDropdownId(activeDropdownId === pay.id ? null : pay.id);
+                                }}
+                                className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                                title="Actions"
                               >
-                                <Check size={13} />
+                                <MoreVertical size={14} />
                               </button>
-                            )}
-                            <button
-                              onClick={() => handleEditOpen(pay)}
-                              title="Edit Voucher"
-                              className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
-                            >
-                              <Edit size={13} />
-                            </button>
-                            <button
-                              onClick={() => {
-                                setSelectedPayment(pay);
-                                setIsPrintModalOpen(true);
-                              }}
-                              title="Print Voucher"
-                              className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
-                            >
-                              <Printer size={13} />
-                            </button>
-                            <button
-                              onClick={() => handleDelete(pay.id)}
-                              title="Delete Voucher"
-                              className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-red-600 hover:text-red-800 cursor-pointer inline-flex"
-                            >
-                              <Trash2 size={13} />
-                            </button>
+                              {activeDropdownId === pay.id && (
+                                <div className="absolute right-0 mt-1 w-44 bg-white border border-onyx/10 rounded-lg shadow-xl z-50 py-1 font-sans text-xs text-left">
+                                  <button
+                                    onClick={() => {
+                                      setSelectedPayment(pay);
+                                      setIsDetailOpen(true);
+                                      setActiveDropdownId(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 hover:bg-cream-dark text-onyx flex items-center space-x-2 transition-colors duration-150"
+                                  >
+                                    <Eye size={13} className="text-onyx/60" />
+                                    <span>View Details</span>
+                                  </button>
+                                  {isPending && (
+                                    <button
+                                      onClick={() => {
+                                        handleConfirmOpen({
+                                          type: "PENDING_VOUCHER",
+                                          id: pay.id,
+                                          amount: pay.amount,
+                                          vendorName: pay.vendorName
+                                        });
+                                        setActiveDropdownId(null);
+                                      }}
+                                      className="w-full text-left px-4 py-2 hover:bg-green-50 text-green-600 flex items-center space-x-2 transition-colors duration-150 font-semibold"
+                                    >
+                                      <Check size={13} />
+                                      <span>Confirm Pay</span>
+                                    </button>
+                                  )}
+                                  <button
+                                    onClick={() => {
+                                      handleEditOpen(pay);
+                                      setActiveDropdownId(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 hover:bg-cream-dark text-onyx flex items-center space-x-2 transition-colors duration-150"
+                                  >
+                                    <Edit size={13} className="text-onyx/60" />
+                                    <span>Edit Voucher</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      setSelectedPayment(pay);
+                                      setIsPrintModalOpen(true);
+                                      setActiveDropdownId(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 hover:bg-cream-dark text-onyx flex items-center space-x-2 transition-colors duration-150"
+                                  >
+                                    <Printer size={13} className="text-onyx/60" />
+                                    <span>Print Voucher</span>
+                                  </button>
+                                  <div className="border-t border-onyx/5 my-1" />
+                                  <button
+                                    onClick={() => {
+                                      handleDelete(pay.id);
+                                      setActiveDropdownId(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-650 flex items-center space-x-2 transition-colors duration-150"
+                                  >
+                                    <Trash2 size={13} />
+                                    <span>Delete Voucher</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1249,7 +1313,7 @@ export default function PaymentsList({
                     <th>Status</th>
                     <th>Remarks</th>
                     <th>Recorded By</th>
-                    <th className="text-center w-36">Actions</th>
+                    <th className="text-center w-20">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1307,68 +1371,103 @@ export default function PaymentsList({
                           </td>
                           <td className="text-onyx/60 truncate max-w-xs" title={req.remarks || ""}>{req.remarks || "-"}</td>
                           <td>{req.recordedBy}</td>
-                          <td className="text-center space-x-1">
-                            {isPending && (
-                              <>
+                          <td className="text-center">
+                            {!isPaid ? (
+                              <div className="relative inline-block text-left dropdown-action">
                                 <button
-                                  onClick={() => handleEditReqOpen(req)}
-                                  title="Edit Request"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setActiveDropdownId(activeDropdownId === req.id ? null : req.id);
+                                  }}
                                   className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                                  title="Actions"
                                 >
-                                  <Edit size={13} />
+                                  <MoreVertical size={14} />
                                 </button>
-                                <button
-                                  onClick={() => handleDeleteRequest(req.id)}
-                                  title="Delete Request"
-                                  className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-red-600 hover:text-red-800 cursor-pointer inline-flex"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                                {canApprove && (
-                                  <>
-                                    <button
-                                      onClick={() => handleReviewRequest(req.id, "APPROVED")}
-                                      title="Approve Request"
-                                      className="p-1 hover:bg-green-50 border border-transparent hover:border-green-100 rounded text-green-600 hover:text-green-700 cursor-pointer inline-flex"
-                                    >
-                                      <CheckCircle size={13} />
-                                    </button>
-                                    <button
-                                      onClick={() => handleReviewRequest(req.id, "REJECTED")}
-                                      title="Reject Request"
-                                      className="p-1 hover:bg-red-50 border border-transparent hover:border-red-100 rounded text-red-500 hover:text-red-700 cursor-pointer inline-flex"
-                                    >
-                                      <X size={13} />
-                                    </button>
-                                  </>
+                                {activeDropdownId === req.id && (
+                                  <div className="absolute right-0 mt-1 w-44 bg-white border border-onyx/10 rounded-lg shadow-xl z-50 py-1 font-sans text-xs text-left">
+                                    {isPending && (
+                                      <>
+                                        <button
+                                          onClick={() => {
+                                            handleEditReqOpen(req);
+                                            setActiveDropdownId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 hover:bg-cream-dark text-onyx flex items-center space-x-2 transition-colors duration-150"
+                                        >
+                                          <Edit size={13} className="text-onyx/60" />
+                                          <span>Edit Request</span>
+                                        </button>
+                                        {canApprove && (
+                                          <>
+                                            <button
+                                              onClick={() => {
+                                                handleReviewRequest(req.id, "APPROVED");
+                                                setActiveDropdownId(null);
+                                              }}
+                                              className="w-full text-left px-4 py-2 hover:bg-green-50 text-green-600 flex items-center space-x-2 transition-colors duration-150 font-semibold"
+                                            >
+                                              <CheckCircle size={13} />
+                                              <span>Approve Request</span>
+                                            </button>
+                                            <button
+                                              onClick={() => {
+                                                handleReviewRequest(req.id, "REJECTED");
+                                                setActiveDropdownId(null);
+                                              }}
+                                              className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-500 flex items-center space-x-2 transition-colors duration-150"
+                                            >
+                                              <X size={13} />
+                                              <span>Reject Request</span>
+                                            </button>
+                                          </>
+                                        )}
+                                        <div className="border-t border-onyx/5 my-1" />
+                                        <button
+                                          onClick={() => {
+                                            handleDeleteRequest(req.id);
+                                            setActiveDropdownId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-655 flex items-center space-x-2 transition-colors duration-150"
+                                        >
+                                          <Trash2 size={13} />
+                                          <span>Delete Request</span>
+                                        </button>
+                                      </>
+                                    )}
+                                    {isApproved && (
+                                      <button
+                                        onClick={() => {
+                                          handleConfirmOpen({
+                                            type: "REQUEST",
+                                            id: req.id,
+                                            amount: req.amount,
+                                            vendorName: req.vendorName
+                                          });
+                                          setActiveDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 hover:bg-green-50 text-green-600 flex items-center space-x-2 transition-colors duration-150 font-semibold"
+                                      >
+                                        <CreditCard size={13} />
+                                        <span>Confirm Pay</span>
+                                      </button>
+                                    )}
+                                    {isRejected && (
+                                      <button
+                                        onClick={() => {
+                                          handleDeleteRequest(req.id);
+                                          setActiveDropdownId(null);
+                                        }}
+                                        className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-655 flex items-center space-x-2 transition-colors duration-150"
+                                      >
+                                        <Trash2 size={13} />
+                                        <span>Delete Request</span>
+                                      </button>
+                                    )}
+                                  </div>
                                 )}
-                              </>
-                            )}
-                            {isApproved && (
-                              <button
-                                onClick={() => handleConfirmOpen({
-                                  type: "REQUEST",
-                                  id: req.id,
-                                  amount: req.amount,
-                                  vendorName: req.vendorName
-                                })}
-                                title="Confirm Payment & Log Voucher"
-                                className="px-2 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-bold shadow-sm transition inline-flex items-center space-x-1 cursor-pointer"
-                              >
-                                <CreditCard size={10} />
-                                <span>Confirm Pay</span>
-                              </button>
-                            )}
-                            {isRejected && (
-                              <button
-                                onClick={() => handleDeleteRequest(req.id)}
-                                title="Delete Request"
-                                className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-red-600 hover:text-red-800 cursor-pointer inline-flex"
-                              >
-                                <Trash2 size={13} />
-                              </button>
-                            )}
-                            {isPaid && (
+                              </div>
+                            ) : (
                               <span className="text-[10px] text-zinc-400 font-semibold italic">Disbursed</span>
                             )}
                           </td>
@@ -1553,7 +1652,7 @@ export default function PaymentsList({
                     <th>Posted On</th>
                     <th>Due Date</th>
                     <th>Payment Status</th>
-                    <th className="text-center w-48">Actions</th>
+                    <th className="text-center w-20">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1610,37 +1709,57 @@ export default function PaymentsList({
                               </span>
                             )}
                           </td>
-                          <td className="text-center space-x-2">
-                            <button
-                              onClick={() => {
-                                setErrorMsg(null);
-                                setNewRequest({
-                                  vendorId: grn.vendorId,
-                                  poId: grn.poId,
-                                  grnId: grn.id,
-                                  type: "AGAINST_BILL",
-                                  amount: grn.amount,
-                                  remarks: `Payment request against GRN ${grn.number}`
-                                });
-                                setIsReqOpen(true);
-                              }}
-                              className="px-2.5 py-1 border border-onyx/10 hover:bg-cream-dark text-[10px] font-bold rounded shadow-sm inline-flex items-center space-x-1 cursor-pointer"
-                            >
-                              <Plus size={10} />
-                              <span>Raise Request</span>
-                            </button>
-                            <button
-                              onClick={() => handleConfirmOpen({
-                                type: "PENDING_VOUCHER", // confirms directly creating a payment voucher for it
-                                id: grn.id, // we will generate a payment voucher directly
-                                amount: grn.amount,
-                                vendorName: grn.vendorName
-                              })}
-                              className="px-2.5 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-[10px] font-bold shadow-sm inline-flex items-center space-x-1 cursor-pointer"
-                            >
-                              <Check size={10} />
-                              <span>Confirm Pay</span>
-                            </button>
+                          <td className="text-center">
+                            <div className="relative inline-block text-left dropdown-action">
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setActiveDropdownId(activeDropdownId === grn.id ? null : grn.id);
+                                }}
+                                className="p-1 hover:bg-cream-dark border border-transparent hover:border-onyx/5 rounded text-onyx/65 hover:text-onyx cursor-pointer inline-flex"
+                                title="Actions"
+                              >
+                                <MoreVertical size={14} />
+                              </button>
+                              {activeDropdownId === grn.id && (
+                                <div className="absolute right-0 mt-1 w-44 bg-white border border-onyx/10 rounded-lg shadow-xl z-50 py-1 font-sans text-xs text-left">
+                                  <button
+                                    onClick={() => {
+                                      setErrorMsg(null);
+                                      setNewRequest({
+                                        vendorId: grn.vendorId,
+                                        poId: grn.poId,
+                                        grnId: grn.id,
+                                        type: "AGAINST_BILL",
+                                        amount: grn.amount,
+                                        remarks: `Payment request against GRN ${grn.number}`
+                                      });
+                                      setIsReqOpen(true);
+                                      setActiveDropdownId(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 hover:bg-cream-dark text-onyx flex items-center space-x-2 transition-colors duration-150"
+                                  >
+                                    <Plus size={13} className="text-onyx/60" />
+                                    <span>Raise Request</span>
+                                  </button>
+                                  <button
+                                    onClick={() => {
+                                      handleConfirmOpen({
+                                        type: "GRN_DIRECT",
+                                        id: grn.id,
+                                        amount: grn.amount,
+                                        vendorName: grn.vendorName
+                                      });
+                                      setActiveDropdownId(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 hover:bg-green-50 text-green-600 flex items-center space-x-2 transition-colors duration-150 font-semibold"
+                                  >
+                                    <Check size={13} />
+                                    <span>Confirm Pay</span>
+                                  </button>
+                                </div>
+                              )}
+                            </div>
                           </td>
                         </tr>
                       );
@@ -1748,7 +1867,7 @@ export default function PaymentsList({
                       </button>
                       <button
                         onClick={() => handleConfirmOpen({
-                          type: "PENDING_VOUCHER",
+                          type: "GRN_DIRECT",
                           id: grn.id,
                           amount: grn.amount,
                           vendorName: grn.vendorName

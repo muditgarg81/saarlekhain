@@ -238,11 +238,14 @@ export async function confirmPaymentRequest(
 
     const result = await db.$transaction(async (tx) => {
       // 1. Create Payment Voucher
-      const referenceText = original.po 
-        ? `${data.reference} (PO: ${original.po.number})`
-        : original.grn 
-          ? `${data.reference} (GRN: ${original.grn.number})`
-          : data.reference;
+      let referenceText = data.reference;
+      if (original.po && original.grn) {
+        referenceText = `${data.reference} (PO: ${original.po.number}) (GRN: ${original.grn.number})`;
+      } else if (original.po) {
+        referenceText = `${data.reference} (PO: ${original.po.number})`;
+      } else if (original.grn) {
+        referenceText = `${data.reference} (GRN: ${original.grn.number})`;
+      }
 
       const pay = await tx.paymentVoucher.create({
         data: {

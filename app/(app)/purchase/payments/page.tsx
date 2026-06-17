@@ -305,9 +305,16 @@ export default async function PaymentsPage() {
     });
 
     // Calculate total paid against this GRN (summing voucher references or paid requests)
-    const paidAmount = payments
-      .filter((pv) => pv.reference?.includes(grn.number))
-      .reduce((sum, pv) => sum + pv.amount, 0);
+    const grnPaidRequestVoucherIds = paymentRequests
+      .filter((pr) => pr.grnId === grn.id && pr.status === "PAID" && pr.paymentVoucherId)
+      .map((pr) => pr.paymentVoucherId);
+
+    const grnVouchers = payments.filter((pv) => 
+      grnPaidRequestVoucherIds.includes(pv.id) || 
+      (pv.reference && pv.reference.includes(grn.number))
+    );
+
+    const paidAmount = grnVouchers.reduce((sum, pv) => sum + pv.amount, 0);
 
     const balanceAmount = grnValue - paidAmount;
 
