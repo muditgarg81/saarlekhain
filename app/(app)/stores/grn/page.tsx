@@ -12,16 +12,23 @@ export default async function GrnPage() {
   const companyId = (session.user as any).companyId || "demo-company-id";
 
   // Fetch GRNs, POs, Items, Stores, and Vendors concurrently
-  const [grns, purchaseOrders, items, stores, vendors] = await Promise.all([
-    db.grn.findMany({
-      where: { companyId, deletedAt: null },
-      include: { lines: true },
-      orderBy: { createdAt: "desc" }
-    }),
+  const grns = await db.grn.findMany({
+    where: { companyId, deletedAt: null },
+    include: { lines: true },
+    orderBy: { createdAt: "desc" }
+  });
+
+  const poIdsFromGrns = grns.map(g => g.poId).filter(Boolean) as string[];
+
+  // Fetch POs, Items, Stores, and Vendors concurrently
+  const [purchaseOrders, items, stores, vendors] = await Promise.all([
     db.purchaseOrder.findMany({
       where: { 
         companyId, 
-        status: { in: ["APPROVED", "SENT", "PARTIALLY_RECEIVED"] } 
+        OR: [
+          { status: { in: ["APPROVED", "SENT", "PARTIALLY_RECEIVED"] } },
+          { id: { in: poIdsFromGrns } }
+        ]
       },
       include: { 
         lines: true,
@@ -110,6 +117,7 @@ export default async function GrnPage() {
     poNumber: po.number,
     vendorId: po.vendorId,
     vendorName: po.vendor.name,
+    status: po.status,
     lines: po.lines.map(l => {
       const item = items.find(i => i.id === l.itemId);
       return {

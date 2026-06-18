@@ -69,6 +69,7 @@ interface POItem {
   poNumber: string;
   vendorId: string;
   vendorName: string;
+  status: string;
   lines: Array<{
     id: string;
     itemId: string;
@@ -130,6 +131,7 @@ export default function GrnList({
     number: string;
     source: string;
     poId: string;
+    poNumber?: string | null;
     vendorId: string;
     storeId: string;
     dcNo: string;
@@ -523,6 +525,7 @@ export default function GrnList({
       number: grn.number,
       source: grn.source,
       poId: grn.poId || "",
+      poNumber: grn.poNumber,
       vendorId: grn.vendorId || "",
       storeId: grn.storeId || "",
       dcNo: grn.dcNo || "",
@@ -996,9 +999,11 @@ export default function GrnList({
                       required
                     >
                       <option value="">Select Active PO</option>
-                      {purchaseOrders.map(po => (
-                        <option key={po.id} value={po.id}>{po.poNumber} — {po.vendorName}</option>
-                      ))}
+                      {purchaseOrders
+                        .filter(po => ["APPROVED", "SENT", "PARTIALLY_RECEIVED"].includes(po.status))
+                        .map(po => (
+                          <option key={po.id} value={po.id}>{po.poNumber} — {po.vendorName}</option>
+                        ))}
                     </select>
                   </div>
                 ) : (
@@ -1399,7 +1404,7 @@ export default function GrnList({
                     disabled
                     value={
                       editGrnForm.source === "AGAINST_PO"
-                        ? purchaseOrders.find(p => p.id === editGrnForm.poId)?.poNumber || editGrnForm.poId
+                        ? editGrnForm.poNumber || purchaseOrders.find(p => p.id === editGrnForm.poId)?.poNumber || editGrnForm.poId
                         : vendors.find(v => v.id === editGrnForm.vendorId)?.name || editGrnForm.vendorId
                     }
                     className="w-full text-xs p-2 bg-cream-dark/20 border border-onyx/10 rounded-lg text-onyx/50"
