@@ -20,6 +20,7 @@ import {
   updatePaymentRequestStatus
 } from "@/app/actions/paymentRequests";
 import { limitYearTo4Digits } from "@/lib/date";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { 
   Search, 
   Plus, 
@@ -2066,17 +2067,12 @@ export default function PaymentsList({
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                   Supplier *
                 </label>
-                <select
+                <SearchableSelect
+                  options={vendors.map(v => ({ value: v.id, label: v.name }))}
                   value={newPayment.vendorId}
-                  onChange={(e) => handleVendorChange(e.target.value)}
-                  className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
-                  required
-                >
-                  <option value="">Select Vendor</option>
-                  {vendors.map(v => (
-                    <option key={v.id} value={v.id}>{v.name}</option>
-                  ))}
-                </select>
+                  onChange={(val) => handleVendorChange(val)}
+                  placeholder="Select Vendor"
+                />
               </div>
 
               {/* Invoice Selector */}
@@ -2255,17 +2251,12 @@ export default function PaymentsList({
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                   Supplier *
                 </label>
-                <select
+                <SearchableSelect
+                  options={vendors.map(v => ({ value: v.id, label: v.name }))}
                   value={editPayment.vendorId}
-                  onChange={(e) => handleEditVendorChange(e.target.value)}
-                  className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
-                  required
-                >
-                  <option value="">Select Vendor</option>
-                  {vendors.map(v => (
-                    <option key={v.id} value={v.id}>{v.name}</option>
-                  ))}
-                </select>
+                  onChange={(val) => handleEditVendorChange(val)}
+                  placeholder="Select Vendor"
+                />
               </div>
 
               {/* Invoice Selector */}
@@ -2880,25 +2871,20 @@ export default function PaymentsList({
               {/* Vendor Selector */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Select Supplier *</label>
-                <select
+                <SearchableSelect
+                  options={vendors.map(v => ({ value: v.id, label: `${v.name} (${v.code})` }))}
                   value={newRequest.vendorId}
-                  onChange={(e) => {
+                  onChange={(val) => {
                     setNewRequest(prev => ({
                       ...prev,
-                      vendorId: e.target.value,
+                      vendorId: val,
                       poId: "",
                       grnId: "",
                       amount: 0
                     }));
                   }}
-                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
-                  required
-                >
-                  <option value="">-- Choose Supplier --</option>
-                  {vendors.map(v => (
-                    <option key={v.id} value={v.id}>{v.name} ({v.code})</option>
-                  ))}
-                </select>
+                  placeholder="-- Choose Supplier --"
+                />
               </div>
 
               {/* Payment Type */}
@@ -3046,25 +3032,20 @@ export default function PaymentsList({
               {/* Vendor Selector */}
               <div>
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Supplier *</label>
-                <select
+                <SearchableSelect
+                  options={vendors.map(v => ({ value: v.id, label: `${v.name} (${v.code})` }))}
                   value={editRequest.vendorId}
-                  onChange={(e) => {
+                  onChange={(val) => {
                     setEditRequest(prev => ({
                       ...prev,
-                      vendorId: e.target.value,
+                      vendorId: val,
                       poId: "",
                       grnId: "",
                       amount: 0
                     }));
                   }}
-                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
-                  required
-                >
-                  <option value="">-- Choose Supplier --</option>
-                  {vendors.map(v => (
-                    <option key={v.id} value={v.id}>{v.name} ({v.code})</option>
-                  ))}
-                </select>
+                  placeholder="-- Choose Supplier --"
+                />
               </div>
 
               {/* Payment Type */}
