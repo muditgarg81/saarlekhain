@@ -103,11 +103,16 @@ export async function updatePaymentRequest(
     });
 
     if (!original) return { success: false, error: "Payment Request not found" };
-    if (original.status !== PaymentRequestStatus.PENDING) {
-      return { success: false, error: "Only pending requests can be modified" };
+    if (original.status === PaymentRequestStatus.PAID) {
+      return { success: false, error: "Cannot modify a disbursed (PAID) request" };
     }
 
     const result = await db.$transaction(async (tx) => {
+      // If it was APPROVED or REJECTED, reset status back to PENDING since details have changed
+      const updatedStatus = original.status !== PaymentRequestStatus.PENDING 
+        ? PaymentRequestStatus.PENDING 
+        : original.status;
+
       const prq = await tx.paymentRequest.update({
         where: { id },
         data: {
@@ -117,6 +122,9 @@ export async function updatePaymentRequest(
           type: data.type,
           amount: data.amount,
           remarks: data.remarks || null,
+          status: updatedStatus,
+          approvedById: updatedStatus === PaymentRequestStatus.PENDING ? null : original.approvedById,
+          approvedAt: updatedStatus === PaymentRequestStatus.PENDING ? null : original.approvedAt,
         }
       });
 
@@ -147,8 +155,8 @@ export async function deletePaymentRequest(id: string) {
     });
 
     if (!original) return { success: false, error: "Payment Request not found" };
-    if (original.status !== PaymentRequestStatus.PENDING && original.status !== PaymentRequestStatus.REJECTED) {
-      return { success: false, error: "Cannot delete approved or paid requests" };
+    if (original.status === PaymentRequestStatus.PAID) {
+      return { success: false, error: "Cannot delete a disbursed (PAID) request" };
     }
 
     await db.$transaction(async (tx) => {

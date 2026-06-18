@@ -143,6 +143,7 @@ export default function PaymentsList({
 }: PaymentsListProps) {
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"VOUCHERS" | "REQUESTS" | "DUE_GRNS">("VOUCHERS");
+  const [statusFilter, setStatusFilter] = useState<string>("ALL");
 
   // Modals & States
   const [isOpen, setIsOpen] = useState(false);
@@ -729,13 +730,18 @@ export default function PaymentsList({
     (pay.reference?.toLowerCase() || "").includes(search.toLowerCase())
   );
 
-  const filteredRequests = paymentRequests.filter(req => 
-    req.number.toLowerCase().includes(search.toLowerCase()) ||
-    req.vendorName.toLowerCase().includes(search.toLowerCase()) ||
-    (req.remarks?.toLowerCase() || "").includes(search.toLowerCase()) ||
-    (req.poNumber?.toLowerCase() || "").includes(search.toLowerCase()) ||
-    (req.grnNumber?.toLowerCase() || "").includes(search.toLowerCase())
-  );
+  const filteredRequests = paymentRequests.filter(req => {
+    const matchesSearch = 
+      req.number.toLowerCase().includes(search.toLowerCase()) ||
+      req.vendorName.toLowerCase().includes(search.toLowerCase()) ||
+      (req.remarks?.toLowerCase() || "").includes(search.toLowerCase()) ||
+      (req.poNumber?.toLowerCase() || "").includes(search.toLowerCase()) ||
+      (req.grnNumber?.toLowerCase() || "").includes(search.toLowerCase());
+
+    const matchesStatus = statusFilter === "ALL" || req.status === statusFilter;
+
+    return matchesSearch && matchesStatus;
+  });
 
   const pendingRequestsCount = paymentRequests.filter(
     (req) => req.status === "PENDING" || req.status === "APPROVED"
@@ -949,23 +955,40 @@ export default function PaymentsList({
 
       {/* Filter and Search */}
       <div className="glass-card p-4 rounded-xl border border-onyx/5">
-        <div className="relative w-full">
-          <span className="absolute inset-y-0 left-3 flex items-center text-onyx/40">
-            <Search size={15} />
-          </span>
-          <input
-            type="text"
-            placeholder={
-              activeTab === "VOUCHERS"
-                ? "Search by voucher number, supplier, reference..."
-                : activeTab === "REQUESTS"
-                ? "Search by request number, supplier, PO/GRN, remarks..."
-                : "Search by GRN number, supplier, PO..."
-            }
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="w-full text-xs pl-9 pr-4 py-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron transition-all duration-200"
-          />
+        <div className="flex flex-col md:flex-row gap-3 items-center w-full">
+          <div className="relative flex-1 w-full">
+            <span className="absolute inset-y-0 left-3 flex items-center text-onyx/40">
+              <Search size={15} />
+            </span>
+            <input
+              type="text"
+              placeholder={
+                activeTab === "VOUCHERS"
+                  ? "Search by voucher number, supplier, reference..."
+                  : activeTab === "REQUESTS"
+                  ? "Search by request number, supplier, PO/GRN, remarks..."
+                  : "Search by GRN number, supplier, PO..."
+              }
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full text-xs pl-9 pr-4 py-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron transition-all duration-200"
+            />
+          </div>
+          {activeTab === "REQUESTS" && (
+            <div className="w-full md:w-48">
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-semibold text-onyx cursor-pointer"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="PENDING">Pending</option>
+                <option value="APPROVED">Approved</option>
+                <option value="REJECTED">Rejected</option>
+                <option value="PAID">Paid / Disbursed</option>
+              </select>
+            </div>
+          )}
         </div>
       </div>
 
@@ -1429,6 +1452,7 @@ export default function PaymentsList({
                                 </button>
                                 {activeDropdownId === req.id && (
                                   <div className="absolute right-0 mt-1 w-44 bg-white border border-onyx/10 rounded-lg shadow-xl z-50 py-1 font-sans text-xs text-left">
+                                    {/* 1. Status Update / Approval Actions */}
                                     {canApprove && (
                                       <>
                                         <button
@@ -1441,22 +1465,7 @@ export default function PaymentsList({
                                           <Sliders size={13} className="text-onyx/60" />
                                           <span>Edit Status / Remarks</span>
                                         </button>
-                                        <div className="border-t border-onyx/5 my-1" />
-                                      </>
-                                    )}
-                                    {isPending && (
-                                      <>
-                                        <button
-                                          onClick={() => {
-                                            handleEditReqOpen(req);
-                                            setActiveDropdownId(null);
-                                          }}
-                                          className="w-full text-left px-4 py-2 hover:bg-cream-dark text-onyx flex items-center space-x-2 transition-colors duration-150"
-                                        >
-                                          <Edit size={13} className="text-onyx/60" />
-                                          <span>Edit Request</span>
-                                        </button>
-                                        {canApprove && (
+                                        {isPending && (
                                           <>
                                             <button
                                               onClick={() => {
@@ -1481,47 +1490,52 @@ export default function PaymentsList({
                                           </>
                                         )}
                                         <div className="border-t border-onyx/5 my-1" />
-                                        <button
-                                          onClick={() => {
-                                            handleDeleteRequest(req.id);
-                                            setActiveDropdownId(null);
-                                          }}
-                                          className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-655 flex items-center space-x-2 transition-colors duration-150"
-                                        >
-                                          <Trash2 size={13} />
-                                          <span>Delete Request</span>
-                                        </button>
                                       </>
                                     )}
+
+                                    {/* 2. Confirm Payment for Approved Request */}
                                     {isApproved && (
-                                      <button
-                                        onClick={() => {
-                                          handleConfirmOpen({
-                                            type: "REQUEST",
-                                            id: req.id,
-                                            amount: req.amount,
-                                            vendorName: req.vendorName
-                                          });
-                                          setActiveDropdownId(null);
-                                        }}
-                                        className="w-full text-left px-4 py-2 hover:bg-green-50 text-green-600 flex items-center space-x-2 transition-colors duration-150 font-semibold"
-                                      >
-                                        <CreditCard size={13} />
-                                        <span>Confirm Pay</span>
-                                      </button>
+                                      <>
+                                        <button
+                                          onClick={() => {
+                                            handleConfirmOpen({
+                                              type: "REQUEST",
+                                              id: req.id,
+                                              amount: req.amount,
+                                              vendorName: req.vendorName
+                                            });
+                                            setActiveDropdownId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 hover:bg-green-50 text-green-600 flex items-center space-x-2 transition-colors duration-150 font-semibold"
+                                        >
+                                          <CreditCard size={13} />
+                                          <span>Confirm Pay</span>
+                                        </button>
+                                        <div className="border-t border-onyx/5 my-1" />
+                                      </>
                                     )}
-                                    {isRejected && (
-                                      <button
-                                        onClick={() => {
-                                          handleDeleteRequest(req.id);
-                                          setActiveDropdownId(null);
-                                        }}
-                                        className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-655 flex items-center space-x-2 transition-colors duration-150"
-                                      >
-                                        <Trash2 size={13} />
-                                        <span>Delete Request</span>
-                                      </button>
-                                    )}
+
+                                    {/* 3. General Edit / Delete actions for any unpaid request */}
+                                    <button
+                                      onClick={() => {
+                                        handleEditReqOpen(req);
+                                        setActiveDropdownId(null);
+                                      }}
+                                      className="w-full text-left px-4 py-2 hover:bg-cream-dark text-onyx flex items-center space-x-2 transition-colors duration-150"
+                                    >
+                                      <Edit size={13} className="text-onyx/60" />
+                                      <span>Edit Request</span>
+                                    </button>
+                                    <button
+                                      onClick={() => {
+                                        handleDeleteRequest(req.id);
+                                        setActiveDropdownId(null);
+                                      }}
+                                      className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-655 flex items-center space-x-2 transition-colors duration-150"
+                                    >
+                                      <Trash2 size={13} />
+                                      <span>Delete Request</span>
+                                    </button>
                                   </div>
                                 )}
                               </div>
@@ -1627,6 +1641,7 @@ export default function PaymentsList({
                     <div className="flex items-center justify-between pt-2 border-t border-onyx/5">
                       <span className="text-[9px] text-onyx/40">By {req.recordedBy}</span>
                       <div className="flex items-center space-x-2">
+                        {/* 1. Status Edit */}
                         {canApprove && !isPaid && (
                           <button
                             onClick={() => handleEditStatusOpen(req)}
@@ -1636,38 +1651,28 @@ export default function PaymentsList({
                             <Sliders size={14} />
                           </button>
                         )}
-                        {isPending && (
+
+                        {/* 2. Review actions (Approve/Reject) for Pending */}
+                        {isPending && canApprove && (
                           <>
                             <button
-                              onClick={() => handleEditReqOpen(req)}
-                              className="p-1 hover:bg-cream-dark border border-transparent rounded text-onyx/65 cursor-pointer"
+                              onClick={() => handleReviewRequest(req.id, "APPROVED")}
+                              className="p-1 hover:bg-green-50 rounded text-green-600 cursor-pointer"
+                              title="Approve"
                             >
-                              <Edit size={14} />
+                              <CheckCircle size={14} />
                             </button>
                             <button
-                              onClick={() => handleDeleteRequest(req.id)}
-                              className="p-1 hover:bg-cream-dark border border-transparent rounded text-red-600 cursor-pointer"
+                              onClick={() => handleReviewRequest(req.id, "REJECTED")}
+                              className="p-1 hover:bg-red-50 rounded text-red-500 cursor-pointer"
+                              title="Reject"
                             >
-                              <Trash2 size={14} />
+                              <X size={14} />
                             </button>
-                            {canApprove && (
-                              <>
-                                <button
-                                  onClick={() => handleReviewRequest(req.id, "APPROVED")}
-                                  className="p-1 hover:bg-green-50 rounded text-green-600 cursor-pointer"
-                                >
-                                  <CheckCircle size={14} />
-                                </button>
-                                <button
-                                  onClick={() => handleReviewRequest(req.id, "REJECTED")}
-                                  className="p-1 hover:bg-red-50 rounded text-red-500 cursor-pointer"
-                                >
-                                  <X size={14} />
-                                </button>
-                              </>
-                            )}
                           </>
                         )}
+
+                        {/* 3. Confirm Payment for Approved Request */}
                         {isApproved && (
                           <button
                             onClick={() => handleConfirmOpen({
@@ -1682,14 +1687,27 @@ export default function PaymentsList({
                             <span>Confirm Payment</span>
                           </button>
                         )}
-                        {isRejected && (
-                          <button
-                            onClick={() => handleDeleteRequest(req.id)}
-                            className="p-1.5 hover:bg-cream-dark border border-transparent rounded text-red-600 cursor-pointer"
-                          >
-                            <Trash2 size={14} />
-                          </button>
+
+                        {/* 4. Edit details & Delete request for any unpaid request */}
+                        {!isPaid && (
+                          <>
+                            <button
+                              onClick={() => handleEditReqOpen(req)}
+                              className="p-1 hover:bg-cream-dark border border-transparent rounded text-onyx/65 cursor-pointer"
+                              title="Edit Request"
+                            >
+                              <Edit size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteRequest(req.id)}
+                              className="p-1 hover:bg-cream-dark border border-transparent rounded text-red-600 cursor-pointer"
+                              title="Delete Request"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </>
                         )}
+
                         {isPaid && (
                           <span className="text-[10px] text-zinc-400 font-semibold italic">Disbursed</span>
                         )}
