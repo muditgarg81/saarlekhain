@@ -1,6 +1,9 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { jsPDF } from "jspdf";
+import autoTable from "jspdf-autotable";
+import * as xlsx from "xlsx";
 import { 
   recordPayment, 
   updatePayment, 
@@ -624,6 +627,74 @@ export default function PaymentsList({
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+  };
+
+  // Excel Export
+  const handleExportExcel = (targetIds?: string[]) => {
+    const idsToExport = targetIds || (selectedIds.length > 0 ? selectedIds : filteredPayments.map(p => p.id));
+    if (idsToExport.length === 0) {
+      alert("No payments available to export.");
+      return;
+    }
+
+    const paymentsToExport = payments.filter(p => idsToExport.includes(p.id));
+
+    const data = paymentsToExport.map(p => ({
+      "Voucher Number": p.number,
+      "Supplier/Vendor": p.vendorName,
+      "Invoice Ref": p.invoiceNo || "On Account",
+      "Amount (INR)": p.amount,
+      "Paid On": new Date(p.paidOn).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+      "Payment Mode": p.mode || "N/A",
+      "Txn/Chq Ref": p.reference || "-",
+      "Recorded By": p.recordedBy
+    }));
+
+    const worksheet = xlsx.utils.json_to_sheet(data);
+    const workbook = xlsx.utils.book_new();
+    xlsx.utils.book_append_sheet(workbook, worksheet, "Payment Vouchers");
+    xlsx.writeFile(workbook, `PaymentsExport_${new Date().toISOString().slice(0,10)}.xlsx`);
+  };
+
+  // PDF Export
+  const handleExportPDF = (targetIds?: string[]) => {
+    const idsToExport = targetIds || (selectedIds.length > 0 ? selectedIds : filteredPayments.map(p => p.id));
+    if (idsToExport.length === 0) {
+      alert("No payments available to export.");
+      return;
+    }
+
+    const paymentsToExport = payments.filter(p => idsToExport.includes(p.id));
+
+    const doc = new jsPDF();
+    
+    // Title & Header details
+    doc.setFontSize(16);
+    doc.text("Saarlekha - Payment Vouchers Export", 14, 15);
+    doc.setFontSize(9);
+    doc.setTextColor(100);
+    doc.text(`Generated on: ${new Date().toLocaleDateString("en-IN")}`, 14, 21);
+    
+    const tableColumn = ["Voucher No", "Supplier/Vendor", "Invoice Ref", "Amount", "Paid On", "Mode", "Txn/Chq Ref"];
+    const tableRows = paymentsToExport.map(p => [
+      p.number,
+      p.vendorName,
+      p.invoiceNo || "On Account",
+      `INR ${p.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`,
+      new Date(p.paidOn).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }),
+      p.mode || "N/A",
+      p.reference || "-"
+    ]);
+
+    autoTable(doc, {
+      head: [tableColumn],
+      body: tableRows,
+      startY: 25,
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [30, 30, 36], textColor: [244, 244, 245] }
+    });
+
+    doc.save(`PaymentsExport_${new Date().toISOString().slice(0,10)}.pdf`);
   };
 
   // Print via popup window
@@ -2128,6 +2199,20 @@ export default function PaymentsList({
             >
               <Download size={13} />
               <span>Export CSV</span>
+            </button>
+            <button
+              onClick={() => handleExportExcel(selectedIds)}
+              className="flex items-center space-x-1 px-3 py-1.5 bg-onyx-light hover:bg-white/10 border border-onyx-light text-xs font-bold rounded-lg transition-all cursor-pointer"
+            >
+              <Download size={13} />
+              <span>Export Excel</span>
+            </button>
+            <button
+              onClick={() => handleExportPDF(selectedIds)}
+              className="flex items-center space-x-1 px-3 py-1.5 bg-onyx-light hover:bg-white/10 border border-onyx-light text-xs font-bold rounded-lg transition-all cursor-pointer"
+            >
+              <Download size={13} />
+              <span>Export PDF</span>
             </button>
             <button
               onClick={handleBulkDelete}
