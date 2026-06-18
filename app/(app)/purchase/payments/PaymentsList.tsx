@@ -710,7 +710,7 @@ export default function PaymentsList({
         </head>
         <body>
           <div class="border-double p-8" style="width: 170mm; height: 250mm; display: flex; flex-direction: column; justify-content: space-between; box-sizing: border-box; margin: auto;">
-            \${printContent}
+            ${printContent}
           </div>
           <script>
             window.onload = function() {
