@@ -284,3 +284,66 @@ export async function confirmPaymentRequest(
     return { success: false, error: err.message || "Failed to confirm payment request" };
   }
 }
+
+export async function updatePaymentRequestStatus(
+  id: string,
+  data: {
+    status: PaymentRequestStatus;
+    remarks: string;
+  }
+) {
+  const session = await auth();
+  if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  const companyId = (session.user as any).companyId;
+  const actorId = (session.user as any).id;
+  const userRole = (session.user as any).role || "VIEWER";
+
+  const canApprove = ["OWNER", "ADMIN", "ACCOUNTS", "PURCHASE_MANAGER"].includes(userRole);
+  if (!canApprove) {
+    return { success: false, error: "You are not authorized to update payment request status" };
+  }
+
+  try {
+    const original = await db.paymentRequest.findFirst({
+      where: { id, companyId }
+    });
+
+    if (!original) return { success: false, error: "Payment Request not found" };
+    if (original.status === PaymentRequestStatus.PAID) {
+      return { success: false, error: "Cannot change the status of a disbursed (PAID) request" };
+    }
+
+    const result = await db.$transaction(async (tx) => {
+      const updateData: any = {
+        status: data.status,
+        remarks: data.remarks || null,
+      };
+
+      if (data.status === PaymentRequestStatus.APPROVED) {
+        updateData.approvedById = actorId;
+        updateData.approvedAt = new Date();
+      } else if (data.status === PaymentRequestStatus.PENDING) {
+        updateData.approvedById = null;
+        updateData.approvedAt = null;
+      }
+
+      const prq = await tx.paymentRequest.update({
+        where: { id },
+        data: updateData
+      });
+
+      // Audit Log
+      await logAudit(tx, companyId, actorId, `UPDATE_STATUS_${data.status}`, "PaymentRequest", prq.id, original, prq);
+
+      return prq;
+    });
+
+    revalidatePath("/purchase/payments");
+    return { success: true, paymentRequest: result };
+  } catch (err: any) {
+    console.error("Error updating payment request status:", err);
+    return { success: false, error: err.message || "Failed to update payment request status" };
+  }
+}
+

@@ -13,7 +13,8 @@ import {
   updatePaymentRequest,
   deletePaymentRequest,
   reviewPaymentRequest,
-  confirmPaymentRequest
+  confirmPaymentRequest,
+  updatePaymentRequestStatus
 } from "@/app/actions/paymentRequests";
 import { limitYearTo4Digits } from "@/lib/date";
 import { 
@@ -36,7 +37,8 @@ import {
   Square,
   Check,
   FileText,
-  MoreVertical
+  MoreVertical,
+  Sliders
 } from "lucide-react";
 
 interface PaymentRecord {
@@ -189,6 +191,15 @@ export default function PaymentsList({
     paidOn: new Date().toISOString().split("T")[0],
     mode: "NEFT",
     reference: ""
+  });
+
+  // Edit Request Status states
+  const [isEditStatusOpen, setIsEditStatusOpen] = useState(false);
+  const [editStatusReq, setEditStatusReq] = useState({
+    id: "",
+    number: "",
+    status: "PENDING" as "PENDING" | "APPROVED" | "REJECTED",
+    remarks: ""
   });
 
   // Form states
@@ -483,6 +494,34 @@ export default function PaymentsList({
       alert(res.error || "Failed to delete payment request");
     }
   };
+
+  const handleEditStatusOpen = (req: any) => {
+    setEditStatusReq({
+      id: req.id,
+      number: req.number,
+      status: req.status,
+      remarks: req.remarks || ""
+    });
+    setIsEditStatusOpen(true);
+  };
+
+  const handleUpdateStatusSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setActionLoading(true);
+    setErrorMsg(null);
+    const res = await updatePaymentRequestStatus(editStatusReq.id, {
+      status: editStatusReq.status,
+      remarks: editStatusReq.remarks
+    });
+    setActionLoading(false);
+    if (res.success) {
+      setIsEditStatusOpen(false);
+      window.location.reload();
+    } else {
+      setErrorMsg(res.error || "Failed to update payment request status");
+    }
+  };
+
 
   const handleReviewRequest = async (id: string, status: "APPROVED" | "REJECTED") => {
     if (!confirm(`Are you sure you want to ${status.toLowerCase()} this payment request?`)) return;
@@ -1390,6 +1429,21 @@ export default function PaymentsList({
                                 </button>
                                 {activeDropdownId === req.id && (
                                   <div className="absolute right-0 mt-1 w-44 bg-white border border-onyx/10 rounded-lg shadow-xl z-50 py-1 font-sans text-xs text-left">
+                                    {canApprove && (
+                                      <>
+                                        <button
+                                          onClick={() => {
+                                            handleEditStatusOpen(req);
+                                            setActiveDropdownId(null);
+                                          }}
+                                          className="w-full text-left px-4 py-2 hover:bg-cream-dark text-onyx flex items-center space-x-2 transition-colors duration-150"
+                                        >
+                                          <Sliders size={13} className="text-onyx/60" />
+                                          <span>Edit Status / Remarks</span>
+                                        </button>
+                                        <div className="border-t border-onyx/5 my-1" />
+                                      </>
+                                    )}
                                     {isPending && (
                                       <>
                                         <button
@@ -1573,6 +1627,15 @@ export default function PaymentsList({
                     <div className="flex items-center justify-between pt-2 border-t border-onyx/5">
                       <span className="text-[9px] text-onyx/40">By {req.recordedBy}</span>
                       <div className="flex items-center space-x-2">
+                        {canApprove && !isPaid && (
+                          <button
+                            onClick={() => handleEditStatusOpen(req)}
+                            title="Edit Status & Remarks"
+                            className="p-1 hover:bg-cream-dark border border-transparent rounded text-saffron hover:text-saffron-dark cursor-pointer inline-flex"
+                          >
+                            <Sliders size={14} />
+                          </button>
+                        )}
                         {isPending && (
                           <>
                             <button
@@ -3013,6 +3076,82 @@ export default function PaymentsList({
                   className="px-4 py-2 bg-saffron hover:bg-saffron-dark text-onyx text-xs font-bold rounded-lg shadow-sm transition disabled:opacity-50 cursor-pointer"
                 >
                   Save Changes
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ==================== EDIT PAYMENT REQUEST STATUS MODAL ==================== */}
+      {isEditStatusOpen && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-cream max-w-md w-full flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden animate-in zoom-in-95 duration-150">
+            {/* Header */}
+            <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <Sliders size={18} className="text-saffron" />
+                <h3 className="font-heading text-base font-bold">Update Request Status & Remarks</h3>
+              </div>
+              <button onClick={() => setIsEditStatusOpen(false)} className="hover:text-saffron cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Form */}
+            <form onSubmit={handleUpdateStatusSubmit} className="p-6 space-y-4 text-xs">
+              {errorMsg && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded text-red-800 font-semibold">
+                  {errorMsg}
+                </div>
+              )}
+
+              <div className="bg-saffron/10 border border-saffron/20 rounded-lg p-3 text-[11px] text-onyx/80">
+                <span className="font-bold">Request:</span> {editStatusReq.number}
+              </div>
+
+              {/* Status Selector */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Status *</label>
+                <select
+                  value={editStatusReq.status}
+                  onChange={(e) => setEditStatusReq(prev => ({ ...prev, status: e.target.value as any }))}
+                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-semibold text-onyx"
+                  required
+                >
+                  <option value="PENDING">Pending Approval</option>
+                  <option value="APPROVED">Approved</option>
+                  <option value="REJECTED">Rejected</option>
+                </select>
+              </div>
+
+              {/* Remarks */}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Remarks *</label>
+                <textarea
+                  value={editStatusReq.remarks}
+                  onChange={(e) => setEditStatusReq(prev => ({ ...prev, remarks: e.target.value }))}
+                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron min-h-[80px]"
+                  placeholder="Enter approval/rejection notes or updates..."
+                  required
+                />
+              </div>
+
+              {/* Actions */}
+              <div className="flex items-center justify-end space-x-2 pt-4 border-t border-onyx/5">
+                <button
+                  type="button"
+                  onClick={() => setIsEditStatusOpen(false)}
+                  className="px-4 py-2 border border-onyx/10 hover:bg-cream-dark text-xs font-bold rounded-lg cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-saffron hover:bg-saffron-dark text-onyx text-xs font-bold rounded-lg shadow-sm transition disabled:opacity-50 cursor-pointer"
+                >
+                  Update Request
                 </button>
               </div>
             </form>
