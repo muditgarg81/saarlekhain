@@ -170,13 +170,41 @@ export default async function PaymentsPage() {
     }
   });
 
+  // Map poId -> total advance paid (PAID requests of type ADVANCE)
+  const poAdvanceMap = new Map<string, number>();
+  paymentRequests.forEach(pr => {
+    if (pr.poId && pr.type === "ADVANCE" && pr.status === "PAID") {
+      poAdvanceMap.set(pr.poId, (poAdvanceMap.get(pr.poId) || 0) + pr.amount);
+    }
+  });
+
+  // Sort invoices chronologically to allocate advance payments in order
+  const sortedInvoices = [...invoices].sort((a, b) => a.invoiceDate.getTime() - b.invoiceDate.getTime());
+  const invoiceAdvanceAllocatedMap = new Map<string, number>();
+
   // Find invoices that have NOT been fully paid yet (balance > 0.01)
-  const unpaidInvoices = invoices
+  const unpaidInvoices = sortedInvoices
     .map(inv => {
       const vendor = vendors.find(v => v.id === inv.vendorId);
       const debitNotesAmount = inv.poId ? (poToDebitAmountMap.get(inv.poId) || 0) : 0;
       const netAmount = inv.amount - debitNotesAmount;
-      const paidAmount = invoicePaidSumMap.get(inv.id) || 0;
+      const directPaidAmount = invoicePaidSumMap.get(inv.id) || 0;
+      let paidAmount = directPaidAmount;
+
+      // Apply PO advance payment if applicable
+      if (inv.poId) {
+        const totalPoAdvance = poAdvanceMap.get(inv.poId) || 0;
+        const allocatedAdvance = invoiceAdvanceAllocatedMap.get(inv.poId) || 0;
+        const remainingAdvance = totalPoAdvance - allocatedAdvance;
+        const invoicePendingAmount = netAmount - directPaidAmount;
+
+        if (remainingAdvance > 0 && invoicePendingAmount > 0) {
+          const advanceForThisInvoice = Math.min(invoicePendingAmount, remainingAdvance);
+          invoiceAdvanceAllocatedMap.set(inv.poId, allocatedAdvance + advanceForThisInvoice);
+          paidAmount += advanceForThisInvoice;
+        }
+      }
+
       const balanceAmount = netAmount - paidAmount;
 
       return {
@@ -361,7 +389,16 @@ export default async function PaymentsPage() {
   const pendingGrns: any[] = [];
   const today = new Date();
 
-  grns.forEach((grn) => {
+  // Sort GRNs chronologically to allocate advance payments in order of creation/posting
+  const sortedGrns = [...grns].sort((a, b) => {
+    const dateA = a.postedAt || a.createdAt;
+    const dateB = b.postedAt || b.createdAt;
+    return dateA.getTime() - dateB.getTime();
+  });
+
+  const grnAdvanceAllocatedMap = new Map<string, number>();
+
+  sortedGrns.forEach((grn) => {
     const vendor = vendors.find((v) => v.id === grn.vendorId);
     const po = pos.find((p) => p.id === grn.poId);
 
@@ -385,7 +422,22 @@ export default async function PaymentsPage() {
       (pv.reference && pv.reference.includes(grn.number))
     );
 
-    const paidAmount = grnVouchers.reduce((sum, pv) => sum + pv.amount, 0);
+    const directPaidAmount = grnVouchers.reduce((sum, pv) => sum + pv.amount, 0);
+    let paidAmount = directPaidAmount;
+
+    // Apply PO advance payment if applicable
+    if (grn.poId) {
+      const totalPoAdvance = poAdvanceMap.get(grn.poId) || 0;
+      const allocatedAdvance = grnAdvanceAllocatedMap.get(grn.poId) || 0;
+      const remainingAdvance = totalPoAdvance - allocatedAdvance;
+      const grnPendingAmount = grnValue - directPaidAmount;
+
+      if (remainingAdvance > 0 && grnPendingAmount > 0) {
+        const advanceForThisGrn = Math.min(grnPendingAmount, remainingAdvance);
+        grnAdvanceAllocatedMap.set(grn.poId, allocatedAdvance + advanceForThisGrn);
+        paidAmount += advanceForThisGrn;
+      }
+    }
 
     const balanceAmount = grnValue - paidAmount;
 
@@ -421,6 +473,9 @@ export default async function PaymentsPage() {
       });
     }
   });
+
+  // Sort pendingGrns descending by postedAt to preserve original display order
+  pendingGrns.sort((a, b) => new Date(b.postedAt).getTime() - new Date(a.postedAt).getTime());
 
   return (
     <PaymentsList
