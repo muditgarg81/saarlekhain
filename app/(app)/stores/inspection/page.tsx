@@ -17,7 +17,7 @@ export default async function InspectionPage() {
     where: { companyId },
     include: {
       grn: {
-        select: { number: true, lines: true }
+        select: { number: true, lines: true, status: true }
       },
       results: true
     },
@@ -60,6 +60,9 @@ export default async function InspectionPage() {
       itemName: item?.name || "Unknown Item",
       itemCode: item?.code || "N/A",
       receivedQty: grnLine?.receivedQty || 0,
+      acceptedQty: grnLine?.acceptedQty || 0,
+      rejectedQty: grnLine?.rejectedQty || 0,
+      grnStatus: i.grn.status,
       sampleSize: i.sampleSize,
       disposition: i.disposition,
       mtcRef: i.mtcRef,

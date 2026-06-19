@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { submitInspectionResult } from "@/app/actions/inspections";
+import { submitInspectionResult, resetInspectionResult } from "@/app/actions/inspections";
 import { 
   Search, 
   X, 
@@ -36,6 +36,9 @@ interface Inspection {
   itemName: string;
   itemCode: string;
   receivedQty: number;
+  acceptedQty: number;
+  rejectedQty: number;
+  grnStatus: string;
   sampleSize: number;
   disposition: string | null;
   mtcRef: string | null;
@@ -100,10 +103,10 @@ export default function InspectionList({ initialInspections, userRole }: Inspect
 
   const handleOpenRecord = (insp: Inspection) => {
     setSelectedInspection(insp);
-    setDisposition("ACCEPT");
+    setDisposition((insp.disposition as any) || "ACCEPT");
     setMtcRef(insp.mtcRef || "");
-    setAcceptedQty(insp.receivedQty);
-    setRejectedQty(0);
+    setAcceptedQty(insp.disposition ? insp.acceptedQty : insp.receivedQty);
+    setRejectedQty(insp.disposition ? insp.rejectedQty : 0);
     setErrorMsg(null);
     setOcrFeedback(null);
 
@@ -119,6 +122,21 @@ export default function InspectionList({ initialInspections, userRole }: Inspect
     }));
     setParamResults(params);
     setIsRecordOpen(true);
+  };
+
+  const handleDeleteLog = async (id: string) => {
+    if (!confirm("Are you sure you want to reset this QC inspection log back to Pending? This will also reset the accepted/rejected quantities on the GRN line and delete any associated rejected material records.")) {
+      return;
+    }
+    setActionLoading(true);
+    setErrorMsg(null);
+    const res = await resetInspectionResult(id);
+    setActionLoading(false);
+    if (res.success) {
+      window.location.reload();
+    } else {
+      alert(res.error || "Failed to reset QC inspection");
+    }
   };
 
   // Evaluate single parameter pass/fail based on specs
@@ -340,14 +358,37 @@ export default function InspectionList({ initialInspections, userRole }: Inspect
                             <Eye size={13} />
                           </button>
 
-                          {!insp.disposition && isQC && (
-                            <button
-                              onClick={() => handleOpenRecord(insp)}
-                              title="Record QC Tests"
-                              className="p-1 hover:bg-amber-50 text-amber-600 hover:text-amber-700 rounded border border-transparent hover:border-amber-200 cursor-pointer"
-                            >
-                              <ClipboardList size={13} />
-                            </button>
+                          {isQC && (
+                            <>
+                              {insp.grnStatus === "POSTED" ? (
+                                <span className="text-[10px] text-zinc-400 font-semibold italic select-none" title="Parent GRN is posted to stock ledger. Cannot modify QC.">
+                                  POSTED
+                                </span>
+                              ) : (
+                                <>
+                                  <button
+                                    onClick={() => handleOpenRecord(insp)}
+                                    title={insp.disposition ? "Edit QC Tests" : "Record QC Tests"}
+                                    className={`p-1 rounded border border-transparent cursor-pointer ${
+                                      insp.disposition 
+                                        ? "hover:bg-cream-dark text-onyx/65 hover:text-onyx" 
+                                        : "hover:bg-amber-50 text-amber-600 hover:text-amber-700 hover:border-amber-200"
+                                    }`}
+                                  >
+                                    <ClipboardList size={13} />
+                                  </button>
+                                  {insp.disposition && (
+                                    <button
+                                      onClick={() => handleDeleteLog(insp.id)}
+                                      title="Reset QC Log"
+                                      className="p-1 hover:bg-red-50 text-red-650 hover:text-red-700 rounded border border-transparent hover:border-red-200 cursor-pointer"
+                                    >
+                                      <Trash2 size={13} />
+                                    </button>
+                                  )}
+                                </>
+                              )}
+                            </>
                           )}
                         </div>
                       </td>
@@ -429,14 +470,37 @@ export default function InspectionList({ initialInspections, userRole }: Inspect
                     <Eye size={14} />
                   </button>
 
-                  {!insp.disposition && isQC && (
-                    <button
-                      onClick={() => handleOpenRecord(insp)}
-                      title="Record QC Tests"
-                      className="p-1.5 hover:bg-amber-50 text-amber-600 hover:text-amber-700 rounded border border-transparent hover:border-amber-200 cursor-pointer inline-flex font-bold"
-                    >
-                      <ClipboardList size={14} />
-                    </button>
+                  {isQC && (
+                    <>
+                      {insp.grnStatus === "POSTED" ? (
+                        <span className="text-[10px] text-zinc-400 font-semibold italic select-none" title="Parent GRN is posted to stock ledger. Cannot modify QC.">
+                          POSTED
+                        </span>
+                      ) : (
+                        <>
+                          <button
+                            onClick={() => handleOpenRecord(insp)}
+                            title={insp.disposition ? "Edit QC Tests" : "Record QC Tests"}
+                            className={`p-1.5 rounded border border-transparent cursor-pointer inline-flex font-bold ${
+                              insp.disposition 
+                                ? "hover:bg-cream-dark text-onyx/65 hover:text-onyx" 
+                                : "hover:bg-amber-50 text-amber-600 hover:text-amber-700 hover:border-amber-200"
+                            }`}
+                          >
+                            <ClipboardList size={14} />
+                          </button>
+                          {insp.disposition && (
+                            <button
+                              onClick={() => handleDeleteLog(insp.id)}
+                              title="Reset QC Log"
+                              className="p-1.5 hover:bg-red-50 text-red-655 hover:text-red-700 rounded border border-transparent hover:border-red-200 cursor-pointer inline-flex"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          )}
+                        </>
+                      )}
+                    </>
                   )}
                 </div>
               </div>
@@ -450,7 +514,7 @@ export default function InspectionList({ initialInspections, userRole }: Inspect
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-cream max-w-3xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
             <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
-              <h3 className="font-heading text-lg font-bold">Record Inspection Tests ({selectedInspection.number})</h3>
+              <h3 className="font-heading text-lg font-bold">{selectedInspection.disposition ? "Edit" : "Record"} Inspection Tests ({selectedInspection.number})</h3>
               <button onClick={() => setIsRecordOpen(false)} className="hover:text-saffron cursor-pointer">
                 <X size={20} />
               </button>
@@ -786,7 +850,7 @@ export default function InspectionList({ initialInspections, userRole }: Inspect
                   disabled={actionLoading}
                   className="px-4 py-2 bg-saffron hover:bg-saffron-dark rounded-lg text-xs font-bold text-onyx shadow cursor-pointer disabled:opacity-50"
                 >
-                  {actionLoading ? "Saving..." : "Post QC Test Results"}
+                  {actionLoading ? "Saving..." : selectedInspection.disposition ? "Save Changes" : "Post QC Test Results"}
                 </button>
               </div>
             </form>

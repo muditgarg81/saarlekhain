@@ -45,6 +45,10 @@ export async function submitInspectionResult(
       if (!inspection) throw new Error("QC Inspection record not found");
 
       const grn = inspection.grn;
+      if (grn.status === GrnStatus.POSTED) {
+        throw new Error("Cannot modify inspection results for a POSTED GRN. Please delete/revert the GRN first.");
+      }
+
       const grnLine = grn.lines.find(l => l.id === inspection.grnLineId);
       if (!grnLine) throw new Error("Linked GRN line not found");
 
@@ -106,7 +110,7 @@ export async function submitInspectionResult(
         }
       });
 
-      // 7. Create/Update RejectedMaterial record if rejectedQty > 0
+      // 7. Create/Update RejectedMaterial record if rejectedQty > 0, otherwise delete it
       if (data.rejectedQty > 0) {
         let vendorName = "Unknown Vendor";
         if (grn.vendorId) {
@@ -139,6 +143,10 @@ export async function submitInspectionResult(
             rejectedQty: data.rejectedQty,
             status: "PENDING_RETURN",
           }
+        });
+      } else {
+        await tx.rejectedMaterial.deleteMany({
+          where: { grnLineId: inspection.grnLineId }
         });
       }
 
@@ -177,5 +185,95 @@ export async function submitInspectionResult(
   } catch (err: any) {
     console.error("Error submitting QC inspection:", err);
     return { success: false, error: err.message || "Failed to submit QC inspection" };
+  }
+}
+
+export async function resetInspectionResult(inspectionId: string) {
+  const session = await auth();
+  if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  const companyId = (session.user as any).companyId;
+  const actorId = (session.user as any).id;
+  const role = (session.user as any).role;
+
+  // QC inspection role gate
+  const canInspect = ["ADMIN", "OWNER", "STORE_MANAGER", "QC_INSPECTOR"].includes(role);
+  if (!canInspect) return { success: false, error: "Access Denied: You do not have QC inspection rights." };
+
+  try {
+    const result = await db.$transaction(async (tx) => {
+      // 1. Fetch inspection details
+      const inspection = await tx.inspection.findFirst({
+        where: { id: inspectionId, companyId },
+        include: { grn: true }
+      });
+      if (!inspection) throw new Error("QC Inspection record not found");
+
+      const grn = inspection.grn;
+      if (grn.status === GrnStatus.POSTED) {
+        throw new Error("Cannot reset inspection for a POSTED GRN. Please delete/revert the GRN first.");
+      }
+
+      // 2. Clear inspection results observations
+      await tx.inspectionResult.updateMany({
+        where: { inspectionId },
+        data: {
+          observed: null,
+          observedText: null,
+          pass: null
+        }
+      });
+
+      // 3. Clear inspection header disposition
+      const updatedInspection = await tx.inspection.update({
+        where: { id: inspectionId },
+        data: {
+          disposition: null,
+          inspectedById: null,
+          inspectedAt: null
+        }
+      });
+
+      // 4. Reset GRN Line quantities
+      await tx.grnLine.update({
+        where: { id: inspection.grnLineId },
+        data: {
+          acceptedQty: 0,
+          rejectedQty: 0
+        }
+      });
+
+      // 5. Delete RejectedMaterial record
+      await tx.rejectedMaterial.deleteMany({
+        where: { grnLineId: inspection.grnLineId }
+      });
+
+      // 6. Reset GRN status back to QC_PENDING
+      await tx.grn.update({
+        where: { id: grn.id },
+        data: { status: GrnStatus.QC_PENDING }
+      });
+
+      // 7. Audit Log
+      await tx.auditLog.create({
+        data: {
+          companyId,
+          actorId,
+          action: "QC_RESET",
+          entity: "Inspection",
+          entityId: inspectionId,
+          after: JSON.parse(JSON.stringify(updatedInspection))
+        }
+      });
+
+      return updatedInspection;
+    });
+
+    revalidatePath("/stores/grn");
+    revalidatePath("/stores/inspection");
+    return { success: true, inspection: result };
+  } catch (err: any) {
+    console.error("Error resetting QC inspection:", err);
+    return { success: false, error: err.message || "Failed to reset QC inspection" };
   }
 }
