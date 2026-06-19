@@ -52,7 +52,7 @@ interface InspectionListProps {
 export default function InspectionList({ initialInspections, userRole }: InspectionListProps) {
   const [inspections, setInspections] = useState<Inspection[]>(initialInspections);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("pending");
+  const [statusFilter, setStatusFilter] = useState("all");
 
   // Detail & Action States
   const [isRecordOpen, setIsRecordOpen] = useState(false);
