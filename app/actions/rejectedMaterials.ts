@@ -67,8 +67,8 @@ export async function updateRejectedMaterialStatus(
         }
       }
 
-      // If status changes from PENDING_RETURN to a finalized state (RETURNED_TO_VENDOR or DISPOSED), generate a Debit Note
-      if ((data.status === "RETURNED_TO_VENDOR" || data.status === "DISPOSED") && original.status === "PENDING_RETURN") {
+      // If status changes from PENDING_RETURN to a finalized state (RETURNED_TO_VENDOR, DISPOSED, or SHORT_SUPPLY), generate a Debit Note
+      if ((data.status === "RETURNED_TO_VENDOR" || data.status === "DISPOSED" || data.status === "SHORT_SUPPLY") && original.status === "PENDING_RETURN") {
         if (grnLine && grnLine.grn.vendorId) {
           // Fetch PoLine to get exact rate, discount, and gstRate
           let rate = 0;

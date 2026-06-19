@@ -631,5 +631,6 @@ enum RejectedMaterialStatus {
   PENDING_RETURN
   RETURNED_TO_VENDOR
   DISPOSED
+  SHORT_SUPPLY
   @@schema("stores")
 }

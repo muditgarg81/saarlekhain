@@ -15,10 +15,11 @@ import {
   Clock,
   ArrowLeft,
   Plus,
-  Edit3
+  Edit3,
+  MinusCircle
 } from "lucide-react";
 import Link from "next/link";
-
+ 
 interface SerializedMaterial {
   id: string;
   companyId: string;
@@ -28,7 +29,7 @@ interface SerializedMaterial {
   itemName: string;
   vendorName: string;
   rejectedQty: number;
-  status: "PENDING_RETURN" | "RETURNED_TO_VENDOR" | "DISPOSED";
+  status: "PENDING_RETURN" | "RETURNED_TO_VENDOR" | "DISPOSED" | "SHORT_SUPPLY";
   gatepassRef: string | null;
   actionDate: string | null;
   remarks: string | null;
@@ -43,12 +44,12 @@ interface RejectedMaterialClientProps {
 export default function RejectedMaterialClient({ initialMaterials }: RejectedMaterialClientProps) {
   const [materialsList, setMaterialsList] = useState<SerializedMaterial[]>(initialMaterials);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING_RETURN" | "RETURNED_TO_VENDOR" | "DISPOSED">("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING_RETURN" | "RETURNED_TO_VENDOR" | "DISPOSED" | "SHORT_SUPPLY">("ALL");
 
   // Modal and Form States
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedMaterial, setSelectedMaterial] = useState<SerializedMaterial | null>(null);
-  const [targetStatus, setTargetStatus] = useState<"RETURNED_TO_VENDOR" | "DISPOSED">("RETURNED_TO_VENDOR");
+  const [targetStatus, setTargetStatus] = useState<"RETURNED_TO_VENDOR" | "DISPOSED" | "SHORT_SUPPLY">("RETURNED_TO_VENDOR");
   
   // Inputs
   const [gatepassRef, setGatepassRef] = useState("");
@@ -77,8 +78,9 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
   const pendingCount = materialsList.filter((m) => m.status === "PENDING_RETURN").length;
   const returnedCount = materialsList.filter((m) => m.status === "RETURNED_TO_VENDOR").length;
   const disposedCount = materialsList.filter((m) => m.status === "DISPOSED").length;
+  const shortSupplyCount = materialsList.filter((m) => m.status === "SHORT_SUPPLY").length;
 
-  const handleOpenActionModal = (m: SerializedMaterial, status: "RETURNED_TO_VENDOR" | "DISPOSED") => {
+  const handleOpenActionModal = (m: SerializedMaterial, status: "RETURNED_TO_VENDOR" | "DISPOSED" | "SHORT_SUPPLY") => {
     setSelectedMaterial(m);
     setTargetStatus(status);
     
@@ -100,7 +102,7 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
   const handleOpenEditModal = (m: SerializedMaterial) => {
     setSelectedMaterial(m);
     // If it's already returned or disposed, target that status, otherwise default to RETURNED_TO_VENDOR
-    setTargetStatus(m.status === "DISPOSED" ? "DISPOSED" : "RETURNED_TO_VENDOR");
+    setTargetStatus(m.status === "DISPOSED" ? "DISPOSED" : m.status === "SHORT_SUPPLY" ? "SHORT_SUPPLY" : "RETURNED_TO_VENDOR");
     setGatepassRef(m.gatepassRef || "");
     
     if (m.actionDate) {
@@ -143,7 +145,7 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
         setMaterialsList((prev) =>
           prev.map((m) => (m.id === selectedMaterial.id ? updated : m))
         );
-        setSuccessMsg(`Status successfully updated to ${targetStatus === "RETURNED_TO_VENDOR" ? "Returned to Vendor" : "Disposed"}`);
+        setSuccessMsg(`Status successfully updated to ${targetStatus === "RETURNED_TO_VENDOR" ? "Returned to Vendor" : targetStatus === "SHORT_SUPPLY" ? "Short Supplied" : "Disposed"}`);
         setTimeout(() => {
           setIsModalOpen(false);
           setSelectedMaterial(null);
@@ -235,7 +237,7 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
       )}
 
       {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="glass-card p-4 rounded-xl border border-onyx/5 shadow-xs flex items-center space-x-4">
           <div className="p-3 rounded-lg bg-onyx/5 text-onyx">
             <FileText size={20} />
@@ -275,6 +277,16 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
             <div className="text-lg font-bold text-onyx">{disposedCount}</div>
           </div>
         </div>
+
+        <div className="glass-card p-4 rounded-xl border border-onyx/5 shadow-xs flex items-center space-x-4">
+          <div className="p-3 rounded-lg bg-blue-100 text-blue-600 border border-blue-200">
+            <MinusCircle size={20} />
+          </div>
+          <div>
+            <div className="text-[10px] uppercase font-bold text-onyx/50 tracking-wider">Short Supplied</div>
+            <div className="text-lg font-bold text-onyx">{shortSupplyCount}</div>
+          </div>
+        </div>
       </div>
 
       {/* Filter and Table Section */}
@@ -304,7 +316,7 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
 
           {/* Status filter tabs */}
           <div className="flex bg-cream-dark/30 border border-onyx/10 rounded-lg p-0.5 text-xs font-semibold">
-            {(["ALL", "PENDING_RETURN", "RETURNED_TO_VENDOR", "DISPOSED"] as const).map((status) => (
+            {(["ALL", "PENDING_RETURN", "RETURNED_TO_VENDOR", "DISPOSED", "SHORT_SUPPLY"] as const).map((status) => (
               <button
                 key={status}
                 onClick={() => setStatusFilter(status)}
@@ -314,7 +326,7 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
                     : "text-onyx/60 hover:text-onyx"
                 }`}
               >
-                {status === "ALL" ? "All" : status === "PENDING_RETURN" ? "Pending" : status === "RETURNED_TO_VENDOR" ? "Returned" : "Disposed"}
+                {status === "ALL" ? "All" : status === "PENDING_RETURN" ? "Pending" : status === "RETURNED_TO_VENDOR" ? "Returned" : status === "DISPOSED" ? "Disposed" : "Short Supply"}
               </button>
             ))}
           </div>
@@ -379,6 +391,11 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
                             Disposed / Scrapped
                           </span>
                         )}
+                        {m.status === "SHORT_SUPPLY" && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 border border-blue-200">
+                            Short Supplied
+                          </span>
+                        )}
                       </td>
                       <td className="p-3">
                         {m.status === "PENDING_RETURN" ? (
@@ -428,6 +445,13 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
                                 <Trash2 size={12} className="text-red-600" />
                                 <span>Scrap</span>
                               </button>
+                              <button
+                                onClick={() => handleOpenActionModal(m, "SHORT_SUPPLY")}
+                                className="px-2.5 py-1 bg-white border border-onyx/10 hover:border-onyx/20 rounded-md text-[10px] font-bold text-onyx shadow-2xs hover:bg-cream-dark cursor-pointer flex items-center gap-1 transition-all"
+                              >
+                                <MinusCircle size={12} className="text-blue-600" />
+                                <span>Short Supply</span>
+                              </button>
                             </>
                           ) : (
                             <>
@@ -466,7 +490,7 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
             <div className="p-4 bg-onyx text-cream flex items-center justify-between">
               <div>
                 <h3 className="text-xs font-bold uppercase tracking-wider text-saffron">
-                  {selectedMaterial.status !== "PENDING_RETURN" ? "Edit Disposition Log" : `Record ${targetStatus === "RETURNED_TO_VENDOR" ? "Vendor Return" : "Material Scrapping"}`}
+                  {selectedMaterial.status !== "PENDING_RETURN" ? "Edit Disposition Log" : `Record ${targetStatus === "RETURNED_TO_VENDOR" ? "Vendor Return" : targetStatus === "SHORT_SUPPLY" ? "Short Supply" : "Material Scrapping"}`}
                 </h3>
                 <p className="text-[10px] text-cream-light/70 font-mono mt-0.5">
                   Item: {selectedMaterial.itemName} ({selectedMaterial.itemCode})
@@ -499,6 +523,7 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
                   >
                     <option value="RETURNED_TO_VENDOR">Returned to Vendor</option>
                     <option value="DISPOSED">Disposed / Scrapped</option>
+                    <option value="SHORT_SUPPLY">Short Supplied</option>
                   </select>
                 </div>
               )}
@@ -534,6 +559,16 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
                     className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-bold"
                     disabled={loading}
                   />
+                </div>
+              )}
+
+              {/* Short Supply Helper Message */}
+              {targetStatus === "SHORT_SUPPLY" && (
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 text-[11px] text-blue-800 flex items-start space-x-2">
+                  <AlertTriangle className="text-blue-500 shrink-0 mt-0.5" size={14} />
+                  <span>
+                    <strong>Short Supply:</strong> No gatepass reference is required for short supply. A debit note will be automatically generated in draft status to adjust the supplier payment balance.
+                  </span>
                 </div>
               )}
 
