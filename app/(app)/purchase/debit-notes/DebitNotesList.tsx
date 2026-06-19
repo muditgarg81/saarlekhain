@@ -25,7 +25,8 @@ import {
   Printer,
   Download,
   CheckSquare,
-  Square
+  Square,
+  ChevronDown
 } from "lucide-react";
 import Link from "next/link";
 import { can, SessionUser } from "@/lib/rbac";
@@ -96,6 +97,102 @@ function amountToWords(amount: number): string {
   }
   
   return result + " Only";
+}
+
+interface VendorSelectProps {
+  vendors: Vendor[];
+  value: string;
+  onChange: (value: string) => void;
+  disabled?: boolean;
+}
+
+function VendorSelect({ vendors, value, onChange, disabled }: VendorSelectProps) {
+  const [isOpen, setIsOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const selectedVendor = vendors.find(v => v.id === value);
+
+  const filteredVendors = vendors.filter(v => 
+    v.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    v.code.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="relative">
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full text-left text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-semibold text-onyx flex items-center justify-between disabled:opacity-50"
+      >
+        <span className="truncate pr-2">
+          {selectedVendor ? `[${selectedVendor.code}] ${selectedVendor.name}` : "-- Choose Vendor --"}
+        </span>
+        <ChevronDown size={14} className="text-onyx/50 shrink-0" />
+      </button>
+
+      {isOpen && (
+        <>
+          {/* Backdrop to close dropdown on click outside */}
+          <div className="fixed inset-0 z-40" onClick={() => setIsOpen(false)} />
+          
+          <div className="absolute left-0 right-0 mt-1 bg-cream border border-onyx/10 rounded-lg shadow-lg z-50 overflow-hidden flex flex-col max-h-72">
+            <div className="p-2 border-b border-onyx/5 bg-cream-dark/20 flex items-center gap-1.5">
+              <Search size={14} className="text-onyx/40 shrink-0" />
+              <input
+                type="text"
+                autoFocus
+                placeholder="Search vendor by name or code..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-transparent text-xs outline-none font-semibold text-onyx placeholder:text-onyx/45"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="p-0.5 hover:bg-onyx/5 rounded text-onyx/50"
+                >
+                  <X size={12} />
+                </button>
+              )}
+            </div>
+
+            <div className="overflow-y-auto max-h-56 divide-y divide-onyx/5">
+              {filteredVendors.length === 0 ? (
+                <div className="p-3 text-[11px] text-onyx/40 text-center font-medium">
+                  No vendors found
+                </div>
+              ) : (
+                filteredVendors.map((v) => {
+                  const isSelected = v.id === value;
+                  return (
+                    <button
+                      key={v.id}
+                      type="button"
+                      onClick={() => {
+                        onChange(v.id);
+                        setIsOpen(false);
+                        setSearchQuery("");
+                      }}
+                      className={`w-full text-left p-2.5 text-xs font-semibold flex items-center justify-between transition-colors hover:bg-saffron/10 ${
+                        isSelected ? "bg-saffron/10 text-onyx font-bold" : "text-onyx/80"
+                      }`}
+                    >
+                      <span className="truncate pr-2">
+                        [{v.code}] {v.name}
+                      </span>
+                      {isSelected && <Check size={12} className="text-saffron-dark shrink-0" />}
+                    </button>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
 }
 
 export default function DebitNotesList({ notes: initialNotes, vendors, user }: DebitNotesListProps) {
@@ -999,20 +1096,12 @@ export default function DebitNotesList({ notes: initialNotes, vendors, user }: D
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                   Select Supplier / Vendor *
                 </label>
-                <select
-                  required
+                <VendorSelect
+                  vendors={vendors}
                   value={formData.vendorId}
-                  onChange={(e) => setFormData(prev => ({ ...prev, vendorId: e.target.value }))}
-                  className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-semibold text-onyx"
+                  onChange={(val) => setFormData(prev => ({ ...prev, vendorId: val }))}
                   disabled={loading}
-                >
-                  <option value="">-- Choose Vendor --</option>
-                  {vendors.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      [{v.code}] {v.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               <div>
@@ -1084,20 +1173,12 @@ export default function DebitNotesList({ notes: initialNotes, vendors, user }: D
                 <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                   Select Supplier / Vendor *
                 </label>
-                <select
-                  required
+                <VendorSelect
+                  vendors={vendors}
                   value={formData.vendorId}
-                  onChange={(e) => setFormData(prev => ({ ...prev, vendorId: e.target.value }))}
-                  className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-semibold text-onyx"
+                  onChange={(val) => setFormData(prev => ({ ...prev, vendorId: val }))}
                   disabled={loading}
-                >
-                  <option value="">-- Choose Vendor --</option>
-                  {vendors.map((v) => (
-                    <option key={v.id} value={v.id}>
-                      [{v.code}] {v.name}
-                    </option>
-                  ))}
-                </select>
+                />
               </div>
 
               <div>
