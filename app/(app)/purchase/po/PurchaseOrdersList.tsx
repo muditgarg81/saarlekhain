@@ -7,7 +7,8 @@ import {
   approvePO, 
   amendPO, 
   cancelPO,
-  updatePO
+  updatePO,
+  shortClosePO
 } from "@/app/actions/purchaseOrders";
 import { SearchableItemSelect } from "@/components/SearchableItemSelect";
 import { PoType } from "@prisma/client";
@@ -30,7 +31,8 @@ import {
   Calendar,
   History,
   MapPin,
-  Settings
+  Settings,
+  XOctagon
 } from "lucide-react";
 
 interface LineItem {
@@ -860,13 +862,16 @@ export default function PurchaseOrdersList({
     }
   };
 
-  const handleWorkflow = async (action: "submit" | "approve" | "cancel", poId: string) => {
+  const handleWorkflow = async (action: "submit" | "approve" | "cancel" | "short_close", poId: string) => {
     if (action === "cancel") {
       const poObj = purchaseOrders.find(p => p.id === poId);
       const isDraft = poObj?.status === "DRAFT";
       const confirmMsg = isDraft 
         ? "Are you sure you want to permanently delete this draft Purchase Order?"
         : "Are you sure you want to cancel this Purchase Order?";
+      if (!confirm(confirmMsg)) return;
+    } else if (action === "short_close") {
+      const confirmMsg = "Are you sure you want to short-close this Purchase Order? Any unreceived quantities will be cancelled/short-closed.";
       if (!confirm(confirmMsg)) return;
     }
 
@@ -876,6 +881,7 @@ export default function PurchaseOrdersList({
     if (action === "submit") res = await submitForApproval(poId);
     else if (action === "approve") res = await approvePO(poId);
     else if (action === "cancel") res = await cancelPO(poId);
+    else if (action === "short_close") res = await shortClosePO(poId);
     setActionLoading(false);
 
     if (res && res.success) {
@@ -939,7 +945,6 @@ export default function PurchaseOrdersList({
   };
 
   const getPoDisplayStatus = (po: PORecord) => {
-    if (isPoOverdue(po)) return "OVERDUE";
     return po.status;
   };
 
@@ -1089,16 +1094,24 @@ export default function PurchaseOrdersList({
                         {po.rfqNumbers && po.rfqNumbers.length > 0 ? po.rfqNumbers.join(", ") : "-"}
                       </td>
                       <td className="text-center">
-                        <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
-                          getPoDisplayStatus(po) === "OVERDUE" ? "bg-yellow-100 text-yellow-800" :
-                          po.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
-                          po.status === "PENDING_APPROVAL" ? "bg-yellow-100 text-yellow-800 animate-pulse" :
-                          po.status === "APPROVED" ? "bg-green-100 text-green-800" :
-                          po.status === "SENT" ? "bg-blue-100 text-blue-800" :
-                          po.status === "CANCELLED" ? "bg-red-100 text-red-800" : "bg-purple-100 text-purple-800"
-                        }`}>
-                          {getPoDisplayStatus(po).replace("_", " ")}
-                        </span>
+                        <div className="flex flex-wrap items-center justify-center gap-1.5">
+                          <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${
+                            po.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
+                            po.status === "PENDING_APPROVAL" ? "bg-yellow-100 text-yellow-800 animate-pulse" :
+                            po.status === "APPROVED" ? "bg-green-100 text-green-800" :
+                            po.status === "SENT" ? "bg-blue-100 text-blue-800" :
+                            po.status === "PARTIALLY_RECEIVED" ? "bg-orange-100 text-orange-800" :
+                            po.status === "SHORT_CLOSED" ? "bg-amber-100 text-amber-800" :
+                            po.status === "CANCELLED" ? "bg-red-100 text-red-800" : "bg-purple-100 text-purple-800"
+                          }`}>
+                            {po.status.replace("_", " ")}
+                          </span>
+                          {isPoOverdue(po) && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-yellow-100 text-yellow-800 animate-pulse">
+                              OVERDUE
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="text-center">
                         <div className="flex items-center justify-center space-x-1.5">
@@ -1160,6 +1173,16 @@ export default function PurchaseOrdersList({
                             </button>
                           )}
 
+                          {["APPROVED", "SENT", "PARTIALLY_RECEIVED"].includes(po.status) && isPurchase && (
+                            <button
+                              onClick={() => handleWorkflow("short_close", po.id)}
+                              title="Short Close PO"
+                              className="p-1 hover:bg-amber-50 text-amber-600 hover:text-amber-700 rounded border border-transparent hover:border-amber-200 cursor-pointer"
+                            >
+                              <XOctagon size={13} />
+                            </button>
+                          )}
+
                           {["DRAFT", "PENDING_APPROVAL", "APPROVED", "SENT"].includes(po.status) && isPurchase && (
                             <button
                               onClick={() => handleWorkflow("cancel", po.id)}
@@ -1204,16 +1227,24 @@ export default function PurchaseOrdersList({
                       )}
                     </span>
                   </div>
-                  <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
-                    getPoDisplayStatus(po) === "OVERDUE" ? "bg-yellow-100 text-yellow-800" :
-                    po.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
-                    po.status === "PENDING_APPROVAL" ? "bg-yellow-100 text-yellow-800 animate-pulse" :
-                    po.status === "APPROVED" ? "bg-green-100 text-green-800" :
-                    po.status === "SENT" ? "bg-blue-100 text-blue-800" :
-                    po.status === "CANCELLED" ? "bg-red-100 text-red-800" : "bg-purple-100 text-purple-800"
-                  }`}>
-                    {getPoDisplayStatus(po).replace("_", " ")}
-                  </span>
+                  <div className="flex flex-wrap items-center gap-1">
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase ${
+                      po.status === "DRAFT" ? "bg-gray-100 text-gray-800" :
+                      po.status === "PENDING_APPROVAL" ? "bg-yellow-100 text-yellow-800 animate-pulse" :
+                      po.status === "APPROVED" ? "bg-green-100 text-green-800" :
+                      po.status === "SENT" ? "bg-blue-100 text-blue-800" :
+                      po.status === "PARTIALLY_RECEIVED" ? "bg-orange-100 text-orange-800" :
+                      po.status === "SHORT_CLOSED" ? "bg-amber-100 text-amber-800" :
+                      po.status === "CANCELLED" ? "bg-red-100 text-red-800" : "bg-purple-100 text-purple-800"
+                    }`}>
+                      {po.status.replace("_", " ")}
+                    </span>
+                    {isPoOverdue(po) && (
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase bg-yellow-100 text-yellow-800 animate-pulse">
+                        OVERDUE
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="space-y-2 text-xs text-onyx/70">
@@ -1304,6 +1335,16 @@ export default function PurchaseOrdersList({
                       className="p-1.5 hover:bg-saffron-light text-saffron-dark rounded border border-transparent hover:border-saffron-dark/20 cursor-pointer inline-flex"
                     >
                       <Edit3 size={14} />
+                    </button>
+                  )}
+
+                  {["APPROVED", "SENT", "PARTIALLY_RECEIVED"].includes(po.status) && isPurchase && (
+                    <button
+                      onClick={() => handleWorkflow("short_close", po.id)}
+                      title="Short Close PO"
+                      className="p-1.5 hover:bg-amber-50 text-amber-600 hover:text-amber-700 rounded border border-transparent hover:border-amber-200 cursor-pointer inline-flex"
+                    >
+                      <XOctagon size={14} />
                     </button>
                   )}
 

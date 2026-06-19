@@ -791,6 +791,316 @@ export async function cancelPO(poId: string) {
   }
 }
 
+export async function shortClosePO(poId: string) {
+  const session = await auth();
+  if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  const companyId = (session.user as any).companyId;
+  const actorId = (session.user as any).id;
+
+  try {
+    const original = await db.purchaseOrder.findFirst({
+      where: { id: poId, companyId },
+    });
+    if (!original) return { success: false, error: "PO not found" };
+
+    const activeStatuses = ["APPROVED", "SENT", "PARTIALLY_RECEIVED"];
+    if (!activeStatuses.includes(original.status)) {
+      return { success: false, error: `Only POs with status APPROVED, SENT, or PARTIALLY_RECEIVED can be short-closed.` };
+    }
+
+    const result = await db.$transaction(async (tx) => {
+      // 1. Fetch poLines
+      const poLines = await tx.poLine.findMany({
+        where: { poId }
+      });
+
+      // 2. Adjust quantities and allocations
+      for (const poLine of poLines) {
+        const unreceivedQty = Math.max(0, poLine.qty - poLine.receivedQty);
+        if (unreceivedQty <= 0) continue;
+
+        // Adjust or delete award allocations linked to this poLine
+        const rfqLineAllocations = await tx.awardAllocation.findMany({
+          where: { poLineId: poLine.id, companyId }
+        });
+        for (const alloc of rfqLineAllocations) {
+          if (poLine.receivedQty > 0) {
+            await tx.awardAllocation.update({
+              where: { id: alloc.id },
+              data: { qty: poLine.receivedQty }
+            });
+          } else {
+            await tx.awardAllocation.delete({
+              where: { id: alloc.id }
+            });
+          }
+        }
+
+        // Decrement awardedQty on RfqLine
+        if (poLine.rfqLineId) {
+          const rfqLine = await tx.rfqLine.findUnique({
+            where: { id: poLine.rfqLineId }
+          });
+          if (rfqLine) {
+            const newAwardedQty = Math.max(0, rfqLine.awardedQty - unreceivedQty);
+            await tx.rfqLine.update({
+              where: { id: rfqLine.id },
+              data: { awardedQty: newAwardedQty }
+            });
+          }
+        }
+
+        // Decrement orderedQty on PrLine
+        if (poLine.prLineId) {
+          const prLine = await tx.prLine.findUnique({
+            where: { id: poLine.prLineId }
+          });
+          if (prLine) {
+            const newOrderedQty = Math.max(0, prLine.orderedQty - unreceivedQty);
+            await tx.prLine.update({
+              where: { id: prLine.id },
+              data: { orderedQty: newOrderedQty }
+            });
+
+            // Decrement orderedQty on IndentLines linked to this prLine
+            const indentLines = await tx.indentLine.findMany({
+              where: { prLineId: prLine.id }
+            });
+            for (const indLine of indentLines) {
+              const newIndOrderedQty = Math.max(0, indLine.orderedQty - unreceivedQty);
+              await tx.indentLine.update({
+                where: { id: indLine.id },
+                data: { orderedQty: newIndOrderedQty }
+              });
+            }
+          }
+        }
+      }
+
+      // 3. Recompute statuses
+      const rfqLineIds = Array.from(new Set(poLines.map((l: any) => l.rfqLineId).filter(Boolean))) as string[];
+      const prLineIds = Array.from(new Set(poLines.map((l: any) => l.prLineId).filter(Boolean))) as string[];
+
+      // Recompute RfqLines status
+      for (const rfqLineId of rfqLineIds) {
+        const freshRfqLine = await tx.rfqLine.findUnique({
+          where: { id: rfqLineId },
+          include: { quotationLines: true }
+        });
+        if (freshRfqLine) {
+          const rfqLineAllocations = await tx.awardAllocation.findMany({
+            where: { rfqLineId: freshRfqLine.id, companyId }
+          });
+          const totalAllocated = rfqLineAllocations.reduce((sum: number, a: any) => sum + a.qty, 0);
+
+          let rfqLineStatus: RfqLineStatus = RfqLineStatus.OPEN;
+          if (totalAllocated >= freshRfqLine.qty) {
+            rfqLineStatus = RfqLineStatus.CLOSED;
+          } else if (totalAllocated > 0) {
+            rfqLineStatus = RfqLineStatus.PARTIALLY_AWARDED;
+          } else {
+            const activeQuotes = freshRfqLine.quotationLines.filter((q: any) => q.canSupply);
+            if (activeQuotes.length === 0) {
+              rfqLineStatus = RfqLineStatus.UNCOVERED;
+            } else {
+              const totalAvailable = activeQuotes.reduce((sum: number, q: any) => sum + (q.quotedQty ?? freshRfqLine.qty), 0);
+              if (totalAvailable < freshRfqLine.qty) {
+                rfqLineStatus = RfqLineStatus.SHORT;
+              } else {
+                rfqLineStatus = RfqLineStatus.QUOTED;
+              }
+            }
+          }
+
+          await tx.rfqLine.update({
+            where: { id: freshRfqLine.id },
+            data: { status: rfqLineStatus }
+          });
+        }
+      }
+
+      // Recompute PrLines and IndentLines statuses
+      for (const prLineId of prLineIds) {
+        const prLine = await tx.prLine.findUnique({
+          where: { id: prLineId }
+        });
+        if (prLine) {
+          const open = prLine.qty - prLine.orderedQty - prLine.shortClosedQty;
+          let prLineStatus: LineStatus = LineStatus.OPEN;
+          if (open <= 0) {
+            prLineStatus = prLine.shortClosedQty === prLine.qty ? LineStatus.SHORT_CLOSED : LineStatus.ORDERED;
+          } else if (prLine.orderedQty > 0) {
+            prLineStatus = LineStatus.PARTIALLY_ORDERED;
+          }
+
+          await tx.prLine.update({
+            where: { id: prLine.id },
+            data: { status: prLineStatus, poRaised: open <= 0 }
+          });
+
+          // Recompute IndentLines statuses linked to this prLine
+          const indentLines = await tx.indentLine.findMany({
+            where: { prLineId: prLine.id }
+          });
+          for (const indentLine of indentLines) {
+            const openInd = indentLine.qty - indentLine.orderedQty - indentLine.issuedQty - indentLine.shortClosedQty;
+            let indentLineStatus: LineStatus = LineStatus.OPEN;
+            if (openInd <= 0) {
+              if (indentLine.shortClosedQty === indentLine.qty) {
+                indentLineStatus = LineStatus.SHORT_CLOSED;
+              } else if (indentLine.issuedQty >= indentLine.qty - indentLine.shortClosedQty) {
+                indentLineStatus = LineStatus.ISSUED;
+              } else {
+                indentLineStatus = LineStatus.ORDERED;
+              }
+            } else if (indentLine.orderedQty > 0 || indentLine.issuedQty > 0) {
+              indentLineStatus = LineStatus.PARTIALLY_ORDERED;
+            }
+
+            await tx.indentLine.update({
+              where: { id: indentLine.id },
+              data: { status: indentLineStatus }
+            });
+          }
+        }
+      }
+
+      // 4. Recompute parent header statuses
+      // RFQ headers
+      const rfqLinesForHeader = await tx.rfqLine.findMany({
+        where: { id: { in: rfqLineIds } }
+      });
+      const rfqIds = Array.from(new Set(rfqLinesForHeader.map((rl: any) => rl.rfqId))) as string[];
+
+      for (const rfqId of rfqIds) {
+        const freshRfqLines = await tx.rfqLine.findMany({
+          where: { rfqId }
+        });
+        const freshRfqLineIds = freshRfqLines.map((l) => l.id);
+        const rfqAllocations = await tx.awardAllocation.findMany({
+          where: { rfqLineId: { in: freshRfqLineIds }, companyId }
+        });
+
+        let nextRfqStatus: RfqStatus = RfqStatus.AWARDED;
+        if (rfqAllocations.length === 0) {
+          nextRfqStatus = RfqStatus.QUOTES_RECEIVED;
+        } else {
+          const allRfqLinesClosed = freshRfqLines.every((l) => {
+            const lineAllocs = rfqAllocations.filter((a) => a.rfqLineId === l.id);
+            const totalAlloc = lineAllocs.reduce((sum, a) => sum + a.qty, 0);
+            return totalAlloc >= l.qty;
+          });
+          if (allRfqLinesClosed) {
+            nextRfqStatus = RfqStatus.CLOSED;
+          } else {
+            nextRfqStatus = RfqStatus.AWARDED;
+          }
+        }
+
+        await tx.rfq.update({
+          where: { id: rfqId },
+          data: { status: nextRfqStatus }
+        });
+
+        // Recalculate quotation.awarded for this RFQ
+        const quotations = await tx.quotation.findMany({
+          where: { rfqId }
+        });
+        for (const q of quotations) {
+          const hasAlloc = rfqAllocations.some((a) => a.vendorId === q.vendorId);
+          await tx.quotation.update({
+            where: { id: q.id },
+            data: { awarded: hasAlloc }
+          });
+        }
+      }
+
+      // PR headers
+      const prLinesForHeader = await tx.prLine.findMany({
+        where: { id: { in: prLineIds } }
+      });
+      const prIds = Array.from(new Set(prLinesForHeader.map((pl: any) => pl.prId))) as string[];
+
+      for (const prId of prIds) {
+        const pr = await tx.purchaseRequisition.findUnique({
+          where: { id: prId },
+          include: { lines: true }
+        });
+        if (pr) {
+          const allPrLinesTerminal = pr.lines.every((l) =>
+            ([LineStatus.ORDERED, LineStatus.SHORT_CLOSED, LineStatus.CANCELLED] as LineStatus[]).includes(l.status)
+          );
+          const somePrLinesOrdered = pr.lines.some((l) =>
+            ([LineStatus.ORDERED, LineStatus.PARTIALLY_ORDERED] as LineStatus[]).includes(l.status)
+          );
+
+          let nextPrStatus: PrStatus = PrStatus.RFQ_ISSUED;
+          if (allPrLinesTerminal) {
+            const allShortClosed = pr.lines.every((l) => l.status === LineStatus.SHORT_CLOSED);
+            nextPrStatus = allShortClosed ? PrStatus.SHORT_CLOSED : PrStatus.CLOSED;
+          } else if (somePrLinesOrdered) {
+            nextPrStatus = PrStatus.PARTIALLY_ORDERED;
+          }
+
+          await tx.purchaseRequisition.update({
+            where: { id: pr.id },
+            data: { status: nextPrStatus }
+          });
+        }
+      }
+
+      // Indent headers
+      const affectedIndentLines = await tx.indentLine.findMany({
+        where: { prLineId: { in: prLineIds } }
+      });
+      const indentIds = Array.from(new Set(affectedIndentLines.map((il: any) => il.indentId).filter(Boolean))) as string[];
+
+      for (const indentId of indentIds) {
+        const indent = await tx.indent.findUnique({
+          where: { id: indentId },
+          include: { lines: true }
+        });
+        if (indent) {
+          const allIndentLinesTerminal = indent.lines.every((l) =>
+            ([LineStatus.ORDERED, LineStatus.ISSUED, LineStatus.SHORT_CLOSED, LineStatus.CANCELLED] as LineStatus[]).includes(l.status)
+          );
+          const someIndentLinesOrdered = indent.lines.some((l) =>
+            ([LineStatus.ORDERED, LineStatus.PARTIALLY_ORDERED, LineStatus.ISSUED] as LineStatus[]).includes(l.status)
+          );
+
+          let nextIndentStatus: IndentStatus = IndentStatus.CONVERTED_TO_PR;
+          if (allIndentLinesTerminal) {
+            const allShortClosed = indent.lines.every((l) => l.status === LineStatus.SHORT_CLOSED);
+            nextIndentStatus = allShortClosed ? IndentStatus.SHORT_CLOSED : IndentStatus.CLOSED;
+          } else if (someIndentLinesOrdered) {
+            nextIndentStatus = IndentStatus.PARTIALLY_ORDERED;
+          }
+
+          await tx.indent.update({
+            where: { id: indent.id },
+            data: { status: nextIndentStatus }
+          });
+        }
+      }
+
+      // 5. Update PO status to SHORT_CLOSED
+      const po = await tx.purchaseOrder.update({
+        where: { id: poId },
+        data: { status: PoStatus.SHORT_CLOSED },
+      });
+
+      await logAudit(tx, companyId, actorId, "SHORT_CLOSE", "PurchaseOrder", poId, original, po);
+      return po;
+    });
+
+    revalidatePath("/purchase/po");
+    return { success: true, po: result };
+  } catch (err: any) {
+    return { success: false, error: err.message || "Failed to short-close PO" };
+  }
+}
+
 export async function updatePO(poId: string, data: z.infer<typeof poSchema>) {
   const session = await auth();
   if (!session || !session.user) return { success: false, error: "Unauthorized" };
