@@ -205,6 +205,7 @@ export default async function RequisitionsPage() {
       items={items}
       vendors={vendors}
       userRole={userRole}
+      user={session.user as any}
       shipToLocations={shipToLocations}
       presets={presets}
     />

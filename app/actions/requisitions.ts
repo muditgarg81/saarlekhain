@@ -6,6 +6,7 @@ import { getNextSequence } from "@/lib/sequences";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { PrStatus, RfqStatus, RfqLineStatus, LineStatus } from "@prisma/client";
+import { can } from "@/lib/rbac";
 
 const prSchema = z.object({
   lines: z.array(z.object({
@@ -229,6 +230,10 @@ export async function submitQuotation(data: z.infer<typeof quotationSchema>) {
   const session = await auth();
   if (!session || !session.user) return { success: false, error: "Unauthorized" };
 
+  if (!can(session.user as any, "rfq.manage")) {
+    return { success: false, error: "Forbidden: You do not have permission to record quotes." };
+  }
+
   const companyId = (session.user as any).companyId;
   const actorId = (session.user as any).id;
 
@@ -288,6 +293,10 @@ export async function submitQuotation(data: z.infer<typeof quotationSchema>) {
 export async function awardQuotation(rfqId: string, quotationId: string) {
   const session = await auth();
   if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  if (!can(session.user as any, "rfq.award")) {
+    return { success: false, error: "Forbidden: You do not have permission to award RFQs." };
+  }
 
   const companyId = (session.user as any).companyId;
   const actorId = (session.user as any).id;
@@ -446,4 +455,191 @@ export async function recalculateRfqRanks(rfqId: string, tx: any) {
     }
   }
 }
+
+export async function updateQuotation(data: {
+  id: string;
+  leadDays?: number | null;
+  terms?: string | null;
+  freight: number;
+  packingCharges: number;
+  lines: {
+    id: string;
+    rate: number;
+    discount: number;
+    gstRate: number;
+    canSupply: boolean;
+    quotedQty?: number | null;
+    leadDays?: number | null;
+  }[];
+}) {
+  const session = await auth();
+  if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  if (!can(session.user as any, "rfq.manage")) {
+    return { success: false, error: "Forbidden: You do not have permission to edit quotes." };
+  }
+
+  const companyId = (session.user as any).companyId;
+  const actorId = (session.user as any).id;
+
+  try {
+    const q = await db.quotation.findFirst({
+      where: { id: data.id, companyId },
+      include: {
+        rfq: true,
+        lines: {
+          include: {
+            poLines: true
+          }
+        }
+      }
+    });
+
+    if (!q) return { success: false, error: "Quotation not found" };
+
+    if (q.rfq.status === RfqStatus.CLOSED) {
+      return { success: false, error: "Cannot edit quotation because the RFQ is closed." };
+    }
+
+    const hasPo = q.lines.some(l => l.poLines.length > 0);
+    if (hasPo) {
+      return { success: false, error: "Cannot edit quotation because a Purchase Order has already been raised for it." };
+    }
+
+    const result = await db.$transaction(async (tx) => {
+      // 1. Update quotation metadata
+      const updatedQuote = await tx.quotation.update({
+        where: { id: data.id },
+        data: {
+          leadDays: data.leadDays || null,
+          terms: data.terms || null,
+          freight: data.freight,
+          packingCharges: data.packingCharges,
+        }
+      });
+
+      // 2. Update each line
+      for (const line of data.lines) {
+        await tx.quotationLine.update({
+          where: { id: line.id },
+          data: {
+            rate: line.rate,
+            discount: line.discount,
+            gstRate: line.gstRate,
+            canSupply: line.canSupply,
+            quotedQty: line.quotedQty ?? null,
+            leadDays: line.leadDays ?? null,
+          }
+        });
+
+        // 3. If line.canSupply became false, delete its AwardAllocations
+        if (!line.canSupply) {
+          await tx.awardAllocation.deleteMany({
+            where: { quotationLineId: line.id, companyId }
+          });
+        }
+      }
+
+      // 4. Recalculate ranks for the RFQ
+      await recalculateRfqRanks(q.rfqId, tx);
+
+      await logAudit(tx, companyId, actorId, "UPDATE_QUOTATION", "Quotation", data.id, q, updatedQuote);
+      return updatedQuote;
+    });
+
+    revalidatePath("/purchase/requisitions");
+    return { success: true, quotation: result };
+  } catch (err: any) {
+    console.error("Error updating quotation:", err);
+    return { success: false, error: err.message || "Failed to update quotation" };
+  }
+}
+
+export async function deleteQuotation(quotationId: string) {
+  const session = await auth();
+  if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  if (!can(session.user as any, "rfq.manage")) {
+    return { success: false, error: "Forbidden: You do not have permission to delete quotes." };
+  }
+
+  const companyId = (session.user as any).companyId;
+  const actorId = (session.user as any).id;
+
+  try {
+    const q = await db.quotation.findFirst({
+      where: { id: quotationId, companyId },
+      include: {
+        rfq: true,
+        lines: {
+          include: {
+            poLines: true
+          }
+        }
+      }
+    });
+
+    if (!q) return { success: false, error: "Quotation not found" };
+
+    if (q.rfq.status === RfqStatus.CLOSED) {
+      return { success: false, error: "Cannot delete quotation because the RFQ is closed." };
+    }
+
+    const hasPo = q.lines.some(l => l.poLines.length > 0);
+    if (hasPo) {
+      return { success: false, error: "Cannot delete quotation because a Purchase Order has already been raised for it." };
+    }
+
+    const qLineIds = q.lines.map(l => l.id);
+
+    await db.$transaction(async (tx) => {
+      // 1. Delete associated AwardAllocations
+      await tx.awardAllocation.deleteMany({
+        where: { quotationLineId: { in: qLineIds }, companyId }
+      });
+
+      // 2. Delete QuotationLines
+      await tx.quotationLine.deleteMany({
+        where: { quotationId }
+      });
+
+      // 3. Delete Quotation
+      await tx.quotation.delete({
+        where: { id: quotationId }
+      });
+
+      // 4. Recalculate ranks for the RFQ
+      await recalculateRfqRanks(q.rfqId, tx);
+
+      // 5. Update RFQ status
+      const remainingQuotes = await tx.quotation.count({
+        where: { rfqId: q.rfqId }
+      });
+
+      if (remainingQuotes === 0) {
+        await tx.rfq.update({
+          where: { id: q.rfqId },
+          data: { status: RfqStatus.ISSUED }
+        });
+      } else {
+        const awardedCount = await tx.quotation.count({
+          where: { rfqId: q.rfqId, awarded: true }
+        });
+        await tx.rfq.update({
+          where: { id: q.rfqId },
+          data: { status: awardedCount > 0 ? RfqStatus.AWARDED : RfqStatus.QUOTES_RECEIVED }
+        });
+      }
+
+      await logAudit(tx, companyId, actorId, "DELETE_QUOTATION", "Quotation", quotationId, q, null);
+    });
+
+    revalidatePath("/purchase/requisitions");
+    return { success: true };
+  } catch (err: any) {
+    console.error("Error deleting quotation:", err);
+    return { success: false, error: err.message || "Failed to delete quotation" };
+  }
+}
+
 

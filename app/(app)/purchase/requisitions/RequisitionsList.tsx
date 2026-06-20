@@ -7,7 +7,9 @@ import {
   rejectPR,
   createRFQ, 
   submitQuotation, 
-  awardQuotation 
+  awardQuotation,
+  updateQuotation,
+  deleteQuotation
 } from "@/app/actions/requisitions";
 import { limitYearTo4Digits } from "@/lib/date";
 import { SearchableItemSelect } from "@/components/SearchableItemSelect";
@@ -30,7 +32,8 @@ import {
   TrendingDown,
   Percent,
   ShieldCheck,
-  Info
+  Info,
+  Edit
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 
@@ -129,12 +132,15 @@ interface ShipToLocationRecord {
   gstin: string | null;
 }
 
+import { can, SessionUser } from "@/lib/rbac";
+
 interface RequisitionsListProps {
   prs: PRRecord[];
   rfqs: RFQRecord[];
   items: Item[];
   vendors: Vendor[];
   userRole: string;
+  user: SessionUser;
   shipToLocations: ShipToLocationRecord[];
   presets?: any[];
 }
@@ -145,6 +151,7 @@ export default function RequisitionsList({
   items,
   vendors,
   userRole,
+  user,
   shipToLocations,
   presets = []
 }: RequisitionsListProps) {
@@ -172,6 +179,7 @@ export default function RequisitionsList({
   const [isCompOpen, setIsCompOpen] = useState(false);
   const [lineAwards, setLineAwards] = useState<{ [rfqLineId: string]: string }>({});
   const [isDetailOpen, setIsDetailOpen] = useState(false);
+  const [editingQuotationId, setEditingQuotationId] = useState<string | null>(null);
   const [isRejectPrOpen, setIsRejectPrOpen] = useState(false);
   const [rejectPrId, setRejectPrId] = useState<string | null>(null);
   const [rejectRemarks, setRejectRemarks] = useState("");
@@ -209,6 +217,7 @@ export default function RequisitionsList({
     freight: 0,
     packingCharges: 0,
     lines: [] as {
+      id?: string;
       rfqLineId?: string | null;
       itemId: string;
       rate: number;
@@ -252,6 +261,8 @@ export default function RequisitionsList({
 
   const canApprove = ["PURCHASE_MANAGER", "ADMIN", "OWNER"].includes(userRole);
   const isPurchase = ["PURCHASE_OFFICER", "PURCHASE_MANAGER", "ADMIN", "OWNER"].includes(userRole);
+  const canManageRfq = can(user, "rfq.manage");
+  const canAwardRfq = can(user, "rfq.award");
 
   const filteredPrs = prs.filter(p => 
     p.number.toLowerCase().includes(search.toLowerCase()) ||
@@ -383,6 +394,7 @@ export default function RequisitionsList({
 
   const handleOpenQuote = (rfq: RFQRecord) => {
     setSelectedRfq(rfq);
+    setEditingQuotationId(null);
     setNewQuote({
       vendorId: "",
       leadDays: 5,
@@ -390,6 +402,7 @@ export default function RequisitionsList({
       freight: 0,
       packingCharges: 0,
       lines: rfq.lines.map(l => ({
+        id: undefined,
         rfqLineId: l.id,
         itemId: l.itemId,
         rate: 0,
@@ -403,39 +416,112 @@ export default function RequisitionsList({
     setIsQuoteOpen(true);
   };
 
+  const handleEditQuoteClick = (rfq: RFQRecord, quote: any) => {
+    setSelectedRfq(rfq);
+    setEditingQuotationId(quote.id);
+    setNewQuote({
+      vendorId: quote.vendorId,
+      leadDays: quote.leadDays ?? 5,
+      terms: quote.terms ?? "FOB Destination",
+      freight: quote.freight ?? 0,
+      packingCharges: quote.packingCharges ?? 0,
+      lines: rfq.lines.map(l => {
+        const qLine = quote.lines.find((ql: any) => ql.rfqLineId === l.id);
+        return {
+          id: qLine?.id,
+          rfqLineId: l.id,
+          itemId: l.itemId,
+          rate: qLine ? qLine.rate : 0,
+          discount: qLine ? qLine.discount : 0,
+          gstRate: qLine ? qLine.gstRate : 18,
+          canSupply: qLine ? qLine.canSupply : false,
+          quotedQty: qLine ? (qLine.quotedQty ?? l.qty) : l.qty,
+          leadDays: qLine ? (qLine.leadDays ?? 5) : 5,
+        };
+      })
+    });
+    setIsQuoteOpen(true);
+  };
+
+  const handleDeleteQuote = async (id: string) => {
+    if (!confirm("Are you sure you want to delete this quotation? This action cannot be undone.")) {
+      return;
+    }
+    setActionLoading(true);
+    const res = await deleteQuotation(id);
+    setActionLoading(false);
+    if (res.success) {
+      setIsCompOpen(false);
+      setIsDetailOpen(false);
+      sessionStorage.setItem("requisitions_active_tab", "rfq");
+      window.location.reload();
+    } else {
+      alert("Failed to delete quotation: " + res.error);
+    }
+  };
+
   const handleCreateQuote = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newQuote.vendorId) {
       alert("Please select a vendor");
       return;
     }
-
+ 
     setActionLoading(true);
     setErrorMsg(null);
-
+ 
     // Calculate maximum lead days from item lines
     const activeLines = newQuote.lines.filter(l => l.canSupply !== false);
     const maxLineLeadDays = activeLines.length > 0
       ? Math.max(...activeLines.map(l => l.leadDays || 0))
       : 5;
-
-    const res = await submitQuotation({
-      rfqId: selectedRfq!.id,
-      vendorId: newQuote.vendorId,
-      leadDays: maxLineLeadDays,
-      terms: newQuote.terms,
-      freight: newQuote.freight,
-      packingCharges: newQuote.packingCharges,
-      lines: newQuote.lines
-    });
-    setActionLoading(false);
-
-    if (res.success) {
-      setIsQuoteOpen(false);
-      sessionStorage.setItem("requisitions_active_tab", "rfq");
-      window.location.reload();
+ 
+    if (editingQuotationId) {
+      const res = await updateQuotation({
+        id: editingQuotationId,
+        leadDays: maxLineLeadDays,
+        terms: newQuote.terms,
+        freight: newQuote.freight,
+        packingCharges: newQuote.packingCharges,
+        lines: newQuote.lines.map(l => ({
+          id: l.id!,
+          rate: l.rate,
+          discount: l.discount,
+          gstRate: l.gstRate,
+          canSupply: l.canSupply,
+          quotedQty: l.quotedQty,
+          leadDays: l.leadDays
+        }))
+      });
+      setActionLoading(false);
+ 
+      if (res.success) {
+        setIsQuoteOpen(false);
+        setEditingQuotationId(null);
+        sessionStorage.setItem("requisitions_active_tab", "rfq");
+        window.location.reload();
+      } else {
+        setErrorMsg(res.error || "Failed to update quotation");
+      }
     } else {
-      setErrorMsg(res.error || "Failed to log quotation");
+      const res = await submitQuotation({
+        rfqId: selectedRfq!.id,
+        vendorId: newQuote.vendorId,
+        leadDays: maxLineLeadDays,
+        terms: newQuote.terms,
+        freight: newQuote.freight,
+        packingCharges: newQuote.packingCharges,
+        lines: newQuote.lines
+      });
+      setActionLoading(false);
+ 
+      if (res.success) {
+        setIsQuoteOpen(false);
+        sessionStorage.setItem("requisitions_active_tab", "rfq");
+        window.location.reload();
+      } else {
+        setErrorMsg(res.error || "Failed to log quotation");
+      }
     }
   };
 
@@ -780,7 +866,7 @@ export default function RequisitionsList({
                                 </button>
                               </>
                             )}
-                            {pr.status === "APPROVED" && isPurchase && (
+                            {pr.status === "APPROVED" && canManageRfq && (
                               <button
                                 onClick={() => handleOpenRfq(pr)}
                                 title="Create RFQ"
@@ -878,7 +964,7 @@ export default function RequisitionsList({
                           </button>
                         </>
                       )}
-                      {pr.status === "APPROVED" && isPurchase && (
+                      {pr.status === "APPROVED" && canManageRfq && (
                         <button
                           onClick={() => handleOpenRfq(pr)}
                           className="flex items-center space-x-1 px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded text-xs cursor-pointer font-bold"
@@ -945,7 +1031,7 @@ export default function RequisitionsList({
                             >
                               <Eye size={13} />
                             </button>
-                            {rfq.status !== "AWARDED" && isPurchase && (
+                            {rfq.status !== "AWARDED" && canManageRfq && (
                               <button
                                 onClick={() => handleOpenQuote(rfq)}
                                 title="Log Vendor Quote"
@@ -1022,7 +1108,7 @@ export default function RequisitionsList({
                         <Eye size={12} />
                         <span>Details</span>
                       </button>
-                      {rfq.status !== "AWARDED" && isPurchase && (
+                      {rfq.status !== "AWARDED" && canManageRfq && (
                         <button
                           onClick={() => handleOpenQuote(rfq)}
                           className="flex items-center space-x-1 px-2.5 py-1.5 bg-saffron hover:bg-saffron-dark text-onyx font-bold rounded text-xs cursor-pointer"
@@ -1243,7 +1329,7 @@ export default function RequisitionsList({
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-cream max-w-2xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
             <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
-              <h3 className="font-heading text-lg font-bold">Log Supplier Quotation ({selectedRfq.number})</h3>
+              <h3 className="font-heading text-lg font-bold">{editingQuotationId ? "Edit Supplier Quotation" : "Log Supplier Quotation"} ({selectedRfq.number})</h3>
               <button onClick={() => setIsQuoteOpen(false)} className="hover:text-saffron cursor-pointer">
                 <X size={20} />
               </button>
@@ -1267,6 +1353,7 @@ export default function RequisitionsList({
                     value={newQuote.vendorId}
                     onChange={(val) => setNewQuote(prev => ({ ...prev, vendorId: val }))}
                     placeholder="Select Vendor"
+                    disabled={!!editingQuotationId || actionLoading}
                   />
                 </div>
                 <div className="sm:col-span-4">
@@ -1472,7 +1559,7 @@ export default function RequisitionsList({
                   disabled={actionLoading}
                   className="px-4 py-2 bg-saffron hover:bg-saffron-dark rounded-lg text-xs font-bold text-onyx shadow cursor-pointer"
                 >
-                  {actionLoading ? "Logging..." : "Submit Quote"}
+                  {actionLoading ? (editingQuotationId ? "Saving..." : "Logging...") : (editingQuotationId ? "Save Changes" : "Submit Quote")}
                 </button>
               </div>
             </form>
@@ -1504,8 +1591,30 @@ export default function RequisitionsList({
                       <th className="p-3 border-r border-onyx/10 w-64">Item Details</th>
                       {compData.rfq.quotations.map((q: any) => (
                         <th key={q.id} className="p-3 text-center border-r border-onyx/10 w-72">
-                          <p className="font-bold text-onyx">{q.vendorName}</p>
-                          <p className="text-[9px] text-onyx/50 font-normal">Lead: {q.leadDays || "N/A"} days</p>
+                          <div className="flex flex-col items-center justify-center space-y-1">
+                            <p className="font-bold text-onyx">{q.vendorName}</p>
+                            <p className="text-[9px] text-onyx/50 font-normal">Lead: {q.leadDays || "N/A"} days</p>
+                            {compData.rfq.status !== "CLOSED" && canManageRfq && (
+                              <div className="flex items-center gap-2 mt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleEditQuoteClick(compData.rfq, q)}
+                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded transition"
+                                  title="Edit Quotation"
+                                >
+                                  <Edit size={13} />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteQuote(q.id)}
+                                  className="p-1 text-red-600 hover:bg-red-50 rounded transition"
+                                  title="Delete Quotation"
+                                >
+                                  <Trash2 size={13} />
+                                </button>
+                              </div>
+                            )}
+                          </div>
                         </th>
                       ))}
                     </tr>
@@ -1579,7 +1688,7 @@ export default function RequisitionsList({
                                   </span>
                                 </div>
 
-                                {compData.rfq.status !== "CLOSED" && isPurchase && (
+                                {compData.rfq.status !== "CLOSED" && canAwardRfq && (
                                   <div className="mt-3">
                                     <label className="flex items-center justify-center gap-1.5 cursor-pointer">
                                       <input
@@ -1735,7 +1844,7 @@ export default function RequisitionsList({
 
             <div className="px-6 py-4 border-t border-onyx/10 bg-cream-dark/30 flex items-center justify-between">
               <div>
-                {compData.rfq.status !== "CLOSED" && isPurchase && (
+                {compData.rfq.status !== "CLOSED" && canAwardRfq && (
                   <div className="flex gap-2">
                     <button
                       type="button"
@@ -1926,6 +2035,60 @@ export default function RequisitionsList({
                   </tbody>
                 </table>
               </div>
+
+              {!selectedPr && selectedRfq && (
+                <div className="mt-6 pt-6 border-t border-onyx/5">
+                  <h4 className="text-[10px] font-mono font-bold uppercase tracking-wider text-onyx/40 mb-3">
+                    Logged Supplier Quotations
+                  </h4>
+                  
+                  {selectedRfq.quotations && selectedRfq.quotations.length > 0 ? (
+                    <div className="space-y-3">
+                      {selectedRfq.quotations.map((q) => (
+                        <div 
+                          key={q.id} 
+                          className="p-3 bg-white border border-onyx/5 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs"
+                        >
+                          <div className="space-y-1">
+                            <p className="font-heading text-xs font-bold text-onyx">{q.vendorName}</p>
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] text-onyx/60 font-mono">
+                              <div><span className="text-onyx/40">Lead:</span> {q.leadDays ?? "N/A"} days</div>
+                              <div><span className="text-onyx/40 font-heading">Terms:</span> {q.terms || "N/A"}</div>
+                              <div><span className="text-onyx/40 font-heading">Freight:</span> ₹{q.freight}</div>
+                              <div><span className="text-onyx/40 font-heading">Packing:</span> ₹{q.packingCharges}</div>
+                            </div>
+                          </div>
+                          
+                          {selectedRfq.status !== "CLOSED" && canManageRfq && (
+                            <div className="flex items-center gap-1.5 self-end sm:self-center">
+                              <button
+                                type="button"
+                                onClick={() => handleEditQuoteClick(selectedRfq, q)}
+                                className="flex items-center justify-center p-1.5 text-blue-600 hover:bg-blue-50 border border-blue-100 rounded transition cursor-pointer"
+                                title="Edit Quotation"
+                              >
+                                <Edit size={12} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteQuote(q.id)}
+                                className="flex items-center justify-center p-1.5 text-red-600 hover:bg-red-50 border border-red-100 rounded transition cursor-pointer"
+                                title="Delete Quotation"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="p-4 bg-white border border-dashed border-onyx/15 rounded-lg text-center text-xs text-onyx/40">
+                      No quotations logged yet for this RFQ.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="pt-4 border-t border-onyx/5">

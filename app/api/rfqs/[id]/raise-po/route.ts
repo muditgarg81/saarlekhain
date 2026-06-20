@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { getNextSequence } from "@/lib/sequences";
 import { PoStatus, PoType, PrStatus, IndentStatus, LineStatus, RfqLineStatus, RfqStatus } from "@prisma/client";
+import { can } from "@/lib/rbac";
 
 export async function POST(
   request: Request,
@@ -11,6 +12,9 @@ export async function POST(
   const session = await auth();
   if (!session || !session.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  }
+  if (!can(session.user as any, "rfq.award")) {
+    return NextResponse.json({ error: "Forbidden: You do not have permission to award RFQs." }, { status: 403 });
   }
   const companyId = (session.user as any).companyId;
   const actorId = (session.user as any).id;
