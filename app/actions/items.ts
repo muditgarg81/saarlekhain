@@ -828,3 +828,100 @@ export async function updateReorderLevels(updates: Array<{ id: string; reorderLe
   }
 }
 
+export async function getItemStockLogs(
+  itemId: string,
+  startDateStr?: string,
+  endDateStr?: string
+) {
+  const session = await auth();
+  if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  const companyId = (session.user as any).companyId;
+
+  try {
+    const whereClause: any = {
+      companyId,
+      itemId,
+    };
+
+    if (startDateStr || endDateStr) {
+      whereClause.createdAt = {};
+      if (startDateStr) {
+        whereClause.createdAt.gte = new Date(`${startDateStr}T00:00:00.000Z`);
+      }
+      if (endDateStr) {
+        whereClause.createdAt.lte = new Date(`${endDateStr}T23:59:59.999Z`);
+      }
+    }
+
+    const logs = await db.stockLedger.findMany({
+      where: whereClause,
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    if (logs.length === 0) {
+      return { success: true, logs: [] };
+    }
+
+    // Resolve store names
+    const storeIds = Array.from(new Set(logs.map((l) => l.storeId)));
+    const stores = await db.store.findMany({
+      where: { id: { in: storeIds }, companyId },
+      select: { id: true, name: true },
+    });
+
+    // Resolve reference numbers (GRN / Issue / Rejection)
+    const grnIds = Array.from(new Set(logs.filter((l) => l.refType === "GRN" && l.refId).map((l) => l.refId as string)));
+    const grns = grnIds.length > 0 ? await db.grn.findMany({
+      where: { id: { in: grnIds }, companyId },
+      select: { id: true, number: true },
+    }) : [];
+
+    const issueIds = Array.from(new Set(logs.filter((l) => l.refType === "ISSUE" && l.refId).map((l) => l.refId as string)));
+    const issues = issueIds.length > 0 ? await db.issue.findMany({
+      where: { id: { in: issueIds }, companyId },
+      select: { id: true, number: true },
+    }) : [];
+
+    const rejectionIds = Array.from(new Set(logs.filter((l) => l.refType === "GRN_REJECTION" && l.refId).map((l) => l.refId as string)));
+    const rejections = rejectionIds.length > 0 ? await db.rejectedMaterial.findMany({
+      where: { id: { in: rejectionIds }, companyId },
+      select: { id: true, grnNumber: true },
+    }) : [];
+
+    const formattedLogs = logs.map((l) => {
+      const store = stores.find((s) => s.id === l.storeId);
+      
+      let refNo = l.refId || "N/A";
+      if (l.refType === "GRN") {
+        const grn = grns.find((g) => g.id === l.refId);
+        if (grn) refNo = grn.number;
+      } else if (l.refType === "ISSUE") {
+        const issue = issues.find((i) => i.id === l.refId);
+        if (issue) refNo = issue.number;
+      } else if (l.refType === "GRN_REJECTION") {
+        const rejection = rejections.find((r) => r.id === l.refId);
+        if (rejection) refNo = `QC REJ (GRN: ${rejection.grnNumber})`;
+      }
+
+      return {
+        id: l.id,
+        txnType: l.txnType,
+        qty: l.qty,
+        rate: l.rate,
+        refType: l.refType,
+        refNo,
+        storeName: store?.name || "Unknown Store",
+        createdAt: l.createdAt.toISOString(),
+      };
+    });
+
+    return { success: true, logs: formattedLogs };
+  } catch (err: any) {
+    console.error("Error fetching item stock logs:", err);
+    return { success: false, error: err.message || "Failed to fetch logs" };
+  }
+}
+

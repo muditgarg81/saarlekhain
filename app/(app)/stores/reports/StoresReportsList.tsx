@@ -8,9 +8,11 @@ import {
   TrendingUp, 
   TrendingDown, 
   CheckCircle,
-  PackageCheck
+  PackageCheck,
+  X
 } from "lucide-react";
 import * as utils from "xlsx";
+import { getItemStockLogs } from "@/app/actions/items";
 
 interface StockRow {
   id: string;
@@ -44,6 +46,30 @@ export default function StoresReportsList({
   const [search, setSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("all");
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+
+  const [isLogsOpen, setIsLogsOpen] = useState(false);
+  const [selectedItem, setSelectedItem] = useState<{ id: string; code: string; name: string } | null>(null);
+  const [logs, setLogs] = useState<any[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
+  const [logsError, setLogsError] = useState<string | null>(null);
+
+  const handleItemClick = async (item: { id: string; code: string; name: string }) => {
+    setSelectedItem(item);
+    setIsLogsOpen(true);
+    setLogsLoading(true);
+    setLogsError(null);
+    setLogs([]);
+
+    const res = await getItemStockLogs(item.id, startDate, endDate);
+    setLogsLoading(false);
+    if (res.success) {
+      setLogs(res.logs || []);
+    } else {
+      setLogsError(res.error || "Failed to fetch stock logs");
+    }
+  };
 
   // Filter the derived stock ledger rows
   const filteredData = stockData.filter(row => {
@@ -164,7 +190,29 @@ export default function StoresReportsList({
         </div>
 
         {/* Filters */}
-        <div className="flex items-center space-x-4 w-full md:w-auto">
+        <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+          {/* Start Date */}
+          <div className="flex items-center space-x-1.5">
+            <span className="text-[10px] font-bold text-onyx/40 uppercase">From</span>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="text-xs bg-cream-dark/45 border border-onyx/10 rounded-lg px-2 py-1.5 focus:outline-none focus:border-saffron font-mono"
+            />
+          </div>
+
+          {/* End Date */}
+          <div className="flex items-center space-x-1.5">
+            <span className="text-[10px] font-bold text-onyx/40 uppercase">To</span>
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              className="text-xs bg-cream-dark/45 border border-onyx/10 rounded-lg px-2 py-1.5 focus:outline-none focus:border-saffron font-mono"
+            />
+          </div>
+
           {/* Category Dropdown */}
           <select
             value={selectedCategory}
@@ -222,8 +270,24 @@ export default function StoresReportsList({
                   const isOut = row.qty === 0;
                   return (
                     <tr key={row.id}>
-                      <td className="font-mono font-bold text-xs text-onyx/85">{row.code}</td>
-                      <td className="font-semibold">{row.name}</td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => handleItemClick({ id: row.id, code: row.code, name: row.name })}
+                          className="font-mono font-bold text-xs text-saffron-dark hover:underline focus:outline-none cursor-pointer text-left"
+                        >
+                          {row.code}
+                        </button>
+                      </td>
+                      <td>
+                        <button
+                          type="button"
+                          onClick={() => handleItemClick({ id: row.id, code: row.code, name: row.name })}
+                          className="font-semibold text-onyx hover:text-saffron-dark text-left focus:outline-none cursor-pointer"
+                        >
+                          {row.name}
+                        </button>
+                      </td>
                       <td>{row.categoryName}</td>
                       <td className="text-right font-bold font-mono">{row.qty}</td>
                       <td className="font-semibold text-onyx/50">{row.baseUom}</td>
@@ -266,6 +330,106 @@ export default function StoresReportsList({
           </table>
         </div>
       </div>
+
+      {/* Stock Logs Side Drawer */}
+      {isLogsOpen && selectedItem && (
+        <div className="fixed inset-0 bg-black/45 backdrop-blur-xs flex justify-end z-50 animate-in fade-in duration-200">
+          <div className="w-full max-w-xl bg-cream h-full border-l border-onyx/10 flex flex-col shadow-2xl p-6 relative animate-in slide-in-from-right duration-200">
+            <button 
+              onClick={() => setIsLogsOpen(false)} 
+              className="absolute top-6 right-6 text-onyx/40 hover:text-onyx cursor-pointer"
+            >
+              <X size={20} />
+            </button>
+
+            <div className="space-y-2 mt-4 pb-4 border-b border-onyx/5">
+              <span className="text-[10px] font-mono font-bold bg-saffron px-2 py-0.5 rounded text-onyx">
+                {selectedItem.code}
+              </span>
+              <h3 className="font-heading text-lg font-extrabold text-onyx">
+                Item Stock Ledger Logs
+              </h3>
+              <p className="text-xs text-onyx/60 font-semibold">
+                {selectedItem.name}
+              </p>
+              {(startDate || endDate) && (
+                <p className="text-[10px] text-onyx/40 font-medium">
+                  Period: {startDate ? new Date(startDate).toLocaleDateString() : "Beginning"} to {endDate ? new Date(endDate).toLocaleDateString() : "Present"}
+                </p>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-6 space-y-4">
+              {logsLoading ? (
+                <div className="flex flex-col items-center justify-center py-12 space-y-2">
+                  <div className="w-6 h-6 border-2 border-saffron border-t-transparent rounded-full animate-spin"></div>
+                  <p className="text-xs text-onyx/40 font-medium">Loading ledger logs...</p>
+                </div>
+              ) : logsError ? (
+                <div className="p-4 bg-red-50 border border-red-150 rounded-lg text-center text-xs text-red-700 font-medium">
+                  {logsError}
+                </div>
+              ) : logs.length === 0 ? (
+                <div className="p-8 bg-white border border-dashed border-onyx/15 rounded-lg text-center text-xs text-onyx/40 font-medium">
+                  No stock movements logged for this period.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {logs.map((log) => {
+                    const isPositive = log.qty > 0;
+                    return (
+                      <div 
+                        key={log.id} 
+                        className="p-3.5 bg-white border border-onyx/5 rounded-lg flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 shadow-xs"
+                      >
+                        <div className="space-y-1">
+                          <div className="flex items-center space-x-2">
+                            <span className={`inline-flex px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                              isPositive 
+                                ? "bg-green-50 text-green-700 border border-green-200" 
+                                : "bg-red-50 text-red-700 border border-red-200"
+                            }`}>
+                              {log.txnType.replace("_", " ")}
+                            </span>
+                            <span className="text-[10px] text-onyx/40 font-mono">
+                              {new Date(log.createdAt).toLocaleString()}
+                            </span>
+                          </div>
+                          
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[11px] text-onyx/60 font-mono">
+                            <div><span className="text-onyx/40 font-heading">Store:</span> {log.storeName}</div>
+                            <div><span className="text-onyx/40 font-heading">Ref:</span> {log.refNo}</div>
+                            {log.rate !== null && log.rate !== undefined && (
+                              <div><span className="text-onyx/40 font-heading">Rate:</span> ₹{log.rate.toFixed(2)}</div>
+                            )}
+                          </div>
+                        </div>
+                        
+                        <div className="text-right self-end sm:self-center">
+                          <span className={`font-mono text-sm font-bold ${
+                            isPositive ? "text-green-600" : "text-red-600"
+                          }`}>
+                            {isPositive ? "+" : ""}{log.qty}
+                          </span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            <div className="pt-4 border-t border-onyx/5">
+              <button 
+                onClick={() => setIsLogsOpen(false)}
+                className="w-full py-2.5 bg-onyx text-cream-light font-bold rounded-lg text-xs hover:bg-onyx-light cursor-pointer"
+              >
+                Close Logs
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
