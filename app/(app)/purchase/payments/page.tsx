@@ -170,11 +170,23 @@ export default async function PaymentsPage() {
     }
   });
 
-  // Map poId -> total advance paid (PAID requests of type ADVANCE)
+  // Map poId -> total advance paid (from Payment Vouchers / Payment Requests)
   const poAdvanceMap = new Map<string, number>();
-  paymentRequests.forEach(pr => {
-    if (pr.poId && pr.type === "ADVANCE" && pr.status === "PAID") {
-      poAdvanceMap.set(pr.poId, (poAdvanceMap.get(pr.poId) || 0) + pr.amount);
+  payments.forEach((pay) => {
+    if (!pay.invoiceId) {
+      const linkedReq = paymentRequests.find(pr => pr.paymentVoucherId === pay.id);
+      if (linkedReq && linkedReq.poId) {
+        poAdvanceMap.set(linkedReq.poId, (poAdvanceMap.get(linkedReq.poId) || 0) + pay.amount);
+      } else if (pay.reference) {
+        const poMatch = pay.reference.match(/PO[-_]\d+/i);
+        if (poMatch) {
+          const poNum = poMatch[0].toUpperCase();
+          const matchedPo = pos.find(p => p.number.toUpperCase() === poNum);
+          if (matchedPo) {
+            poAdvanceMap.set(matchedPo.id, (poAdvanceMap.get(matchedPo.id) || 0) + pay.amount);
+          }
+        }
+      }
     }
   });
 
