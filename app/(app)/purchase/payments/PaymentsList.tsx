@@ -20,7 +20,6 @@ import {
   updatePaymentRequestStatus
 } from "@/app/actions/paymentRequests";
 import { limitYearTo4Digits } from "@/lib/date";
-import { deleteGrn } from "@/app/actions/grns";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import { 
   Search, 
@@ -389,20 +388,6 @@ export default function PaymentsList({
       window.location.reload();
     } else {
       alert(res.error || "Failed to delete payment voucher");
-    }
-  };
-
-  const handleDeleteGrn = async (id: string, grnNumber: string) => {
-    if (!confirm(`WARNING: Deleting GRN ${grnNumber} will revert stock ledger quantities, decrement linked PO received quantities, and delete any associated QC inspections or rejected material records. Are you sure you want to proceed?`)) {
-      return;
-    }
-    setActionLoading(true);
-    const res = await deleteGrn(id);
-    setActionLoading(false);
-    if (res.success) {
-      window.location.reload();
-    } else {
-      alert("Failed to delete GRN: " + res.error);
     }
   };
 
@@ -1929,17 +1914,6 @@ export default function PaymentsList({
                                     <Check size={13} />
                                     <span>Confirm Pay</span>
                                   </button>
-                                  <div className="border-t border-onyx/5 my-1" />
-                                  <button
-                                    onClick={() => {
-                                      handleDeleteGrn(grn.id, grn.number);
-                                      setActiveDropdownId(null);
-                                    }}
-                                    className="w-full text-left px-4 py-2 hover:bg-red-50 text-red-650 flex items-center space-x-2 transition-colors duration-150"
-                                  >
-                                    <Trash2 size={13} />
-                                    <span>Delete GRN</span>
-                                  </button>
                                 </div>
                               )}
                             </div>
@@ -2059,13 +2033,6 @@ export default function PaymentsList({
                       >
                         <Check size={12} />
                         <span>Confirm Pay</span>
-                      </button>
-                      <button
-                        onClick={() => handleDeleteGrn(grn.id, grn.number)}
-                        className="px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-650 border border-red-200 rounded text-xs font-bold shadow-sm flex items-center space-x-1 cursor-pointer"
-                      >
-                        <Trash2 size={12} />
-                        <span>Delete</span>
                       </button>
                     </div>
                   </div>
