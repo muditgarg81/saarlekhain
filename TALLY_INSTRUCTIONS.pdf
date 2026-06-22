@@ -1,0 +1,528 @@
+%PDF-1.3
+%ºß¬à
+3 0 obj
+<</Type /Page
+/Parent 1 0 R
+/Resources 2 0 R
+/MediaBox [0 0 595.2799999999999727 841.8899999999999864]
+/Contents 4 0 R
+>>
+endobj
+4 0 obj
+<<
+/Length 3349
+>>
+stream
+0.5670000000000001 w
+0 G
+0.88 0.6 0.14 rg
+56.6929133858267775 771.0238582677164914 481.8941732283464034 -8.5039370078740166 re
+f
+BT
+/F2 22 Tf
+25.2999999999999972 TL
+0.102 g
+56.6929133858267775 742.6774015748030706 Td
+(Tally Prime Integration Guide) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.471 g
+56.6929133858267775 720.0002362204724022 Td
+(Saarlekha Stores & Purchase Connectivity Guide) Tj
+ET
+0.9 G
+56.6929133858267775 685.9844881889763428 m
+538.5870866141731312 685.9844881889763428 l
+S
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 657.6380314960629221 Td
+(This guide explains how to connect your local Tally Prime client/server to the Saarlekha Stores & Purchase) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 642.6370866141731995 Td
+(cloud platform using the standalone LAN Bridge Agent.) Tj
+ET
+BT
+/F2 14 Tf
+16.0999999999999979 TL
+0.102 g
+56.6929133858267775 587.951102362204665 Td
+(1. Architecture Overview) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 562.6116377952755556 Td
+(The LAN Bridge Agent runs inside your factory or accounting network. It polls Tally Prime locally \(via port) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 547.6106929133857193 Td
+(9000 XML server\) and communicates outbound to Saarlekha Cloud over standard HTTPS. No inbound port) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 532.6097480314959967 Td
+(forwarding or firewall exceptions are required on your local router.) Tj
+ET
+BT
+/F2 14 Tf
+16.0999999999999979 TL
+0.102 g
+56.6929133858267775 477.9237637795274622 Td
+(2. Setup Instructions) Tj
+ET
+BT
+/F2 12 Tf
+13.7999999999999989 TL
+0.102 g
+56.6929133858267775 429.9071338582676276 Td
+(Step 1: Register a LAN Bridge Agent in Saarlekha) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 406.5677952755904698 Td
+(1. Navigate to the ERP & Tally Settings page on the Saarlekha platform.) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 374.5589763779526606 Td
+(2. Scroll to the LAN Bridge Agents panel at the bottom.) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 342.5501574803148515 Td
+(3. In the Agent location name field, type a name identifying the machine where the agent will run \(e.g. Office) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 327.5492125984251288 Td
+(Accounting Server\).) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 295.5403937007872628 Td
+(4. Click Add and copy the generated Bridge Token \(e.g. agent_clpx82j...\). Keep this token secure.) Tj
+ET
+BT
+/F2 12 Tf
+13.7999999999999989 TL
+0.102 g
+56.6929133858267775 240.8544094488188421 Td
+(Step 2: Enable HTTP Connectivity in Tally Prime) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 217.5150708661416274 Td
+(Configure Tally Prime to listen for XML/HTTP queries:) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 185.5062519685038751 Td
+(1. Open Tally Prime, click F1: Help > Settings > Connectivity.) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 153.4974330708660091 Td
+(2. Set 'TallyPrime acts as' to 'Both' \(or 'Server'\).) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 121.4886141732282567 Td
+(3. Set 'Enable HTTP server' to 'Yes' and set 'Port' to '9000'.) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 89.4797952755903907 Td
+(4. Save the settings and restart Tally Prime, then open your company \(e.g., CROX FY 2024-25\).) Tj
+ET
+endstream
+endobj
+5 0 obj
+<</Type /Page
+/Parent 1 0 R
+/Resources 2 0 R
+/MediaBox [0 0 595.2799999999999727 841.8899999999999864]
+/Contents 6 0 R
+>>
+endobj
+6 0 obj
+<<
+/Length 2537
+>>
+stream
+0.5670000000000001 w
+0.9 G
+BT
+/F2 12 Tf
+13.7999999999999989 TL
+0.102 g
+56.6929133858267775 785.1970866141732586 Td
+(Step 3: Run the Bridge Agent Locally) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 761.857748031496044 Td
+(Run the bridge agent on the machine that has access to Tally Prime and the Internet. Ensure Node.js \(v16+\)) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 746.8568031496063213 Td
+(is installed on that machine.) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 714.8479842519684553 Td
+(Open a terminal/command prompt in the bridge-agent folder and execute:) Tj
+ET
+0.96 g
+56.6929133858267775 682.8391653543307029 481.8941732283464034 -36.8503937007874072 re
+f
+BT
+/F5 9.5 Tf
+10.9249999999999989 TL
+0.157 g
+70.8661417322834666 662.9966456692912971 Td
+(node bridge-agent.js https://saarlekhain.com YOUR_BRIDGE_TOKEN) Tj
+ET
+BT
+/F2 12 Tf
+13.7999999999999989 TL
+0.102 g
+56.6929133858267775 609.1383779527558318 Td
+(Step 4: Map Ledger Accounts) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 585.7990393700787308 Td
+(To link your Saarlekha Vendors with Tally accounts:) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 553.7902204724409785 Td
+(1. Go back to the ERP & Tally Settings page in Saarlekha.) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 521.7814015748031125 Td
+(2. Under the Ledger Account Mappings tab, select a Saarlekha Vendor.) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 489.7725826771653033 Td
+(3. Type the exact Tally Ledger Account Name and click Add Mapping.) Tj
+ET
+BT
+/F2 14 Tf
+16.0999999999999979 TL
+0.102 g
+56.6929133858267775 435.0865984251967689 Td
+(3. Troubleshooting) Tj
+ET
+BT
+/F2 12 Tf
+13.7999999999999989 TL
+0.102 g
+56.6929133858267775 387.0699685039369342 Td
+(Tally Offline Error) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 363.7306299212597764 Td
+(If the agent logs 'Tally offline', verify Tally is running on the same machine, and connectivity settings \(HTTP) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 348.729685039369997 Td
+(server enabled, port 9000\) are correct.) Tj
+ET
+BT
+/F2 12 Tf
+13.7999999999999989 TL
+0.102 g
+56.6929133858267775 294.0437007874014625 Td
+(Firewall or Antivirus Blocks) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 270.7043622047243616 Td
+(Ensure Windows Firewall or local Antivirus is not blocking port 9000. You can add an inbound firewall rule) Tj
+ET
+BT
+/F1 10 Tf
+11.5 TL
+0.235 g
+56.6929133858267775 255.7034173228345253 Td
+(allowing TCP port 9000 if necessary.) Tj
+ET
+endstream
+endobj
+1 0 obj
+<</Type /Pages
+/Kids [3 0 R 5 0 R ]
+/Count 2
+>>
+endobj
+7 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+8 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica-Bold
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+9 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica-Oblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+10 0 obj
+<<
+/Type /Font
+/BaseFont /Helvetica-BoldOblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+11 0 obj
+<<
+/Type /Font
+/BaseFont /Courier
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+12 0 obj
+<<
+/Type /Font
+/BaseFont /Courier-Bold
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+13 0 obj
+<<
+/Type /Font
+/BaseFont /Courier-Oblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+14 0 obj
+<<
+/Type /Font
+/BaseFont /Courier-BoldOblique
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+15 0 obj
+<<
+/Type /Font
+/BaseFont /Times-Roman
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+16 0 obj
+<<
+/Type /Font
+/BaseFont /Times-Bold
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+17 0 obj
+<<
+/Type /Font
+/BaseFont /Times-Italic
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+18 0 obj
+<<
+/Type /Font
+/BaseFont /Times-BoldItalic
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+19 0 obj
+<<
+/Type /Font
+/BaseFont /ZapfDingbats
+/Subtype /Type1
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+20 0 obj
+<<
+/Type /Font
+/BaseFont /Symbol
+/Subtype /Type1
+/FirstChar 32
+/LastChar 255
+>>
+endobj
+2 0 obj
+<<
+/ProcSet [/PDF /Text /ImageB /ImageC /ImageI]
+/Font <<
+/F1 7 0 R
+/F2 8 0 R
+/F3 9 0 R
+/F4 10 0 R
+/F5 11 0 R
+/F6 12 0 R
+/F7 13 0 R
+/F8 14 0 R
+/F9 15 0 R
+/F10 16 0 R
+/F11 17 0 R
+/F12 18 0 R
+/F13 19 0 R
+/F14 20 0 R
+>>
+/XObject <<
+>>
+>>
+endobj
+21 0 obj
+<<
+/Producer (jsPDF 4.2.1)
+/CreationDate (D:20260622184500+05'30')
+>>
+endobj
+22 0 obj
+<<
+/Type /Catalog
+/Pages 1 0 R
+/OpenAction [3 0 R /FitH null]
+/PageLayout /OneColumn
+>>
+endobj
+xref
+0 23
+0000000000 65535 f 
+0000006279 00000 n 
+0000008104 00000 n 
+0000000015 00000 n 
+0000000152 00000 n 
+0000003553 00000 n 
+0000003690 00000 n 
+0000006342 00000 n 
+0000006467 00000 n 
+0000006597 00000 n 
+0000006730 00000 n 
+0000006868 00000 n 
+0000006992 00000 n 
+0000007121 00000 n 
+0000007253 00000 n 
+0000007389 00000 n 
+0000007517 00000 n 
+0000007644 00000 n 
+0000007773 00000 n 
+0000007906 00000 n 
+0000008008 00000 n 
+0000008354 00000 n 
+0000008440 00000 n 
+trailer
+<<
+/Size 23
+/Root 22 0 R
+/Info 21 0 R
+/ID [ <5F50E5A4F5F05A08BC170D8D6B0E798A> <5F50E5A4F5F05A08BC170D8D6B0E798A> ]
+>>
+startxref
+8544
+%%EOF
