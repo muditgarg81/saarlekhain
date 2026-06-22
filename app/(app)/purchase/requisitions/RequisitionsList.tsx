@@ -92,6 +92,7 @@ interface QuotationRecord {
   vendorName: string;
   leadDays: number | null;
   terms: string | null;
+  paymentTerms: string | null;
   freight: number;
   packingCharges: number;
   awarded: boolean;
@@ -214,6 +215,7 @@ export default function RequisitionsList({
     vendorId: "",
     leadDays: 5,
     terms: "FOB Destination",
+    paymentTerms: "",
     freight: 0,
     packingCharges: 0,
     lines: [] as {
@@ -399,6 +401,7 @@ export default function RequisitionsList({
       vendorId: "",
       leadDays: 5,
       terms: "FOB Destination",
+      paymentTerms: "",
       freight: 0,
       packingCharges: 0,
       lines: rfq.lines.map(l => ({
@@ -423,6 +426,7 @@ export default function RequisitionsList({
       vendorId: quote.vendorId,
       leadDays: quote.leadDays ?? 5,
       terms: quote.terms ?? "FOB Destination",
+      paymentTerms: quote.paymentTerms ?? "",
       freight: quote.freight ?? 0,
       packingCharges: quote.packingCharges ?? 0,
       lines: rfq.lines.map(l => {
@@ -481,6 +485,7 @@ export default function RequisitionsList({
         id: editingQuotationId,
         leadDays: maxLineLeadDays,
         terms: newQuote.terms,
+        paymentTerms: newQuote.paymentTerms,
         freight: newQuote.freight,
         packingCharges: newQuote.packingCharges,
         lines: newQuote.lines.map(l => ({
@@ -509,6 +514,7 @@ export default function RequisitionsList({
         vendorId: newQuote.vendorId,
         leadDays: maxLineLeadDays,
         terms: newQuote.terms,
+        paymentTerms: newQuote.paymentTerms,
         freight: newQuote.freight,
         packingCharges: newQuote.packingCharges,
         lines: newQuote.lines
@@ -1344,7 +1350,7 @@ export default function RequisitionsList({
 
               {/* Vendor, Terms, Freight & Packing Charges */}
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
-                <div className="sm:col-span-8">
+                <div className="sm:col-span-6">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                     Select Supplier *
                   </label>
@@ -1356,15 +1362,27 @@ export default function RequisitionsList({
                     disabled={!!editingQuotationId || actionLoading}
                   />
                 </div>
-                <div className="sm:col-span-4">
+                <div className="sm:col-span-3">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                     Delivery Terms
                   </label>
                   <input
                     type="text"
-                    value={newQuote.terms}
+                    value={newQuote.terms || ""}
                     onChange={(e) => setNewQuote(prev => ({ ...prev, terms: e.target.value }))}
                     className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
+                  />
+                </div>
+                <div className="sm:col-span-3">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                    Payment Terms
+                  </label>
+                  <input
+                    type="text"
+                    value={newQuote.paymentTerms || ""}
+                    onChange={(e) => setNewQuote(prev => ({ ...prev, paymentTerms: e.target.value }))}
+                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
+                    placeholder="e.g. Net 30, Advance"
                   />
                 </div>
 
@@ -1593,7 +1611,7 @@ export default function RequisitionsList({
                         <th key={q.id} className="p-3 text-center border-r border-onyx/10 w-72">
                           <div className="flex flex-col items-center justify-center space-y-1">
                             <p className="font-bold text-onyx">{q.vendorName}</p>
-                            <p className="text-[9px] text-onyx/50 font-normal">Lead: {q.leadDays || "N/A"} days</p>
+                            <p className="text-[9px] text-onyx/50 font-normal">Lead: {q.leadDays || "N/A"} days{q.paymentTerms ? ` | Pay: ${q.paymentTerms}` : ""}</p>
                             {compData.rfq.status !== "CLOSED" && canManageRfq && (
                               <div className="flex items-center gap-2 mt-1">
                                 <button
@@ -2051,9 +2069,10 @@ export default function RequisitionsList({
                         >
                           <div className="space-y-1">
                             <p className="font-heading text-xs font-bold text-onyx">{q.vendorName}</p>
-                            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-[10px] text-onyx/60 font-mono">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-0.5 text-[10px] text-onyx/60 font-mono">
                               <div><span className="text-onyx/40">Lead:</span> {q.leadDays ?? "N/A"} days</div>
-                              <div><span className="text-onyx/40 font-heading">Terms:</span> {q.terms || "N/A"}</div>
+                              <div><span className="text-onyx/40 font-heading">Del. Terms:</span> {q.terms || "N/A"}</div>
+                              <div><span className="text-onyx/40 font-heading">Pay. Terms:</span> {q.paymentTerms || "N/A"}</div>
                               <div><span className="text-onyx/40 font-heading">Freight:</span> ₹{q.freight}</div>
                               <div><span className="text-onyx/40 font-heading">Packing:</span> ₹{q.packingCharges}</div>
                             </div>

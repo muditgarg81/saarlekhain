@@ -177,6 +177,7 @@ export default async function RequisitionsPage() {
           vendorName: vendor?.name || "Unknown Vendor",
           leadDays: q.leadDays,
           terms: q.terms,
+          paymentTerms: q.paymentTerms,
           freight: q.freight,
           packingCharges: q.packingCharges,
           awarded: q.awarded,

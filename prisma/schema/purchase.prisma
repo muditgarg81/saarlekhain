@@ -210,6 +210,7 @@ model Quotation {
   vendorId  String
   leadDays  Int?
   terms     String?
+  paymentTerms String?
   freight        Float @default(0)
   packingCharges Float @default(0)
   awarded   Boolean @default(false)

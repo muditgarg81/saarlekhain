@@ -29,6 +29,7 @@ const quotationSchema = z.object({
   vendorId: z.string(),
   leadDays: z.number().int().nonnegative().optional().nullable(),
   terms: z.string().optional().nullable(),
+  paymentTerms: z.string().optional().nullable(),
   freight: z.number().nonnegative().default(0),
   packingCharges: z.number().nonnegative().default(0),
   lines: z.array(z.object({
@@ -248,6 +249,7 @@ export async function submitQuotation(data: z.infer<typeof quotationSchema>) {
           vendorId: validated.vendorId,
           leadDays: validated.leadDays || null,
           terms: validated.terms || null,
+          paymentTerms: validated.paymentTerms || null,
           freight: validated.freight,
           packingCharges: validated.packingCharges,
           awarded: false,
@@ -460,6 +462,7 @@ export async function updateQuotation(data: {
   id: string;
   leadDays?: number | null;
   terms?: string | null;
+  paymentTerms?: string | null;
   freight: number;
   packingCharges: number;
   lines: {
@@ -513,6 +516,7 @@ export async function updateQuotation(data: {
         data: {
           leadDays: data.leadDays || null,
           terms: data.terms || null,
+          paymentTerms: data.paymentTerms || null,
           freight: data.freight,
           packingCharges: data.packingCharges,
         }

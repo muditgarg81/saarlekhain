@@ -167,7 +167,7 @@ export async function POST(
             vendorId,
             status: PoStatus.PENDING_APPROVAL,
             prId: rfq.prId,
-            paymentTerms: paymentTerms || vendor?.paymentTerms || "Net 30",
+            paymentTerms: paymentTerms || quotation?.paymentTerms || vendor?.paymentTerms || "Net 30",
             freightTerms: freightTerms || "FOB Destination",
             shipTo: shipTo || "Main Warehouse Gate 1",
             termsConditions: termsConditions || null,
