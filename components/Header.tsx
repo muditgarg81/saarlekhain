@@ -17,11 +17,12 @@ import {
   Eye,
   AlertTriangle,
   ArrowRight,
-  Menu
+  Menu,
+  ArrowLeft
 } from "lucide-react";
 import { useSession } from "next-auth/react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 
 interface HeaderProps {
   user: {
@@ -97,17 +98,23 @@ export default function Header({ user, onMenuClick }: HeaderProps) {
   });
 
   const bellRef = useRef<HTMLDivElement>(null);
+  const mobileBellRef = useRef<HTMLDivElement>(null);
 
   // Close dropdown on click outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (bellRef.current && !bellRef.current.contains(event.target as Node)) {
+      const target = event.target as Node;
+      const clickedOutsideDesktop = !bellRef.current || !bellRef.current.contains(target);
+      const clickedOutsideMobile = !mobileBellRef.current || !mobileBellRef.current.contains(target);
+      if (clickedOutsideDesktop && clickedOutsideMobile) {
         setIsBellOpen(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const pathname = usePathname();
 
   // Fetch switchers and summary counts on mount
   useEffect(() => {
@@ -318,345 +325,397 @@ export default function Header({ user, onMenuClick }: HeaderProps) {
     handleUpdatePrefs({ ...prefs, mutedCategories: newMuted });
   };
 
-  const totalUnreadCount = unreadNotifCount + reminders.length;
-
-  return (
-    <header className="h-16 bg-cream-light border-b border-cream-dark px-4 md:px-8 flex items-center justify-between sticky top-0 z-40 shadow-sm font-body">
-      {/* Left Section: Switchers & Search */}
-      <div className="flex items-center space-x-3 md:space-x-4 flex-1 max-w-2xl">
+  const renderBellDropdown = (isMobile: boolean) => {
+    if (!isBellOpen) return null;
+    return (
+      <div className={`absolute right-0 mt-3 ${isMobile ? 'w-80' : 'w-96'} bg-cream-light/95 backdrop-blur-md border border-cream-dark rounded-xl shadow-xl z-50 overflow-hidden transition-all duration-200 animate-in fade-in slide-in-from-top-1 text-onyx font-body`}>
         
-        {/* Mobile menu toggle */}
-        <button
-          type="button"
-          onClick={onMenuClick}
-          className="md:hidden p-2 -ml-2 text-onyx/70 hover:text-onyx hover:bg-cream rounded-lg transition duration-150 cursor-pointer shrink-0"
-          title="Toggle navigation menu"
-        >
-          <Menu size={20} />
-        </button>
-        
-        {/* Company Dropdown Switcher */}
-        <div className="relative flex items-center bg-cream border border-onyx/10 rounded-lg text-onyx/80 px-2.5 py-1 text-xs font-semibold hover:border-saffron hover:bg-cream-light transition-all duration-200">
-          <Building2 size={13} className="text-saffron-dark mr-1.5" />
-          <select
-            value={user.companyId}
-            onChange={(e) => handleCompanyChange(e.target.value)}
-            className="bg-transparent pr-4 focus:outline-none cursor-pointer appearance-none text-xs font-semibold focus:ring-0 outline-none"
-          >
-            {companies.map((c) => (
-              <option key={c.companyId} value={c.companyId} className="bg-cream-light text-onyx">
-                {c.companyName} ({c.role.replace("_", " ")})
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={12} className="absolute right-2.5 pointer-events-none text-onyx/40" />
-        </div>
-
-        {/* Store Dropdown Switcher */}
-        <div className="relative flex items-center bg-cream border border-onyx/10 rounded-lg text-onyx/80 px-2.5 py-1 text-xs font-semibold hover:border-saffron hover:bg-cream-light transition-all duration-200">
-          <MapPin size={13} className="text-saffron-dark mr-1.5" />
-          <select
-            value={user.storeId || "all"}
-            onChange={(e) => handleStoreChange(e.target.value)}
-            className="bg-transparent pr-4 focus:outline-none cursor-pointer appearance-none text-xs font-semibold focus:ring-0 outline-none"
-          >
-            {(!user.storeScope || user.storeScope.length === 0) && (
-              <option value="all" className="bg-cream-light text-onyx">All Stores</option>
-            )}
-            {stores.map((s) => (
-              <option key={s.id} value={s.id} className="bg-cream-light text-onyx">
-                {s.name} ({s.code})
-              </option>
-            ))}
-          </select>
-          <ChevronDown size={12} className="absolute right-2.5 pointer-events-none text-onyx/40" />
-        </div>
-
-        {/* Search */}
-        <div className="relative w-full hidden md:block max-w-xs">
-          <span className="absolute inset-y-0 left-3 flex items-center text-onyx/40">
-            <Search size={14} />
-          </span>
-          <input
-            type="text"
-            placeholder="Quick search registers, POs..."
-            className="w-full text-xs pl-9 pr-4 py-1.5 bg-cream border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron transition-all duration-200"
-          />
-        </div>
-      </div>
-
-      {/* Right Section: Notifications & Profile */}
-      <div className="flex items-center space-x-6">
-        
-        {/* Notification Bell Dropdown Container */}
-        <div className="relative" ref={bellRef}>
-          <button
-            onClick={() => setIsBellOpen(!isBellOpen)}
-            className="relative p-2 rounded-lg hover:bg-cream border border-transparent hover:border-onyx/5 transition-all duration-200 group focus:outline-none"
-            title="View actions and alerts"
-          >
-            <Bell size={18} className="text-onyx/80 group-hover:text-onyx transition-colors duration-200" />
+        {/* Header block */}
+        <div className="px-4 py-3 border-b border-cream-dark flex items-center justify-between bg-cream/50">
+          <div className="flex items-center space-x-2">
+            <h3 className="text-xs font-bold tracking-wide text-onyx uppercase">Bell Center</h3>
             {totalUnreadCount > 0 && (
-              <span className={`absolute top-1 right-1 font-mono text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-pulse text-white ${hasCriticalReminders ? 'bg-red-600' : 'bg-saffron-dark'}`}>
-                {totalUnreadCount}
+              <span className="px-1.5 py-0.5 text-[10px] font-bold bg-saffron text-onyx rounded-md">
+                {totalUnreadCount} items
               </span>
             )}
-          </button>
+          </div>
+          
+          {/* Actions line */}
+          <div className="flex items-center space-x-2.5">
+            {bellTab === "feed" && (
+              <button
+                onClick={handleMarkAllRead}
+                className="text-[10px] font-semibold text-saffron-dark hover:text-saffron transition-all duration-200 flex items-center space-x-1"
+              >
+                <CheckSquare size={12} />
+                <span>Mark all read</span>
+              </button>
+            )}
+            
+            <button
+              onClick={() => setBellTab(prev => prev === "prefs" ? "actions" : "prefs")}
+              className="p-1 text-onyx/60 hover:text-onyx rounded-md hover:bg-cream transition-all duration-200"
+              title="Preferences"
+            >
+              <Settings size={14} />
+            </button>
+          </div>
+        </div>
 
-          {/* Bell Panel Dropdown (Glassmorphism & Harmonious Layout) */}
-          {isBellOpen && (
-            <div className="absolute right-0 mt-3 w-96 bg-cream-light/95 backdrop-blur-md border border-cream-dark rounded-xl shadow-xl z-50 overflow-hidden transition-all duration-200 animate-in fade-in slide-in-from-top-1 text-onyx font-body">
-              
-              {/* Header block */}
-              <div className="px-4 py-3 border-b border-cream-dark flex items-center justify-between bg-cream/50">
-                <div className="flex items-center space-x-2">
-                  <h3 className="text-xs font-bold tracking-wide text-onyx uppercase">Bell Center</h3>
-                  {totalUnreadCount > 0 && (
-                    <span className="px-1.5 py-0.5 text-[10px] font-bold bg-saffron text-onyx rounded-md">
-                      {totalUnreadCount} items
-                    </span>
-                  )}
+        {/* Tabs */}
+        {bellTab !== "prefs" && (
+          <div className="flex border-b border-cream-dark text-xs font-semibold bg-cream/20">
+            <button
+              onClick={() => setBellTab("actions")}
+              className={`flex-1 text-center py-2.5 transition-all duration-200 border-b-2 ${bellTab === "actions" ? 'border-saffron text-saffron-dark font-bold' : 'border-transparent text-onyx/60 hover:text-onyx'}`}
+            >
+              Action items ({reminders.length})
+            </button>
+            <button
+              onClick={() => setBellTab("feed")}
+              className={`flex-1 text-center py-2.5 transition-all duration-200 border-b-2 ${bellTab === "feed" ? 'border-saffron text-saffron-dark font-bold' : 'border-transparent text-onyx/60 hover:text-onyx'}`}
+            >
+              Event Feed ({unreadNotifCount})
+            </button>
+          </div>
+        )}
+
+        {/* Tab Contents */}
+        <div className="max-h-80 overflow-y-auto">
+          
+          {/* Actions Tab */}
+          {bellTab === "actions" && (
+            <div className="divide-y divide-cream-dark">
+              {reminders.length === 0 ? (
+                <div className="px-4 py-8 text-center text-xs text-onyx/40">
+                  All caught up! No pending actions.
                 </div>
-                
-                {/* Actions line */}
-                <div className="flex items-center space-x-2.5">
-                  {bellTab === "feed" && (
-                    <button
-                      onClick={handleMarkAllRead}
-                      className="text-[10px] font-semibold text-saffron-dark hover:text-saffron transition-all duration-200 flex items-center space-x-1"
-                    >
-                      <CheckSquare size={12} />
-                      <span>Mark all read</span>
-                    </button>
-                  )}
-                  
-                  <button
-                    onClick={() => setBellTab(prev => prev === "prefs" ? "actions" : "prefs")}
-                    className="p-1 text-onyx/60 hover:text-onyx rounded-md hover:bg-cream transition-all duration-200"
-                    title="Preferences"
+              ) : (
+                reminders.map((item) => (
+                  <div key={item.category} className="p-3 flex items-start justify-between hover:bg-cream/35 transition-all duration-200 group">
+                    {/* Alert level strip */}
+                    <div className="flex items-start space-x-3 flex-1 min-w-0">
+                      <span className={`w-1.5 h-8 rounded-full shrink-0 ${item.severity === "red" ? 'bg-red-500' : 'bg-saffron'}`} />
+                      <div className="min-w-0">
+                        <button
+                          onClick={() => {
+                            setIsBellOpen(false);
+                            router.push(item.deepLink);
+                          }}
+                          className="text-left text-xs font-bold hover:text-saffron-dark block leading-snug cursor-pointer"
+                        >
+                          {item.label}
+                        </button>
+                        <span className="text-[10px] text-onyx/40 font-mono">
+                          Category: {item.category.replace("_", " ")}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center space-x-1.5 ml-2">
+                      <button
+                        onClick={() => handleSnoozeReminder(item.category, 24)}
+                        className="p-1 text-onyx/40 hover:text-onyx hover:bg-cream rounded-md transition-all duration-200"
+                        title="Snooze 24 hours"
+                      >
+                        <Clock size={12} />
+                      </button>
+                      <button
+                        onClick={() => handleDismissReminder(item.category)}
+                        className="p-1 text-onyx/40 hover:text-red-600 hover:bg-red-50 rounded-md transition-all duration-200"
+                        title="Dismiss"
+                      >
+                        <X size={12} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Notifications Feed Tab */}
+          {bellTab === "feed" && (
+            <div className="divide-y divide-cream-dark">
+              {notifications.length === 0 ? (
+                <div className="px-4 py-8 text-center text-xs text-onyx/40">
+                  No notifications to display.
+                </div>
+              ) : (
+                notifications.map((notif) => (
+                  <div 
+                    key={notif.id} 
+                    onClick={() => handleMarkRead(notif.id, notif.deepLink)}
+                    className={`p-3 flex items-start space-x-3 hover:bg-cream/35 transition-all duration-200 cursor-pointer ${!notif.readAt ? 'bg-cream/15' : ''}`}
                   >
-                    <Settings size={14} />
-                  </button>
-                </div>
+                    {/* Unread circle */}
+                    {!notif.readAt ? (
+                      <span className="w-2 h-2 mt-1.5 rounded-full bg-saffron shrink-0" />
+                    ) : (
+                      <span className="w-2 h-2 mt-1.5 rounded-full border border-onyx/15 shrink-0" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className={`text-xs ${!notif.readAt ? 'font-bold text-onyx' : 'text-onyx/70'}`}>
+                        {notif.title}
+                      </p>
+                      {notif.body && (
+                        <p className="text-[10px] text-onyx/50 truncate mt-0.5">{notif.body}</p>
+                      )}
+                      <span className="text-[9px] text-onyx/30 font-mono mt-1 block">
+                        {new Date(notif.createdAt).toLocaleDateString()} at {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    </div>
+                    
+                    {notif.deepLink && (
+                      <ArrowRight size={12} className="text-onyx/20 shrink-0 self-center" />
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+
+          {/* Preferences Tab */}
+          {bellTab === "prefs" && (
+            <div className="p-4 space-y-4 text-xs">
+              <h4 className="font-bold border-b border-cream-dark pb-1 text-onyx/80">Preferences</h4>
+              
+              {/* Delivery channels */}
+              <div className="space-y-2">
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={prefs.inApp}
+                    onChange={(e) => handleUpdatePrefs({ ...prefs, inApp: e.target.checked })}
+                    className="rounded text-saffron border-onyx/20 focus:ring-saffron"
+                  />
+                  <span className="font-semibold">In-app Alerts enabled</span>
+                </label>
+                <label className="flex items-center space-x-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={prefs.email}
+                    onChange={(e) => handleUpdatePrefs({ ...prefs, email: e.target.checked })}
+                    className="rounded text-saffron border-onyx/20 focus:ring-saffron"
+                  />
+                  <span className="font-semibold flex items-center space-x-1">
+                    <Mail size={12} className="text-onyx/60" />
+                    <span>Email notifications</span>
+                  </span>
+                </label>
               </div>
 
-              {/* Tabs */}
-              {bellTab !== "prefs" && (
-                <div className="flex border-b border-cream-dark text-xs font-semibold bg-cream/20">
-                  <button
-                    onClick={() => setBellTab("actions")}
-                    className={`flex-1 text-center py-2.5 transition-all duration-200 border-b-2 ${bellTab === "actions" ? 'border-saffron text-saffron-dark font-bold' : 'border-transparent text-onyx/60 hover:text-onyx'}`}
+              {/* Email Digest config */}
+              {prefs.email && (
+                <div className="space-y-1 bg-cream/35 p-2 rounded-lg border border-cream-dark">
+                  <span className="text-[10px] font-bold text-onyx/60 uppercase block">Digest frequency</span>
+                  <select
+                    value={prefs.emailDigest}
+                    onChange={(e) => handleUpdatePrefs({ ...prefs, emailDigest: e.target.value })}
+                    className="w-full text-xs bg-cream border border-onyx/10 rounded px-1.5 py-1 focus:outline-none focus:border-saffron"
                   >
-                    Action items ({reminders.length})
-                  </button>
-                  <button
-                    onClick={() => setBellTab("feed")}
-                    className={`flex-1 text-center py-2.5 transition-all duration-200 border-b-2 ${bellTab === "feed" ? 'border-saffron text-saffron-dark font-bold' : 'border-transparent text-onyx/60 hover:text-onyx'}`}
-                  >
-                    Event Feed ({unreadNotifCount})
-                  </button>
+                    <option value="OFF">OFF (No email digests)</option>
+                    <option value="INSTANT">INSTANT (Send immediately)</option>
+                    <option value="DAILY">DAILY (Once per day)</option>
+                    <option value="WEEKLY">WEEKLY (Once per week)</option>
+                  </select>
                 </div>
               )}
 
-              {/* Tab Contents */}
-              <div className="max-h-80 overflow-y-auto">
-                
-                {/* Actions Tab */}
-                {bellTab === "actions" && (
-                  <div className="divide-y divide-cream-dark">
-                    {reminders.length === 0 ? (
-                      <div className="px-4 py-8 text-center text-xs text-onyx/40">
-                        All caught up! No pending actions.
-                      </div>
-                    ) : (
-                      reminders.map((item) => (
-                        <div key={item.category} className="p-3 flex items-start justify-between hover:bg-cream/35 transition-all duration-200 group">
-                          {/* Alert level strip */}
-                          <div className="flex items-start space-x-3 flex-1 min-w-0">
-                            <span className={`w-1.5 h-8 rounded-full shrink-0 ${item.severity === "red" ? 'bg-red-500' : 'bg-saffron'}`} />
-                            <div className="min-w-0">
-                              <button
-                                onClick={() => {
-                                  setIsBellOpen(false);
-                                  router.push(item.deepLink);
-                                }}
-                                className="text-left text-xs font-bold hover:text-saffron-dark block leading-snug cursor-pointer"
-                              >
-                                {item.label}
-                              </button>
-                              <span className="text-[10px] text-onyx/40 font-mono">
-                                Category: {item.category.replace("_", " ")}
-                              </span>
-                            </div>
-                          </div>
-
-                          {/* Action Buttons */}
-                          <div className="flex items-center space-x-1.5 ml-2">
-                            <button
-                              onClick={() => handleSnoozeReminder(item.category, 24)}
-                              className="p-1 text-onyx/40 hover:text-onyx hover:bg-cream rounded-md transition-all duration-200"
-                              title="Snooze 24 hours"
-                            >
-                              <Clock size={12} />
-                            </button>
-                            <button
-                              onClick={() => handleDismissReminder(item.category)}
-                              className="p-1 text-onyx/40 hover:text-red-600 hover:bg-red-50 rounded-md transition-all duration-200"
-                              title="Dismiss"
-                            >
-                              <X size={12} />
-                            </button>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-
-                {/* Notifications Feed Tab */}
-                {bellTab === "feed" && (
-                  <div className="divide-y divide-cream-dark">
-                    {notifications.length === 0 ? (
-                      <div className="px-4 py-8 text-center text-xs text-onyx/40">
-                        No notifications to display.
-                      </div>
-                    ) : (
-                      notifications.map((notif) => (
-                        <div 
-                          key={notif.id} 
-                          onClick={() => handleMarkRead(notif.id, notif.deepLink)}
-                          className={`p-3 flex items-start space-x-3 hover:bg-cream/35 transition-all duration-200 cursor-pointer ${!notif.readAt ? 'bg-cream/15' : ''}`}
-                        >
-                          {/* Unread circle */}
-                          {!notif.readAt ? (
-                            <span className="w-2 h-2 mt-1.5 rounded-full bg-saffron shrink-0" />
-                          ) : (
-                            <span className="w-2 h-2 mt-1.5 rounded-full border border-onyx/15 shrink-0" />
-                          )}
-                          <div className="flex-1 min-w-0">
-                            <p className={`text-xs ${!notif.readAt ? 'font-bold text-onyx' : 'text-onyx/70'}`}>
-                              {notif.title}
-                            </p>
-                            {notif.body && (
-                              <p className="text-[10px] text-onyx/50 truncate mt-0.5">{notif.body}</p>
-                            )}
-                            <span className="text-[9px] text-onyx/30 font-mono mt-1 block">
-                              {new Date(notif.createdAt).toLocaleDateString()} at {new Date(notif.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                            </span>
-                          </div>
-                          
-                          {notif.deepLink && (
-                            <ArrowRight size={12} className="text-onyx/20 shrink-0 self-center" />
-                          )}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                )}
-
-                {/* Preferences Tab */}
-                {bellTab === "prefs" && (
-                  <div className="p-4 space-y-4 text-xs">
-                    <h4 className="font-bold border-b border-cream-dark pb-1 text-onyx/80">Preferences</h4>
-                    
-                    {/* Delivery channels */}
-                    <div className="space-y-2">
-                      <label className="flex items-center space-x-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={prefs.inApp}
-                          onChange={(e) => handleUpdatePrefs({ ...prefs, inApp: e.target.checked })}
-                          className="rounded text-saffron border-onyx/20 focus:ring-saffron"
-                        />
-                        <span className="font-semibold">In-app Alerts enabled</span>
-                      </label>
-                      <label className="flex items-center space-x-2 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={prefs.email}
-                          onChange={(e) => handleUpdatePrefs({ ...prefs, email: e.target.checked })}
-                          className="rounded text-saffron border-onyx/20 focus:ring-saffron"
-                        />
-                        <span className="font-semibold flex items-center space-x-1">
-                          <Mail size={12} className="text-onyx/60" />
-                          <span>Email notifications</span>
-                        </span>
-                      </label>
-                    </div>
-
-                    {/* Email Digest config */}
-                    {prefs.email && (
-                      <div className="space-y-1 bg-cream/35 p-2 rounded-lg border border-cream-dark">
-                        <span className="text-[10px] font-bold text-onyx/60 uppercase block">Digest frequency</span>
-                        <select
-                          value={prefs.emailDigest}
-                          onChange={(e) => handleUpdatePrefs({ ...prefs, emailDigest: e.target.value })}
-                          className="w-full text-xs bg-cream border border-onyx/10 rounded px-1.5 py-1 focus:outline-none focus:border-saffron"
-                        >
-                          <option value="OFF">OFF (No email digests)</option>
-                          <option value="INSTANT">INSTANT (Send immediately)</option>
-                          <option value="DAILY">DAILY (Once per day)</option>
-                          <option value="WEEKLY">WEEKLY (Once per week)</option>
-                        </select>
-                      </div>
-                    )}
-
-                    {/* Categories mute config */}
-                    <div className="space-y-2">
-                      <span className="text-[10px] font-bold text-onyx/60 uppercase block">Muted Event Streams</span>
-                      <div className="grid grid-cols-2 gap-2">
-                        {["APPROVAL", "STATUS", "PAYMENT", "STOCK", "QUALITY", "SYSTEM", "MENTION"].map((category) => {
-                          const isMuted = prefs.mutedCategories.includes(category);
-                          return (
-                            <button
-                              key={category}
-                              type="button"
-                              onClick={() => toggleMuteCategory(category)}
-                              className={`px-2 py-1 rounded border text-[10px] font-semibold text-center truncate flex items-center justify-between hover:border-saffron/50 transition-all duration-200 ${isMuted ? 'bg-red-50/50 border-red-200/60 text-red-700/80' : 'bg-cream/20 border-onyx/10 text-onyx/80'}`}
-                            >
-                              <span>{category}</span>
-                              {isMuted ? <VolumeX size={10} /> : <Eye size={10} />}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  </div>
-                )}
-
+              {/* Categories mute config */}
+              <div className="space-y-2">
+                <span className="text-[10px] font-bold text-onyx/60 uppercase block">Muted Event Streams</span>
+                <div className="grid grid-cols-2 gap-2">
+                  {["APPROVAL", "STATUS", "PAYMENT", "STOCK", "QUALITY", "SYSTEM", "MENTION"].map((category) => {
+                    const isMuted = prefs.mutedCategories.includes(category);
+                    return (
+                      <button
+                        key={category}
+                        type="button"
+                        onClick={() => toggleMuteCategory(category)}
+                        className={`px-2 py-1 rounded border text-[10px] font-semibold text-center truncate flex items-center justify-between hover:border-saffron/50 transition-all duration-200 ${isMuted ? 'bg-red-50/50 border-red-200/60 text-red-700/80' : 'bg-cream/20 border-onyx/10 text-onyx/80'}`}
+                      >
+                        <span>{category}</span>
+                        {isMuted ? <VolumeX size={10} /> : <Eye size={10} />}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
-              
-              {/* Footer strip */}
-              <div className="bg-cream/50 px-4 py-2 text-center border-t border-cream-dark">
-                <button
-                  onClick={() => {
-                    setIsBellOpen(false);
-                    router.push("/dashboard");
-                  }}
-                  className="text-[10px] font-bold text-onyx/50 hover:text-saffron-dark uppercase tracking-widest transition-colors duration-200"
-                >
-                  Go to Action Dashboard
-                </button>
-              </div>
-
             </div>
           )}
+
+        </div>
+        
+        {/* Footer strip */}
+        <div className="bg-cream/50 px-4 py-2 text-center border-t border-cream-dark">
+          <button
+            onClick={() => {
+              setIsBellOpen(false);
+              router.push("/dashboard");
+            }}
+            className="text-[10px] font-bold text-onyx/50 hover:text-saffron-dark uppercase tracking-widest transition-colors duration-200"
+          >
+            Go to Action Dashboard
+          </button>
         </div>
 
-        {/* Divider */}
-        <span className="w-px h-6 bg-cream-dark" />
-
-        {/* User profile details */}
-        <div className="flex items-center space-x-2 cursor-pointer hover:opacity-85 transition-opacity duration-200" onClick={() => router.push("/settings/company")}>
-          <div className="text-right hidden sm:block">
-            <p className="text-xs font-bold leading-none text-onyx">{user.name || "User"}</p>
-            <p className="text-[9px] font-mono tracking-wider text-onyx/50 uppercase leading-none mt-1">
-              {user.role.replace("_", " ")}
-            </p>
-          </div>
-          <ChevronDown size={14} className="text-onyx/40" />
-        </div>
       </div>
-    </header>
+    );
+  };
+
+  const totalUnreadCount = unreadNotifCount + reminders.length;
+
+  return (
+    <>
+      {/* ── Desktop Header ── */}
+      <header className="hidden md:flex h-16 bg-cream-light border-b border-cream-dark px-8 items-center justify-between sticky top-0 z-40 shadow-sm font-body w-full">
+        {/* Left Section: Switchers & Search */}
+        <div className="flex items-center space-x-4 flex-1 max-w-2xl">
+          {/* Company Dropdown Switcher */}
+          <div className="relative flex items-center bg-cream border border-onyx/10 rounded-lg text-onyx/80 px-2.5 py-1 text-xs font-semibold hover:border-saffron hover:bg-cream-light transition-all duration-200">
+            <Building2 size={13} className="text-saffron-dark mr-1.5" />
+            <select
+              value={user.companyId}
+              onChange={(e) => handleCompanyChange(e.target.value)}
+              className="bg-transparent pr-4 focus:outline-none cursor-pointer appearance-none text-xs font-semibold focus:ring-0 outline-none"
+            >
+              {companies.map((c) => (
+                <option key={c.companyId} value={c.companyId} className="bg-cream-light text-onyx">
+                  {c.companyName} ({c.role.replace("_", " ")})
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={12} className="absolute right-2.5 pointer-events-none text-onyx/40" />
+          </div>
+
+          {/* Store Dropdown Switcher */}
+          <div className="relative flex items-center bg-cream border border-onyx/10 rounded-lg text-onyx/80 px-2.5 py-1 text-xs font-semibold hover:border-saffron hover:bg-cream-light transition-all duration-200">
+            <MapPin size={13} className="text-saffron-dark mr-1.5" />
+            <select
+              value={user.storeId || "all"}
+              onChange={(e) => handleStoreChange(e.target.value)}
+              className="bg-transparent pr-4 focus:outline-none cursor-pointer appearance-none text-xs font-semibold focus:ring-0 outline-none"
+            >
+              {(!user.storeScope || user.storeScope.length === 0) && (
+                <option value="all" className="bg-cream-light text-onyx">All Stores</option>
+              )}
+              {stores.map((s) => (
+                <option key={s.id} value={s.id} className="bg-cream-light text-onyx">
+                  {s.name} ({s.code})
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={12} className="absolute right-2.5 pointer-events-none text-onyx/40" />
+          </div>
+
+          {/* Search */}
+          <div className="relative w-full max-w-xs">
+            <span className="absolute inset-y-0 left-3 flex items-center text-onyx/40">
+              <Search size={14} />
+            </span>
+            <input
+              type="text"
+              placeholder="Quick search registers, POs..."
+              className="w-full text-xs pl-9 pr-4 py-1.5 bg-cream border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron transition-all duration-200"
+            />
+          </div>
+        </div>
+
+        {/* Right Section: Notifications & Profile */}
+        <div className="flex items-center space-x-6">
+          {/* Notification Bell Dropdown Container */}
+          <div className="relative" ref={bellRef}>
+            <button
+              onClick={() => setIsBellOpen(!isBellOpen)}
+              className="relative p-2 rounded-lg hover:bg-cream border border-transparent hover:border-onyx/5 transition-all duration-200 group focus:outline-none"
+              title="View actions and alerts"
+            >
+              <Bell size={18} className="text-onyx/80 group-hover:text-onyx transition-colors duration-200" />
+              {totalUnreadCount > 0 && (
+                <span className={`absolute top-1 right-1 font-mono text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-pulse text-white ${hasCriticalReminders ? 'bg-red-600' : 'bg-saffron-dark'}`}>
+                  {totalUnreadCount}
+                </span>
+              )}
+            </button>
+            {renderBellDropdown(false)}
+          </div>
+
+          {/* Divider */}
+          <span className="w-px h-6 bg-cream-dark" />
+
+          {/* User profile details */}
+          <div className="flex items-center space-x-2 cursor-pointer hover:opacity-85 transition-opacity duration-200" onClick={() => router.push("/settings/company")}>
+            <div className="text-right">
+              <p className="text-xs font-bold leading-none text-onyx">{user.name || "User"}</p>
+              <p className="text-[9px] font-mono tracking-wider text-onyx/50 uppercase leading-none mt-1">
+                {user.role.replace("_", " ")}
+              </p>
+            </div>
+            <ChevronDown size={14} className="text-onyx/40" />
+          </div>
+        </div>
+      </header>
+
+      {/* ── Mobile Header ── */}
+      <header className="md:hidden sticky top-0 z-40 bg-cream-light border-b border-cream-dark h-14 flex items-center justify-between px-4 font-body shadow-xs w-full">
+        <div className="flex items-center gap-3 min-w-0">
+          <button 
+            onClick={onMenuClick} 
+            className="text-onyx/75 p-1 -ml-1 hover:bg-cream/45 rounded-lg transition-colors cursor-pointer shrink-0"
+            title="Toggle Menu"
+          >
+            <Menu className="h-6 w-6" />
+          </button>
+          {pathname !== '/dashboard' && (
+            <button
+              onClick={() => router.back()}
+              className="inline-flex items-center text-xs text-onyx/65 hover:text-onyx bg-cream border border-onyx/10 rounded px-2 py-1 font-semibold transition-colors gap-1 mr-1 shrink-0"
+              title="Go Back"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" /> Back
+            </button>
+          )}
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-6 h-6 bg-saffron text-onyx font-heading font-bold text-xs rounded flex items-center justify-center shrink-0">
+              {activeCompanyName?.[0]?.toUpperCase() || "S"}
+            </div>
+            <div className="flex flex-col min-w-0">
+              <span className="font-bold text-onyx text-xs sm:text-sm leading-none truncate">
+                {activeCompanyName}
+              </span>
+              <span className="text-[9px] text-onyx/50 font-semibold mt-0.5 uppercase tracking-wider truncate max-w-[150px]">
+                {activeStoreName}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-3 shrink-0">
+          {/* Notification Bell Dropdown Container */}
+          <div className="relative" ref={mobileBellRef}>
+            <button
+              onClick={() => setIsBellOpen(!isBellOpen)}
+              className="relative p-2 rounded-lg hover:bg-cream border border-transparent hover:border-onyx/5 transition-all duration-200 group focus:outline-none"
+              title="View actions and alerts"
+            >
+              <Bell size={18} className="text-onyx/80 group-hover:text-onyx transition-colors duration-200" />
+              {totalUnreadCount > 0 && (
+                <span className={`absolute top-1 right-1 font-mono text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center animate-pulse text-white ${hasCriticalReminders ? 'bg-red-600' : 'bg-saffron-dark'}`}>
+                  {totalUnreadCount}
+                </span>
+              )}
+            </button>
+            {renderBellDropdown(true)}
+          </div>
+          
+          <div className="flex items-center space-x-1 bg-saffron/10 text-saffron-dark px-2 py-0.5 rounded font-bold uppercase tracking-wider text-[9px] shrink-0">
+            {user.role.replace("_", " ").split(" ")[0]}
+          </div>
+        </div>
+      </header>
+    </>
   );
 }

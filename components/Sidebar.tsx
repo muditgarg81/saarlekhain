@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { 
   LayoutDashboard, 
   Package, 
@@ -22,14 +22,17 @@ import {
   RefreshCw,
   AlertTriangle,
   Building2,
+  ChevronDown,
   X
 } from "lucide-react";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 import { can, SessionUser } from "@/lib/rbac";
 
 interface SidebarProps {
   user: SessionUser & {
     name?: string | null;
+    storeId?: string | null;
+    storeScope?: string[];
   };
   isOpen?: boolean;
   onClose?: () => void;
@@ -37,10 +40,14 @@ interface SidebarProps {
 
 export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { update } = useSession();
   const role = user.role;
 
   const [companyName, setCompanyName] = useState("Saarlekha Factory");
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [companies, setCompanies] = useState<any[]>([]);
+  const [stores, setStores] = useState<any[]>([]);
 
   useEffect(() => {
     async function fetchCompanyBranding() {
@@ -48,6 +55,7 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
         const res = await fetch("/api/profile/memberships");
         if (res.ok) {
           const mems = await res.json();
+          setCompanies(mems);
           const current = mems.find((m: any) => m.companyId === user.companyId);
           if (current) {
             setCompanyName(current.companyName);
@@ -58,8 +66,42 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
         console.error("Error loading company branding in Sidebar:", err);
       }
     }
+    async function fetchStores() {
+      try {
+        const res = await fetch("/api/profile/stores");
+        if (res.ok) {
+          const data = await res.json();
+          setStores(data);
+        }
+      } catch (err) {
+        console.error("Error loading stores in Sidebar:", err);
+      }
+    }
     fetchCompanyBranding();
+    fetchStores();
   }, [user.companyId]);
+
+  const handleCompanyChange = async (newCompanyId: string) => {
+    if (newCompanyId === user.companyId) return;
+    try {
+      await update({ companyId: newCompanyId });
+      router.refresh();
+      window.location.reload();
+    } catch (err) {
+      console.error("Failed to switch company in Sidebar:", err);
+    }
+  };
+
+  const handleStoreChange = async (newStoreId: string) => {
+    if (newStoreId === (user.storeId || "all")) return;
+    try {
+      await update({ storeId: newStoreId === "all" ? null : newStoreId });
+      router.refresh();
+      window.location.reload();
+    } catch (err) {
+      console.error("Failed to switch store in Sidebar:", err);
+    }
+  };
 
   // Close the mobile sidebar whenever the pathname changes (e.g. after clicking a link)
   useEffect(() => {
@@ -144,6 +186,46 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
           >
             <X size={18} />
           </button>
+        </div>
+
+        {/* Mobile Switchers (Only visible on mobile screens) */}
+        <div className="md:hidden px-4 py-3 bg-onyx-dark/50 border-b border-onyx-light space-y-2">
+          {/* Company switcher select */}
+          <div className="relative flex items-center bg-onyx border border-onyx-light rounded-lg text-cream-light px-2.5 py-1.5 text-xs font-semibold">
+            <Building2 size={13} className="text-saffron mr-1.5 shrink-0" />
+            <select
+              value={user.companyId}
+              onChange={(e) => handleCompanyChange(e.target.value)}
+              className="bg-transparent pr-4 focus:outline-none cursor-pointer appearance-none text-xs font-semibold text-cream-light w-full focus:ring-0 outline-none"
+            >
+              {companies.map((c) => (
+                <option key={c.companyId} value={c.companyId} className="bg-onyx text-cream-light">
+                  {c.companyName} ({c.role.replace("_", " ")})
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={12} className="absolute right-2.5 pointer-events-none text-cream-dark/50" />
+          </div>
+
+          {/* Store switcher select */}
+          <div className="relative flex items-center bg-onyx border border-onyx-light rounded-lg text-cream-light px-2.5 py-1.5 text-xs font-semibold">
+            <MapPin size={13} className="text-saffron mr-1.5 shrink-0" />
+            <select
+              value={user.storeId || "all"}
+              onChange={(e) => handleStoreChange(e.target.value)}
+              className="bg-transparent pr-4 focus:outline-none cursor-pointer appearance-none text-xs font-semibold text-cream-light w-full focus:ring-0 outline-none"
+            >
+              {(!user.storeScope || user.storeScope.length === 0) && (
+                <option value="all" className="bg-onyx text-cream-light">All Stores</option>
+              )}
+              {stores.map((s) => (
+                <option key={s.id} value={s.id} className="bg-onyx text-cream-light">
+                  {s.name} ({s.code})
+                </option>
+              ))}
+            </select>
+            <ChevronDown size={12} className="absolute right-2.5 pointer-events-none text-cream-dark/50" />
+          </div>
         </div>
 
       {/* Nav Menu */}
