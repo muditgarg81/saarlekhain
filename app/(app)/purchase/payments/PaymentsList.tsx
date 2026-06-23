@@ -148,6 +148,7 @@ export default function PaymentsList({
   const [search, setSearch] = useState("");
   const [activeTab, setActiveTab] = useState<"VOUCHERS" | "REQUESTS" | "DUE_GRNS">("VOUCHERS");
   const [statusFilter, setStatusFilter] = useState<string>("ALL");
+  const [billStatusFilter, setBillStatusFilter] = useState<"ALL" | "DUE" | "OVERDUE">("ALL");
 
   // Modals & States
   const [isOpen, setIsOpen] = useState(false);
@@ -819,11 +820,19 @@ export default function PaymentsList({
     (req) => req.status === "PENDING" || req.status === "APPROVED"
   ).length;
 
-  const filteredGrns = pendingGrns.filter(grn => 
-    grn.number.toLowerCase().includes(search.toLowerCase()) ||
-    grn.vendorName.toLowerCase().includes(search.toLowerCase()) ||
-    (grn.poNumber?.toLowerCase() || "").includes(search.toLowerCase())
-  );
+  const filteredGrns = pendingGrns.filter(grn => {
+    const matchesSearch = 
+      grn.number.toLowerCase().includes(search.toLowerCase()) ||
+      grn.vendorName.toLowerCase().includes(search.toLowerCase()) ||
+      (grn.poNumber?.toLowerCase() || "").includes(search.toLowerCase());
+
+    const matchesStatus = 
+      billStatusFilter === "ALL" ||
+      (billStatusFilter === "OVERDUE" && grn.isOverdue) ||
+      (billStatusFilter === "DUE" && !grn.isOverdue);
+
+    return matchesSearch && matchesStatus;
+  });
 
   const computePoTotals = (
     lines: { qty: number; rate: number; discount: number; gstRate: number }[],
@@ -1058,6 +1067,19 @@ export default function PaymentsList({
                 <option value="APPROVED">Approved</option>
                 <option value="REJECTED">Rejected</option>
                 <option value="PAID">Paid / Disbursed</option>
+              </select>
+            </div>
+          )}
+          {activeTab === "DUE_GRNS" && (
+            <div className="w-full md:w-48">
+              <select
+                value={billStatusFilter}
+                onChange={(e) => setBillStatusFilter(e.target.value as any)}
+                className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-semibold text-onyx cursor-pointer"
+              >
+                <option value="ALL">All Bills</option>
+                <option value="DUE">Due (Standard)</option>
+                <option value="OVERDUE">Overdue Only</option>
               </select>
             </div>
           )}
