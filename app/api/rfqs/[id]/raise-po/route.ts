@@ -92,8 +92,37 @@ export async function POST(
     const poIds: string[] = [];
     const warnings: string[] = [];
 
+    // Robust, stable idempotency key signature based on the specific allocations content
+    const sortedAllocContent = allocations
+      .map((a) => `${a.quotationLineId}:${a.qty}`)
+      .sort()
+      .join(",");
+    const idempotencyKey = `rfq-to-po-${rfqId}-${sortedAllocContent}`;
+
     // Run PO raising inside a transaction
-    await db.$transaction(async (tx) => {
+    const result = await db.$transaction(async (tx) => {
+      // Check idempotency first
+      const existingConv = await tx.flowConversion.findFirst({
+        where: { companyId, idempotencyKey }
+      });
+      if (existingConv) {
+        // Find existing POs raised for this RFQ
+        const existingPos = await tx.purchaseOrder.findMany({
+          where: {
+            companyId,
+            lines: {
+              some: {
+                rfqLineId: {
+                  in: rfqLineIds
+                }
+              }
+            }
+          },
+          select: { id: true }
+        });
+        return { success: true, poIds: existingPos.map((p) => p.id), warnings: [] };
+      }
+
       // Create PO for each vendor group
       for (const [vendorId, allocs] of Object.entries(vendorAllocations)) {
         const vendor = vendors.find((v) => v.id === vendorId);
@@ -402,7 +431,6 @@ export async function POST(
       }
 
       // Idempotency conversion logging
-      const idempotencyKey = `rfq-to-po-${rfqId}`;
       await tx.flowConversion.create({
         data: {
           companyId,
@@ -413,9 +441,11 @@ export async function POST(
       });
 
       await logAudit(tx, companyId, actorId, "RAISE_PO_FROM_AWARD", "Rfq", rfqId, null, { poIds });
+
+      return { success: true, poIds, warnings };
     });
 
-    return NextResponse.json({ success: true, poIds, warnings });
+    return NextResponse.json(result);
   } catch (err: any) {
     console.error("Error raising POs from award:", err);
     return NextResponse.json({ error: err.message || "Internal Server Error" }, { status: 500 });
