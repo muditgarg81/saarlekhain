@@ -22,6 +22,9 @@ import {
   RefreshCw,
   AlertTriangle,
   Building2,
+  Users,
+  PackageOpen,
+  QrCode,
   ChevronDown,
   X
 } from "lucide-react";
@@ -140,10 +143,18 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
 
   const isQC = can(user, "inspection.record") || ["QC_INSPECTOR", "STORE_MANAGER", "ADMIN", "OWNER"].includes(role);
 
-  const isAccounts = can(user, "invoice.match") || 
-                     can(user, "payment.record") || 
-                     can(user, "ledger.view") || 
+  const isAccounts = can(user, "invoice.match") ||
+                     can(user, "payment.record") ||
+                     can(user, "ledger.view") ||
                      ["ACCOUNTS", "ADMIN", "OWNER"].includes(role);
+
+  const isSales = can(user, "customer.manage") ||
+                  can(user, "so.create") ||
+                  can(user, "so.approve") ||
+                  can(user, "dispatch.create") ||
+                  can(user, "sales.invoice") ||
+                  can(user, "receipt.record") ||
+                  ["PURCHASE_MANAGER", "PURCHASE_OFFICER", "STORE_MANAGER", "STORE_KEEPER", "ACCOUNTS", "ADMIN", "OWNER"].includes(role);
 
   return (
     <>
@@ -497,6 +508,94 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
               >
                 <TrendingUp size={18} />
                 <span>Purchase Reports</span>
+              </Link>
+            </div>
+          </div>
+        )}
+
+        {/* Sales & Dispatch Category */}
+        { isSales && (
+          <div>
+            <h2 className="text-[10px] uppercase font-semibold text-cream-dark/40 tracking-wider mb-3 px-2">
+              Sales & Dispatch
+            </h2>
+            <div className="space-y-1">
+              <Link
+                href="/sales/customers"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/sales/customers")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <Users size={18} />
+                <span>Customer Master</span>
+              </Link>
+
+              <Link
+                href="/sales/orders"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/sales/orders")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <ClipboardList size={18} />
+                <span>Sales Orders</span>
+              </Link>
+
+              {(can(user, "dispatch.create") || ["ADMIN", "OWNER", "STORE_MANAGER", "STORE_KEEPER"].includes(role)) && (
+                <Link
+                  href="/sales/dispatch"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                    isActive("/sales/dispatch")
+                      ? "bg-saffron text-onyx font-semibold shadow-md"
+                      : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                  }`}
+                >
+                  <PackageOpen size={18} />
+                  <span>Dispatch & Delivery</span>
+                </Link>
+              )}
+
+              {(can(user, "sales.invoice") || ["ADMIN", "OWNER", "ACCOUNTS"].includes(role)) && (
+                <Link
+                  href="/sales/invoices"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                    isActive("/sales/invoices")
+                      ? "bg-saffron text-onyx font-semibold shadow-md"
+                      : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                  }`}
+                >
+                  <QrCode size={18} />
+                  <span>Invoices & E-Invoice</span>
+                </Link>
+              )}
+
+              {(can(user, "receipt.record") || ["ADMIN", "OWNER", "ACCOUNTS"].includes(role)) && (
+                <Link
+                  href="/sales/receipts"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                    isActive("/sales/receipts")
+                      ? "bg-saffron text-onyx font-semibold shadow-md"
+                      : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                  }`}
+                >
+                  <CreditCard size={18} />
+                  <span>Customer Receipts</span>
+                </Link>
+              )}
+
+              <Link
+                href="/sales/reports"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/sales/reports")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <TrendingUp size={18} />
+                <span>Receivables Reports</span>
               </Link>
             </div>
           </div>

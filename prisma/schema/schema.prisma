@@ -4,7 +4,7 @@ datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
-  schemas   = ["core", "ops", "hr", "stores", "purchase"]
+  schemas   = ["core", "ops", "hr", "stores", "purchase", "sales"]
 }
 
 generator client {

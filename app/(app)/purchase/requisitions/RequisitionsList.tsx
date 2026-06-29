@@ -228,6 +228,7 @@ export default function RequisitionsList({
       canSupply: boolean;
       quotedQty: number | null;
       leadDays: number | null;
+      brand?: string | null;
     }[]
   });
 
@@ -414,6 +415,7 @@ export default function RequisitionsList({
         canSupply: true,
         quotedQty: l.qty,
         leadDays: 5,
+        brand: "",
       }))
     });
     setIsQuoteOpen(true);
@@ -441,6 +443,7 @@ export default function RequisitionsList({
           canSupply: qLine ? qLine.canSupply : false,
           quotedQty: qLine ? (qLine.quotedQty ?? l.qty) : l.qty,
           leadDays: qLine ? (qLine.leadDays ?? 5) : 5,
+          brand: qLine ? (qLine.brand ?? "") : "",
         };
       })
     });
@@ -495,7 +498,8 @@ export default function RequisitionsList({
           gstRate: l.gstRate,
           canSupply: l.canSupply,
           quotedQty: l.quotedQty,
-          leadDays: l.leadDays
+          leadDays: l.leadDays,
+          brand: l.brand || null
         }))
       });
       setActionLoading(false);
@@ -517,7 +521,17 @@ export default function RequisitionsList({
         paymentTerms: newQuote.paymentTerms,
         freight: newQuote.freight,
         packingCharges: newQuote.packingCharges,
-        lines: newQuote.lines
+        lines: newQuote.lines.map(l => ({
+          rfqLineId: l.rfqLineId,
+          itemId: l.itemId,
+          rate: l.rate,
+          discount: l.discount,
+          gstRate: l.gstRate,
+          canSupply: l.canSupply,
+          quotedQty: l.quotedQty,
+          leadDays: l.leadDays,
+          brand: l.brand || null
+        }))
       });
       setActionLoading(false);
  
@@ -1460,7 +1474,7 @@ export default function RequisitionsList({
                         </div>
 
                         {/* Right Column */}
-                        <div className={`flex-1 grid grid-cols-2 sm:grid-cols-5 gap-3 p-3 bg-cream-dark/15 border border-onyx/5 rounded-lg transition-opacity duration-200 ${
+                        <div className={`flex-1 grid grid-cols-2 sm:grid-cols-6 gap-3 p-3 bg-cream-dark/15 border border-onyx/5 rounded-lg transition-opacity duration-200 ${
                           !canSupply ? "opacity-40 pointer-events-none" : ""
                         }`}>
                           <div>
@@ -1536,6 +1550,24 @@ export default function RequisitionsList({
                                 });
                               }}
                               className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none text-right font-mono"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Brand / Make</label>
+                            <input
+                              type="text"
+                              value={line.brand || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewQuote(prev => {
+                                  const updated = [...prev.lines];
+                                  updated[idx].brand = val;
+                                  return { ...prev, lines: updated };
+                                });
+                              }}
+                              className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none"
+                              placeholder="e.g. Tata, SKF"
                             />
                           </div>
 
@@ -1704,6 +1736,13 @@ export default function RequisitionsList({
                                   }`}>
                                     Rank {rank}
                                   </span>
+                                  {line.brand && (
+                                    <div className="mt-1">
+                                      <span className="inline-flex items-center px-1 py-0.5 rounded text-[8px] font-bold bg-blue-50 text-blue-800 border border-blue-200">
+                                        Brand: {line.brand}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
 
                                 {compData.rfq.status !== "CLOSED" && canAwardRfq && (

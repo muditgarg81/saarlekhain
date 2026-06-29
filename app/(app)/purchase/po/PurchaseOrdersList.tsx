@@ -45,6 +45,7 @@ interface LineItem {
   discount: number;
   gstRate: number;
   receivedQty: number;
+  brand: string | null;
 }
 
 interface AmendmentRecord {
@@ -211,7 +212,7 @@ export default function PurchaseOrdersList({
     termsConditions: string;
     termsPresetId: string;
     otherCharges: number;
-    lines: { itemId: string; qty: number; rate: number; discount: number; gstRate: number }[];
+    lines: { itemId: string; qty: number; rate: number; discount: number; gstRate: number; brand: string }[];
     rfqId?: string | null;
   }>({
     vendorId: "",
@@ -225,7 +226,7 @@ export default function PurchaseOrdersList({
     otherCharges: 0,
     lines: []
   });
-  const [newPoLine, setNewPoLine] = useState({ itemId: "", qty: 1, rate: 0, discount: 0, gstRate: 18 });
+  const [newPoLine, setNewPoLine] = useState({ itemId: "", qty: 1, rate: 0, discount: 0, gstRate: 18, brand: "" });
 
   // Amend Form State
   const [amendForm, setAmendForm] = useState({
@@ -237,7 +238,7 @@ export default function PurchaseOrdersList({
     termsConditions: "",
     termsPresetId: "",
     otherCharges: 0,
-    lines: [] as { itemId: string; qty: number; rate: number; discount: number; gstRate: number }[]
+    lines: [] as { itemId: string; qty: number; rate: number; discount: number; gstRate: number; brand?: string | null }[]
   });
 
   const [actionLoading, setActionLoading] = useState(false);
@@ -635,7 +636,7 @@ export default function PurchaseOrdersList({
       return [
         index + 1,
         line.itemCode,
-        line.itemName,
+        line.brand ? `${line.itemName}\nBrand/Make: ${line.brand}` : line.itemName,
         line.qty,
         line.rate.toFixed(2),
         line.discount + "%",
@@ -776,7 +777,7 @@ export default function PurchaseOrdersList({
       ...prev,
       lines: [...prev.lines, { ...newPoLine }]
     }));
-    setNewPoLine({ itemId: "", qty: 1, rate: 0, discount: 0, gstRate: 18 });
+    setNewPoLine({ itemId: "", qty: 1, rate: 0, discount: 0, gstRate: 18, brand: "" });
   };
 
   const toggleSelect = (id: string) => {
@@ -828,7 +829,8 @@ export default function PurchaseOrdersList({
         qty: line.qty,
         rate: line.rate,
         discount: line.discount,
-        gstRate: line.gstRate
+        gstRate: line.gstRate,
+        brand: line.brand || ""
       }))
     });
     setIsOpen(true);
@@ -907,7 +909,8 @@ export default function PurchaseOrdersList({
         qty: l.qty,
         rate: l.rate,
         discount: l.discount,
-        gstRate: l.gstRate
+        gstRate: l.gstRate,
+        brand: l.brand || ""
       }))
     });
     setIsAmendOpen(true);
@@ -1597,13 +1600,23 @@ export default function PurchaseOrdersList({
               <div className="p-4 bg-cream-dark/30 border border-onyx/5 rounded-xl space-y-3">
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/60">Add Line Item</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                  <div className="sm:col-span-4">
+                  <div className="sm:col-span-3">
                     <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
                     <SearchableItemSelect
                       items={items}
                       value={newPoLine.itemId}
                       onChange={(val) => setNewPoLine(prev => ({ ...prev, itemId: val }))}
                       placeholder="Select Item"
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Brand / Make</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Tata, SKF"
+                      value={newPoLine.brand}
+                      onChange={(e) => setNewPoLine(prev => ({ ...prev, brand: e.target.value }))}
+                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg"
                     />
                   </div>
                   <div className="sm:col-span-2">
@@ -1625,7 +1638,7 @@ export default function PurchaseOrdersList({
                       className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
                     />
                   </div>
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-1">
                     <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Discount %</label>
                     <input
                       type="number"
@@ -1699,7 +1712,12 @@ export default function PurchaseOrdersList({
                           );
                           return (
                             <tr key={idx} className="border-t border-onyx/5">
-                              <td className="p-2">[{item?.code}] {item?.name}</td>
+                              <td className="p-2">
+                                <div>[{item?.code}] {item?.name}</div>
+                                {line.brand && (
+                                  <div className="text-[10px] text-emerald-800 font-bold mt-0.5">Brand/Make: {line.brand}</div>
+                                )}
+                              </td>
                               <td className="p-2 text-right font-mono">{line.qty}</td>
                               <td className="p-2 text-right font-mono">₹{line.rate.toFixed(2)}</td>
                               <td className="p-2 text-right font-mono font-bold">₹{landed.toFixed(2)}</td>
@@ -2213,7 +2231,12 @@ export default function PurchaseOrdersList({
                         );
                         return (
                           <tr key={line.id} className="border-t border-onyx/5">
-                            <td className="p-2.5">[{line.itemCode}] {line.itemName}</td>
+                            <td className="p-2.5">
+                              <div>[{line.itemCode}] {line.itemName}</div>
+                              {line.brand && (
+                                <div className="text-[10px] text-emerald-800 font-bold mt-0.5">Brand/Make: {line.brand}</div>
+                              )}
+                            </td>
                             <td className="p-2.5 text-right font-mono">₹{line.rate.toFixed(2)}</td>
                             <td className="p-2.5 text-right font-mono font-bold">{line.qty}</td>
                             <td className="p-2.5 text-right font-mono">₹{landed.toFixed(2)}</td>

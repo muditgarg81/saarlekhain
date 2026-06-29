@@ -1,7 +1,6 @@
 // prisma/schema/purchase.prisma
 
 enum PrStatus {
-
   DRAFT
   SUBMITTED
   APPROVED
@@ -11,34 +10,31 @@ enum PrStatus {
   PO_RAISED
   SHORT_CLOSED
   CLOSED
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 enum RfqStatus {
-
   DRAFT
   ISSUED
   QUOTES_RECEIVED
   AWARDED
   CLOSED
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 enum PoType {
-
   REGULAR
   BLANKET
   CAPITAL
   SERVICE
   IMPORT
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 enum PoStatus {
-
   DRAFT
   PENDING_APPROVAL
   APPROVED
@@ -48,32 +44,31 @@ enum PoStatus {
   SHORT_CLOSED
   CLOSED
   CANCELLED
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 enum TermsPresetStatus {
   ACTIVE
   ARCHIVED
+
   @@schema("purchase")
 }
 
 enum VendorStatus {
-
   APPROVED
   HOLD
   BLACKLISTED
   PENDING_APPROVAL
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 enum NoteType {
-
   DEBIT
   CREDIT
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 enum PaymentRequestStatus {
@@ -81,6 +76,7 @@ enum PaymentRequestStatus {
   APPROVED
   REJECTED
   PAID
+
   @@schema("purchase")
 }
 
@@ -88,496 +84,458 @@ enum PaymentRequestType {
   ADVANCE
   AGAINST_BILL
   OTHERS
+
   @@schema("purchase")
 }
 
 enum InvoiceMatchStatus {
-
   PENDING
   MATCHED
   MISMATCH
   ON_HOLD
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 model Vendor {
+  id            String       @id @default(cuid())
+  companyId     String
+  code          String
+  name          String
+  address       String?
+  gstin         String?
+  pan           String?
+  udyamNo       String?
+  category      String? // RM | CONSUMABLE | SERVICE | CAPITAL
+  paymentTerms  String?
+  creditDays    Int          @default(0)
+  tdsApplicable Boolean      @default(false)
+  bankDetails   Json? // access-controlled, masked in lists
+  rating        Float?
+  status        VendorStatus @default(PENDING_APPROVAL)
+  deletedAt     DateTime?
+  minOrderValue Float        @default(0)
+  company       Company      @relation(fields: [companyId], references: [id])
 
-  id          String       @id @default(cuid())
-  companyId   String
-  code        String
-  name        String
-  address     String?
-  gstin       String?
-  pan         String?
-  udyamNo     String?
-  category    String?      // RM | CONSUMABLE | SERVICE | CAPITAL
-  paymentTerms String?
-  creditDays  Int          @default(0)
-  tdsApplicable Boolean    @default(false)
-  bankDetails Json?        // access-controlled, masked in lists
-  rating      Float?
-  status      VendorStatus @default(PENDING_APPROVAL)
-  deletedAt   DateTime?
-  minOrderValue Float      @default(0)
-  company     Company      @relation(fields: [companyId], references: [id])
-
-  pos         PurchaseOrder[]
-  quotations  Quotation[]
+  pos             PurchaseOrder[]
+  quotations      Quotation[]
   paymentRequests PaymentRequest[]
 
   @@unique([companyId, code])
   @@index([companyId, status])
   @@schema("purchase")
-
 }
 
 model PurchaseRequisition {
-
-  id          String   @id @default(cuid())
-  companyId   String
-  number      String   // PR-XXXXX
-  indentId    String?  // when converted from a short-stock indent
-  status      PrStatus @default(DRAFT)
+  id           String    @id @default(cuid())
+  companyId    String
+  number       String // PR-XXXXX
+  indentId     String? // when converted from a short-stock indent
+  status       PrStatus  @default(DRAFT)
   approvedById String?
-  approvedAt  DateTime?
-  remarks     String?
-  deletedAt   DateTime?
-  createdAt   DateTime @default(now())
-  lines       PrLine[]
+  approvedAt   DateTime?
+  remarks      String?
+  deletedAt    DateTime?
+  createdAt    DateTime  @default(now())
+  lines        PrLine[]
 
   @@unique([companyId, number])
   @@index([companyId, status])
   @@schema("purchase")
-
 }
 
 model PrLine {
+  id             String              @id @default(cuid())
+  prId           String
+  itemId         String
+  qty            Float
+  requiredBy     DateTime?
+  orderedQty     Float               @default(0)
+  shortClosedQty Float               @default(0)
+  status         LineStatus          @default(OPEN)
+  indentLines    IndentLine[]
+  rfqLines       RfqLine[]
+  poRaised       Boolean             @default(false)
+  pr             PurchaseRequisition @relation(fields: [prId], references: [id])
 
-  id     String @id @default(cuid())
-  prId   String
-  itemId String
-  qty    Float
-  requiredBy DateTime?
-  orderedQty     Float      @default(0)
-  shortClosedQty Float      @default(0)
-  status         LineStatus @default(OPEN)
-  indentLines IndentLine[]
-  rfqLines    RfqLine[]
-  poRaised    Boolean @default(false)
-  pr     PurchaseRequisition @relation(fields: [prId], references: [id])
   @@schema("purchase")
-
 }
 
 model Rfq {
-
-  id        String     @id @default(cuid())
-  companyId String
-  number    String     // RFQ-XXXXX
-  prId      String?
-  status    RfqStatus  @default(DRAFT)
-  createdAt DateTime   @default(now())
-  lines     RfqLine[]
+  id         String      @id @default(cuid())
+  companyId  String
+  number     String // RFQ-XXXXX
+  prId       String?
+  status     RfqStatus   @default(DRAFT)
+  createdAt  DateTime    @default(now())
+  lines      RfqLine[]
   quotations Quotation[]
 
   @@unique([companyId, number])
   @@schema("purchase")
-
 }
 
 model RfqLine {
+  id             String          @id @default(cuid())
+  rfqId          String
+  itemId         String
+  qty            Float
+  prLineId       String?
+  prLine         PrLine?         @relation(fields: [prLineId], references: [id])
+  quotationLines QuotationLine[]
+  awardedQty     Float           @default(0)
+  status         RfqLineStatus   @default(OPEN)
+  rfq            Rfq             @relation(fields: [rfqId], references: [id])
 
-  id     String @id @default(cuid())
-  rfqId  String
-  itemId String
-  qty    Float
-  prLineId              String?
-  prLine                PrLine?        @relation(fields: [prLineId], references: [id])
-  quotationLines        QuotationLine[]
-  awardedQty            Float          @default(0)
-  status                RfqLineStatus  @default(OPEN)
-  rfq    Rfq    @relation(fields: [rfqId], references: [id])
   @@schema("purchase")
-
 }
 
 model Quotation {
+  id             String          @id @default(cuid())
+  companyId      String
+  rfqId          String
+  vendorId       String
+  leadDays       Int?
+  terms          String?
+  paymentTerms   String?
+  freight        Float           @default(0)
+  packingCharges Float           @default(0)
+  awarded        Boolean         @default(false)
+  rfq            Rfq             @relation(fields: [rfqId], references: [id])
+  vendor         Vendor          @relation(fields: [vendorId], references: [id])
+  lines          QuotationLine[]
 
-  id        String @id @default(cuid())
-  companyId String
-  rfqId     String
-  vendorId  String
-  leadDays  Int?
-  terms     String?
-  paymentTerms String?
-  freight        Float @default(0)
-  packingCharges Float @default(0)
-  awarded   Boolean @default(false)
-  rfq       Rfq    @relation(fields: [rfqId], references: [id])
-  vendor    Vendor @relation(fields: [vendorId], references: [id])
-  lines     QuotationLine[]
   @@schema("purchase")
-
 }
 
 model QuotationLine {
-
-  id          String @id @default(cuid())
+  id          String    @id @default(cuid())
   quotationId String
   itemId      String
   rate        Float
-  discount    Float  @default(0)
-  gstRate     Float  @default(0)
+  discount    Float     @default(0)
+  gstRate     Float     @default(0)
   rfqLineId   String?
-  rfqLine     RfqLine? @relation(fields: [rfqLineId], references: [id])
+  rfqLine     RfqLine?  @relation(fields: [rfqLineId], references: [id])
   poLines     PoLine[]
   quotation   Quotation @relation(fields: [quotationId], references: [id])
 
-  canSupply   Boolean @default(true)
-  quotedQty   Float?
-  leadDays    Int?
-  landedUnit  Float?
-  rank        Int?
+  canSupply  Boolean @default(true)
+  quotedQty  Float?
+  leadDays   Int?
+  landedUnit Float?
+  rank       Int?
+  brand      String?
 
   @@schema("purchase")
-
 }
 
 model PurchaseOrder {
-
-  id           String   @id @default(cuid())
-  companyId    String
-  number       String   // PO-XXXXX
-  vendorId     String
-  type         PoType   @default(REGULAR)
-  status       PoStatus @default(DRAFT)
-  prId         String?
-  orderDate    DateTime @default(now())
-  deliveryDate DateTime?
-  currency     String   @default("INR")
-  paymentTerms String?
-  freightTerms String?
-  shipTo       String?
-  termsConditions String?
-  termsPresetId     String?   // which preset was chosen
-  termsVersion      Int?      // preset version at issue
-  resolvedTermsText String?   // frozen, fully-merged T&C text stamped on the PO PDF
-  rateContractExpiry DateTime?  // for BLANKET; feeds reminders
-  version      Int      @default(1)
-  approvedById String?
-  approvedAt   DateTime?
-  deletedAt    DateTime?
-  otherCharges Float    @default(0)
-  vendor       Vendor   @relation(fields: [vendorId], references: [id])
-  lines        PoLine[]
-  amendments   PoAmendment[]
-  paymentRequests PaymentRequest[]
+  id                 String           @id @default(cuid())
+  companyId          String
+  number             String // PO-XXXXX
+  vendorId           String
+  type               PoType           @default(REGULAR)
+  status             PoStatus         @default(DRAFT)
+  prId               String?
+  orderDate          DateTime         @default(now())
+  deliveryDate       DateTime?
+  currency           String           @default("INR")
+  paymentTerms       String?
+  freightTerms       String?
+  shipTo             String?
+  termsConditions    String?
+  termsPresetId      String? // which preset was chosen
+  termsVersion       Int? // preset version at issue
+  resolvedTermsText  String? // frozen, fully-merged T&C text stamped on the PO PDF
+  rateContractExpiry DateTime? // for BLANKET; feeds reminders
+  version            Int              @default(1)
+  approvedById       String?
+  approvedAt         DateTime?
+  deletedAt          DateTime?
+  otherCharges       Float            @default(0)
+  vendor             Vendor           @relation(fields: [vendorId], references: [id])
+  lines              PoLine[]
+  amendments         PoAmendment[]
+  paymentRequests    PaymentRequest[]
 
   @@unique([companyId, number])
   @@index([companyId, status])
   @@index([companyId, deliveryDate])
   @@schema("purchase")
-
 }
 
 model PoLine {
-
-  id          String @id @default(cuid())
-  poId        String
-  itemId      String
-  qty         Float
-  receivedQty Float  @default(0)
-  rate        Float
-  discount    Float  @default(0)
-  gstRate     Float  @default(0)
-  requiredBy  DateTime?
+  id              String         @id @default(cuid())
+  poId            String
+  itemId          String
+  qty             Float
+  receivedQty     Float          @default(0)
+  rate            Float
+  discount        Float          @default(0)
+  gstRate         Float          @default(0)
+  requiredBy      DateTime?
   quotationLineId String?
   quotationLine   QuotationLine? @relation(fields: [quotationLineId], references: [id])
-  rfqLineId       String?        // denormalized for fast trace
-  prLineId        String?        // denormalized for fast trace
-  po          PurchaseOrder @relation(fields: [poId], references: [id])
-  @@schema("purchase")
+  rfqLineId       String? // denormalized for fast trace
+  prLineId        String? // denormalized for fast trace
+  po              PurchaseOrder  @relation(fields: [poId], references: [id])
+  brand           String?
 
+  @@schema("purchase")
 }
 
 model PoAmendment {
-
-  id        String   @id @default(cuid())
-  poId      String
-  version   Int
-  reason    String?
-  snapshot  Json     // prior header+lines
+  id          String        @id @default(cuid())
+  poId        String
+  version     Int
+  reason      String?
+  snapshot    Json // prior header+lines
   createdById String
-  createdAt DateTime @default(now())
-  po        PurchaseOrder @relation(fields: [poId], references: [id])
-  @@schema("purchase")
+  createdAt   DateTime      @default(now())
+  po          PurchaseOrder @relation(fields: [poId], references: [id])
 
+  @@schema("purchase")
 }
 
 model SupplierInvoice {
-
-  id          String  @id @default(cuid())
+  id          String                @id @default(cuid())
   companyId   String
   vendorId    String
   poId        String?
   invoiceNo   String
   invoiceDate DateTime
   amount      Float
-  dueDate     DateTime?            // invoiceDate + creditDays
-  matchStatus InvoiceMatchStatus @default(PENDING)
+  dueDate     DateTime? // invoiceDate + creditDays
+  matchStatus InvoiceMatchStatus    @default(PENDING)
   ocrDraft    Json?
   deletedAt   DateTime?
-  createdAt   DateTime @default(now())
+  createdAt   DateTime              @default(now())
   lines       SupplierInvoiceLine[]
 
   @@unique([companyId, vendorId, invoiceNo])
   @@index([companyId, matchStatus])
   @@index([companyId, dueDate])
   @@schema("purchase")
-
 }
 
 model SupplierInvoiceLine {
-
-  id        String @id @default(cuid())
+  id        String          @id @default(cuid())
   invoiceId String
   itemId    String
   qty       Float
   rate      Float
   invoice   SupplierInvoice @relation(fields: [invoiceId], references: [id])
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 model DebitCreditNote {
-
   id        String   @id @default(cuid())
   companyId String
-  number    String   // DN-XXXXX or CN-XXXXX
+  number    String // DN-XXXXX or CN-XXXXX
   type      NoteType
   vendorId  String
-  refType   String?  // GRN_REJECTION | RATE_DIFF | ...
+  refType   String? // GRN_REJECTION | RATE_DIFF | ...
   refId     String?
   amount    Float
-  posted    Boolean  @default(false)   // immutable once posted
+  posted    Boolean  @default(false) // immutable once posted
   createdAt DateTime @default(now())
 
   @@unique([companyId, number])
   @@schema("purchase")
-
 }
 
 model PaymentVoucher {
-
-  id          String   @id @default(cuid())
-  companyId   String
-  number      String   // PAY-XXXXX
-  vendorId    String
-  invoiceId   String?
-  amount      Float
-  paidOn      DateTime
-  mode        String?  // NEFT | CHEQUE | UPI — recorded, NOT executed
-  reference   String?
+  id           String   @id @default(cuid())
+  companyId    String
+  number       String // PAY-XXXXX
+  vendorId     String
+  invoiceId    String?
+  amount       Float
+  paidOn       DateTime
+  mode         String? // NEFT | CHEQUE | UPI — recorded, NOT executed
+  reference    String?
   recordedById String
-  createdAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
 
   @@unique([companyId, number])
   @@index([companyId, vendorId])
   @@schema("purchase")
-
 }
 
 model ReminderDismissal {
-
-  id        String   @id @default(cuid())
-  companyId String
-  userId    String
-  category  String   // PENDING_INDENT | PENDING_PO | PAYMENT_DUE | ...
-  refId     String?  // optional specific document
+  id          String    @id @default(cuid())
+  companyId   String
+  userId      String
+  category    String // PENDING_INDENT | PENDING_PO | PAYMENT_DUE | ...
+  refId       String? // optional specific document
   snoozeUntil DateTime?
-  createdAt DateTime @default(now())
+  createdAt   DateTime  @default(now())
 
   @@index([companyId, userId, category])
   @@schema("purchase")
-
 }
 
 model ReminderConfig {
-
   id              String @id @default(cuid())
   companyId       String @unique
-  deliveryDueDays Int    @default(3)   // PO delivery "due soon" lead
-  expiryLeadDays  Int    @default(30)  // batch expiry warning lead
-  paymentDueDays  Int    @default(7)   // payment "due soon" lead
+  deliveryDueDays Int    @default(3) // PO delivery "due soon" lead
+  expiryLeadDays  Int    @default(30) // batch expiry warning lead
+  paymentDueDays  Int    @default(7) // payment "due soon" lead
   agingBuckets    Json   @default("[0,30,60,90]")
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 enum ErpType {
-
   TALLY
   BUSY
   MARG
   ZOHO_BOOKS
   SAP_B1
   CUSTOM
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 enum ErpConnStatus {
-
   ACTIVE
   PAUSED
   AGENT_OFFLINE
   ERROR
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 enum ErpSyncDirection {
-
   PULL
   PUSH
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 enum ErpSyncStatus {
-
   OK
   PARTIAL
   FAILED
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 enum ErpMapStatus {
-
   MAPPED
   UNMAPPED
   NOT_BILLWISE
   CONFLICT
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 enum WritebackStatus {
-
   PENDING
   APPROVED
   POSTED
   FAILED
   SKIPPED
-  @@schema("purchase")
 
+  @@schema("purchase")
 }
 
 model ErpConnection {
+  id               String        @id @default(cuid())
+  companyId        String
+  type             ErpType       @default(TALLY)
+  erpCompanyName   String // SVCurrentCompany for Tally
+  writebackEnabled Boolean       @default(false)
+  status           ErpConnStatus @default(AGENT_OFFLINE)
+  lastSyncAt       DateTime?
+  config           Json? // host hints, schedule, format, tdl collection name
+  createdAt        DateTime      @default(now())
 
-  id              String        @id @default(cuid())
-  companyId       String
-  type            ErpType       @default(TALLY)
-  erpCompanyName  String        // SVCurrentCompany for Tally
-  writebackEnabled Boolean      @default(false)
-  status          ErpConnStatus @default(AGENT_OFFLINE)
-  lastSyncAt      DateTime?
-  config          Json?         // host hints, schedule, format, tdl collection name
-  createdAt       DateTime      @default(now())
-
-  agents          BridgeAgent[]
-  vendorMaps      VendorErpMap[]
-  statements      CreditorStatement[]
-  syncLogs        ErpSyncLog[]
-  writebacks      ErpWriteback[]
+  agents           BridgeAgent[]
+  vendorMaps       VendorErpMap[]
+  statements       CreditorStatement[]
+  customerMaps     CustomerErpMap[] // debtor-side ledger maps (sales schema)
+  debtorStatements DebtorStatement[] // debtor outstandings pulled by the same bridge
+  syncLogs         ErpSyncLog[]
+  writebacks       ErpWriteback[]
 
   @@unique([companyId, type, erpCompanyName])
   @@index([companyId, status])
   @@schema("purchase")
-
 }
 
 model BridgeAgent {
-
-  id             String        @id @default(cuid())
-  companyId      String
-  connectionId   String
-  name           String
-  tokenHash      String        // hashed, rotatable; never store plaintext
-  lastSeenAt     DateTime?
-  version        String?
-  connection     ErpConnection @relation(fields: [connectionId], references: [id])
+  id           String        @id @default(cuid())
+  companyId    String
+  connectionId String
+  name         String
+  tokenHash    String // hashed, rotatable; never store plaintext
+  lastSeenAt   DateTime?
+  version      String?
+  connection   ErpConnection @relation(fields: [connectionId], references: [id])
 
   @@index([companyId, connectionId])
   @@schema("purchase")
-
 }
 
 model VendorErpMap {
-
-  id            String       @id @default(cuid())
+  id            String        @id @default(cuid())
   companyId     String
   connectionId  String
   vendorId      String
   erpLedgerName String
-  erpLedgerGuid String?      // Tally master GUID/ID — stable across renames
-  billwise      Boolean      @default(false)  // "Maintain balances bill-by-bill"
-  status        ErpMapStatus @default(UNMAPPED)
+  erpLedgerGuid String? // Tally master GUID/ID — stable across renames
+  billwise      Boolean       @default(false) // "Maintain balances bill-by-bill"
+  status        ErpMapStatus  @default(UNMAPPED)
   connection    ErpConnection @relation(fields: [connectionId], references: [id])
 
   @@unique([companyId, connectionId, vendorId])
   @@index([companyId, connectionId, erpLedgerGuid])
   @@schema("purchase")
-
 }
 
 model CreditorStatement {
-
-  id             String   @id @default(cuid())
-  companyId      String
-  connectionId   String
-  vendorId       String
-  currency       String   @default("INR")
-  outstanding    Float    @default(0)  // net payable
-  asOf           DateTime
-  connection     ErpConnection @relation(fields: [connectionId], references: [id])
-  bills          CreditorBill[]
+  id           String         @id @default(cuid())
+  companyId    String
+  connectionId String
+  vendorId     String
+  currency     String         @default("INR")
+  outstanding  Float          @default(0) // net payable
+  asOf         DateTime
+  connection   ErpConnection  @relation(fields: [connectionId], references: [id])
+  bills        CreditorBill[]
 
   @@unique([companyId, connectionId, vendorId])
   @@index([companyId, vendorId])
   @@schema("purchase")
-
 }
 
 model CreditorBill {
-
-  id             String   @id @default(cuid())
-  companyId      String
-  statementId    String
-  billRef        String              // Tally bill reference
-  billDate       DateTime?
-  dueDate        DateTime?
-  openingAmount  Float    @default(0)
-  pendingAmount  Float    @default(0)
-  overdueDays    Int?
-  matchedInvoiceId String?           // optional link to SupplierInvoice.id
-  statement      CreditorStatement @relation(fields: [statementId], references: [id])
+  id               String            @id @default(cuid())
+  companyId        String
+  statementId      String
+  billRef          String // Tally bill reference
+  billDate         DateTime?
+  dueDate          DateTime?
+  openingAmount    Float             @default(0)
+  pendingAmount    Float             @default(0)
+  overdueDays      Int?
+  matchedInvoiceId String? // optional link to SupplierInvoice.id
+  statement        CreditorStatement @relation(fields: [statementId], references: [id])
 
   @@index([companyId, statementId])
   @@index([companyId, dueDate])
   @@schema("purchase")
-
 }
 
 model ErpSyncLog {
-
   id           String           @id @default(cuid())
   companyId    String
   connectionId String
   direction    ErpSyncDirection
-  report       String?          // "GroupOutstandings" | "LedgerOutstandings" | "BillsPayable" | "PaymentVoucher"
+  report       String? // "GroupOutstandings" | "LedgerOutstandings" | "BillsPayable" | "PaymentVoucher"
   status       ErpSyncStatus
   message      String?
   recordCount  Int?
@@ -586,36 +544,34 @@ model ErpSyncLog {
 
   @@index([companyId, connectionId, createdAt])
   @@schema("purchase")
-
 }
 
 model ErpWriteback {
-
-  id              String          @id @default(cuid())
-  companyId       String
-  connectionId    String
-  paymentVoucherId String         // Saarlekha PaymentVoucher.id
-  idempotencyKey  String          // dedupe; one ERP voucher per payment
-  status          WritebackStatus @default(PENDING)
-  erpVoucherId    String?         // returned Tally voucher id once posted
-  approvedById    String?
-  message         String?
-  createdAt       DateTime        @default(now())
-  connection      ErpConnection   @relation(fields: [connectionId], references: [id])
+  id               String          @id @default(cuid())
+  companyId        String
+  connectionId     String
+  paymentVoucherId String // Saarlekha PaymentVoucher.id
+  idempotencyKey   String // dedupe; one ERP voucher per payment
+  status           WritebackStatus @default(PENDING)
+  erpVoucherId     String? // returned Tally voucher id once posted
+  approvedById     String?
+  message          String?
+  createdAt        DateTime        @default(now())
+  connection       ErpConnection   @relation(fields: [connectionId], references: [id])
 
   @@unique([companyId, idempotencyKey])
   @@index([companyId, status])
   @@schema("purchase")
-
 }
 
 model FlowConversion {
   id             String   @id @default(cuid())
   companyId      String
-  step           String   // INDENT_TO_PR | PR_TO_RFQ | RFQ_AWARD | RFQ_TO_PO | REORDER_TO_INDENT
-  sourceId       String   // e.g. indentLineId / prId / rfqId
+  step           String // INDENT_TO_PR | PR_TO_RFQ | RFQ_AWARD | RFQ_TO_PO | REORDER_TO_INDENT
+  sourceId       String // e.g. indentLineId / prId / rfqId
   idempotencyKey String
   createdAt      DateTime @default(now())
+
   @@unique([companyId, idempotencyKey])
   @@schema("purchase")
 }
@@ -630,23 +586,24 @@ model ShipToLocation {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   company   Company  @relation(fields: [companyId], references: [id])
+
   @@unique([companyId, code])
   @@schema("purchase")
 }
 
 model PoTermsPreset {
-  id           String            @id @default(cuid())
-  companyId    String?           // null = system/global seed; set = company-owned copy
-  key          String            // slug, e.g. "comprehensive-goods-services"
-  name         String            // shown in the picker
-  description  String?
-  appliesTo    PoType[]          // REGULAR | CAPITAL | SERVICE | IMPORT | BLANKET
-  isDefault    Boolean           @default(false)   // default for its appliesTo types
-  bodyMarkdown String            // template text with {{TOKENS}}
-  tokenDefaults Json?            // preset-level overrides for commercial tokens
-  version      Int               @default(1)
-  status       TermsPresetStatus @default(ACTIVE)
-  createdAt    DateTime          @default(now())
+  id            String            @id @default(cuid())
+  companyId     String? // null = system/global seed; set = company-owned copy
+  key           String // slug, e.g. "comprehensive-goods-services"
+  name          String // shown in the picker
+  description   String?
+  appliesTo     PoType[] // REGULAR | CAPITAL | SERVICE | IMPORT | BLANKET
+  isDefault     Boolean           @default(false) // default for its appliesTo types
+  bodyMarkdown  String // template text with {{TOKENS}}
+  tokenDefaults Json? // preset-level overrides for commercial tokens
+  version       Int               @default(1)
+  status        TermsPresetStatus @default(ACTIVE)
+  createdAt     DateTime          @default(now())
 
   @@unique([companyId, key])
   @@index([companyId, status])
@@ -663,13 +620,14 @@ model PoTermsConfig {
   warrantyMonths       Int     @default(24)
   sparesYears          Int     @default(10)
   ldPctPerDay          Float   @default(0.5)
-  ldCapPct             Float   @default(100)   // cap as % of PO value
+  ldCapPct             Float   @default(100) // cap as % of PO value
   creditDays           Int     @default(45)
   latentDefectDays     Int     @default(90)
   fmTerminationDays    Int     @default(45)
   cureDays             Int     @default(30)
   arbitrationForum     String  @default("Arbitration and Conciliation Act, 1996")
-  jurisdictionCity     String?                 // defaults to company city
+  jurisdictionCity     String? // defaults to company city
+
   @@schema("purchase")
 }
 
@@ -680,6 +638,7 @@ enum LineStatus {
   ISSUED
   SHORT_CLOSED
   CANCELLED
+
   @@schema("purchase")
 }
 
@@ -691,6 +650,7 @@ enum RfqLineStatus {
   UNCOVERED
   SHORT
   CLOSED
+
   @@schema("purchase")
 }
 
@@ -702,6 +662,7 @@ enum AwardReason {
   SOLE_SUPPLIER
   PARTIAL_AVAILABILITY
   OTHER
+
   @@schema("purchase")
 }
 
@@ -716,35 +677,35 @@ model AwardAllocation {
   note            String?
   poLineId        String?
   createdAt       DateTime    @default(now())
+
   @@index([companyId, rfqLineId])
   @@index([companyId, vendorId])
   @@schema("purchase")
 }
 
 model PaymentRequest {
-  id           String               @id @default(cuid())
-  companyId    String
-  number       String               // PRQ-XXXXX
-  vendorId     String
-  poId         String?
-  grnId        String?
-  type         PaymentRequestType
-  amount       Float
-  remarks      String?
-  status       PaymentRequestStatus @default(PENDING)
-  recordedById String
-  approvedById String?
-  approvedAt   DateTime?
+  id               String               @id @default(cuid())
+  companyId        String
+  number           String // PRQ-XXXXX
+  vendorId         String
+  poId             String?
+  grnId            String?
+  type             PaymentRequestType
+  amount           Float
+  remarks          String?
+  status           PaymentRequestStatus @default(PENDING)
+  recordedById     String
+  approvedById     String?
+  approvedAt       DateTime?
   paymentVoucherId String?
-  createdAt    DateTime             @default(now())
-  updatedAt    DateTime             @updatedAt
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
 
-  vendor       Vendor               @relation(fields: [vendorId], references: [id])
-  po           PurchaseOrder?       @relation(fields: [poId], references: [id])
-  grn          Grn?                 @relation(fields: [grnId], references: [id])
+  vendor Vendor         @relation(fields: [vendorId], references: [id])
+  po     PurchaseOrder? @relation(fields: [poId], references: [id])
+  grn    Grn?           @relation(fields: [grnId], references: [id])
 
   @@unique([companyId, number])
   @@index([companyId, status])
   @@schema("purchase")
 }
-

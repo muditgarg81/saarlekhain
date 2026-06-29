@@ -41,6 +41,7 @@ const quotationSchema = z.object({
     canSupply: z.boolean().default(true),
     quotedQty: z.number().nonnegative().optional().nullable(),
     leadDays: z.number().int().nonnegative().optional().nullable(),
+    brand: z.string().optional().nullable(),
   })),
 });
 
@@ -263,6 +264,7 @@ export async function submitQuotation(data: z.infer<typeof quotationSchema>) {
               canSupply: l.canSupply ?? true,
               quotedQty: l.quotedQty ?? null,
               leadDays: l.leadDays ?? null,
+              brand: l.brand || null,
             })),
           },
         },
@@ -473,6 +475,7 @@ export async function updateQuotation(data: {
     canSupply: boolean;
     quotedQty?: number | null;
     leadDays?: number | null;
+    brand?: string | null;
   }[];
 }) {
   const session = await auth();
@@ -533,6 +536,7 @@ export async function updateQuotation(data: {
             canSupply: line.canSupply,
             quotedQty: line.quotedQty ?? null,
             leadDays: line.leadDays ?? null,
+            brand: line.brand ?? null,
           }
         });
 

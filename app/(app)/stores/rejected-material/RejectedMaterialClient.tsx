@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { updateRejectedMaterialStatus } from "@/app/actions/rejectedMaterials";
+import { updateRejectedMaterialStatus, rejectMaterialDirectly } from "@/app/actions/rejectedMaterials";
 import { limitYearTo4Digits } from "@/lib/date";
 import { 
   Search, 
@@ -37,11 +37,25 @@ interface SerializedMaterial {
   updatedAt: string;
 }
 
-interface RejectedMaterialClientProps {
-  initialMaterials: SerializedMaterial[];
+interface SerializedNonQcLine {
+  id: string;
+  grnNumber: string;
+  itemCode: string;
+  itemName: string;
+  itemId: string;
+  receivedQty: number;
+  acceptedQty: number;
+  rejectedQty: number;
+  vendorName: string;
+  date: string;
 }
 
-export default function RejectedMaterialClient({ initialMaterials }: RejectedMaterialClientProps) {
+interface RejectedMaterialClientProps {
+  initialMaterials: SerializedMaterial[];
+  nonQcLines?: SerializedNonQcLine[];
+}
+
+export default function RejectedMaterialClient({ initialMaterials, nonQcLines = [] }: RejectedMaterialClientProps) {
   const [materialsList, setMaterialsList] = useState<SerializedMaterial[]>(initialMaterials);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "PENDING_RETURN" | "RETURNED_TO_VENDOR" | "DISPOSED" | "SHORT_SUPPLY">("ALL");
@@ -59,6 +73,13 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  // Direct Rejection Form States
+  const [activeTab, setActiveTab] = useState<"register" | "reject">("register");
+  const [selectedGrnLineId, setSelectedGrnLineId] = useState("");
+  const [directRejectedQty, setDirectRejectedQty] = useState("");
+  const [directRemarks, setDirectRemarks] = useState("");
+  const [directSearch, setDirectSearch] = useState("");
 
   // Filtered List
   const filteredMaterials = materialsList.filter((m) => {
@@ -203,6 +224,74 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
     }
   };
 
+  const handleDirectRejectionSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedGrnLineId) {
+      alert("Please select a GRN line item");
+      return;
+    }
+
+    const qty = parseFloat(directRejectedQty);
+    if (isNaN(qty) || qty <= 0) {
+      alert("Please enter a valid rejection quantity greater than zero");
+      return;
+    }
+
+    const selectedLine = nonQcLines.find(l => l.id === selectedGrnLineId);
+    if (!selectedLine) return;
+
+    if (qty > selectedLine.acceptedQty) {
+      alert(`Rejection quantity cannot exceed currently accepted quantity (${selectedLine.acceptedQty})`);
+      return;
+    }
+
+    const confirmMsg = `Are you sure you want to reject ${qty} units of "${selectedLine.itemName}" from GRN "${selectedLine.grnNumber}"?\n\nThis will deduct stock from the ledger and auto-generate a draft Debit Note.`;
+    if (!confirm(confirmMsg)) return;
+
+    setLoading(true);
+    setErrorMsg(null);
+    setSuccessMsg(null);
+
+    try {
+      const res = await rejectMaterialDirectly({
+        grnLineId: selectedGrnLineId,
+        rejectedQty: qty,
+        remarks: directRemarks || "Direct Rejection (No QC)"
+      });
+
+      if (res.success && res.rejectedMaterial) {
+        const newRm = {
+          ...res.rejectedMaterial,
+          createdAt: res.rejectedMaterial.createdAt.toISOString(),
+          updatedAt: res.rejectedMaterial.updatedAt.toISOString(),
+          actionDate: res.rejectedMaterial.actionDate ? res.rejectedMaterial.actionDate.toISOString() : null
+        } as SerializedMaterial;
+
+        // Add to register list
+        setMaterialsList(prev => [newRm, ...prev]);
+
+        // Reset form
+        setSelectedGrnLineId("");
+        setDirectRejectedQty("");
+        setDirectRemarks("");
+        setDirectSearch("");
+
+        // Switch to register view
+        setActiveTab("register");
+
+        setSuccessMsg("Direct rejection processed successfully! Debit note triggered.");
+        setTimeout(() => setSuccessMsg(null), 4000);
+      } else {
+        setErrorMsg(res.error || "Failed to process direct rejection");
+      }
+    } catch (err: any) {
+      console.error(err);
+      setErrorMsg(err.message || "An unexpected error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Top Header */}
@@ -222,6 +311,30 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
         </div>
       </div>
 
+      {/* Navigation Tabs */}
+      <div className="flex border-b border-onyx/10 space-x-6 text-sm font-semibold mb-2">
+        <button
+          onClick={() => setActiveTab("register")}
+          className={`pb-2.5 border-b-2 transition-all cursor-pointer ${
+            activeTab === "register"
+              ? "border-saffron text-onyx font-bold"
+              : "border-transparent text-onyx/50 hover:text-onyx"
+          }`}
+        >
+          Material Register
+        </button>
+        <button
+          onClick={() => setActiveTab("reject")}
+          className={`pb-2.5 border-b-2 transition-all cursor-pointer ${
+            activeTab === "reject"
+              ? "border-saffron text-onyx font-bold"
+              : "border-transparent text-onyx/50 hover:text-onyx"
+          }`}
+        >
+          Reject Item (No QC)
+        </button>
+      </div>
+
       {/* Global Message Alerts */}
       {successMsg && (
         <div className="bg-green-50 border-l-4 border-green-500 p-4 rounded-xl flex items-start space-x-3 text-xs text-green-800 font-semibold shadow-sm animate-in fade-in duration-200">
@@ -236,8 +349,10 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
         </div>
       )}
 
-      {/* KPI Cards Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      {activeTab === "register" && (
+        <>
+          {/* KPI Cards Grid */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="glass-card p-4 rounded-xl border border-onyx/5 shadow-xs flex items-center space-x-4">
           <div className="p-3 rounded-lg bg-onyx/5 text-onyx">
             <FileText size={20} />
@@ -481,6 +596,173 @@ export default function RejectedMaterialClient({ initialMaterials }: RejectedMat
           </div>
         </div>
       </div>
+        </>
+      )}
+
+      {activeTab === "reject" && (
+        <div className="glass-card p-6 rounded-xl border border-onyx/5 shadow-sm max-w-2xl mx-auto space-y-6 bg-white animate-in fade-in duration-200">
+          <div>
+            <h3 className="text-lg font-bold tracking-tight text-onyx">Reject Item (No QC)</h3>
+            <p className="text-xs text-onyx/50 mt-1">Select a posted GRN line item to perform direct material rejection and automatically trigger a Debit Note.</p>
+          </div>
+
+          <form onSubmit={handleDirectRejectionSubmit} className="space-y-4 text-xs">
+            {/* Search GRN line input */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                Search GRN / Item / Vendor
+              </label>
+              <div className="relative">
+                <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-onyx/40 pointer-events-none">
+                  <Search size={14} />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Type to filter GRNs..."
+                  value={directSearch}
+                  onChange={(e) => setDirectSearch(e.target.value)}
+                  className="w-full text-xs pl-9 pr-4 py-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                />
+              </div>
+            </div>
+
+            {/* Select GRN Line */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                Select GRN Line Item *
+              </label>
+              <select
+                required
+                value={selectedGrnLineId}
+                onChange={(e) => {
+                  setSelectedGrnLineId(e.target.value);
+                  // Autofill default reject qty if selected
+                  const line = nonQcLines.find(l => l.id === e.target.value);
+                  if (line) {
+                    setDirectRejectedQty(line.acceptedQty.toString());
+                  } else {
+                    setDirectRejectedQty("");
+                  }
+                }}
+                className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-medium"
+              >
+                <option value="">-- Choose Posted GRN Line --</option>
+                {nonQcLines
+                  .filter(l => 
+                    l.grnNumber.toLowerCase().includes(directSearch.toLowerCase()) ||
+                    l.itemName.toLowerCase().includes(directSearch.toLowerCase()) ||
+                    l.itemCode.toLowerCase().includes(directSearch.toLowerCase()) ||
+                    l.vendorName.toLowerCase().includes(directSearch.toLowerCase())
+                  )
+                  .map(l => (
+                    <option key={l.id} value={l.id}>
+                      [{l.grnNumber}] {l.itemName} ({l.vendorName}) - Avail: {l.acceptedQty} units
+                    </option>
+                  ))
+                }
+              </select>
+            </div>
+
+            {/* Display details of selected GRN Line */}
+            {(() => {
+              const line = nonQcLines.find(l => l.id === selectedGrnLineId);
+              if (!line) return null;
+              return (
+                <div className="p-4 bg-cream-dark/15 border border-onyx/5 rounded-xl space-y-2 text-xs">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/50 mb-1">Selected Line Details</h4>
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-2">
+                    <div>
+                      <span className="text-onyx/50 font-medium">GRN Number:</span>{" "}
+                      <span className="font-bold text-onyx">{line.grnNumber}</span>
+                    </div>
+                    <div>
+                      <span className="text-onyx/50 font-medium">Vendor:</span>{" "}
+                      <span className="font-bold text-onyx">{line.vendorName}</span>
+                    </div>
+                    <div>
+                      <span className="text-onyx/50 font-medium">Item:</span>{" "}
+                      <span className="font-bold text-onyx">[{line.itemCode}] {line.itemName}</span>
+                    </div>
+                    <div>
+                      <span className="text-onyx/50 font-medium">Current Stock (Accepted):</span>{" "}
+                      <span className="font-mono font-bold text-emerald-800">{line.acceptedQty} units</span>
+                    </div>
+                    <div>
+                      <span className="text-onyx/50 font-medium">Total Received:</span>{" "}
+                      <span className="font-mono text-onyx">{line.receivedQty} units</span>
+                    </div>
+                    <div>
+                      <span className="text-onyx/50 font-medium">Already Rejected:</span>{" "}
+                      <span className="font-mono text-onyx">{line.rejectedQty} units</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Input Rejection Quantity */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                Rejection Quantity *
+              </label>
+              <input
+                type="number"
+                step="any"
+                required
+                min="0.001"
+                max={(() => {
+                  const line = nonQcLines.find(l => l.id === selectedGrnLineId);
+                  return line ? line.acceptedQty : undefined;
+                })()}
+                placeholder="Enter rejection quantity..."
+                value={directRejectedQty}
+                onChange={(e) => setDirectRejectedQty(e.target.value)}
+                className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-bold font-mono"
+              />
+            </div>
+
+            {/* Input Remarks */}
+            <div>
+              <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                Rejection Remarks / Reason *
+              </label>
+              <textarea
+                required
+                rows={3}
+                placeholder="State the reason for material rejection (e.g., Transit damage, Defective items)..."
+                value={directRemarks}
+                onChange={(e) => setDirectRemarks(e.target.value)}
+                className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron resize-none"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex space-x-2 pt-2 border-t border-onyx/5">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab("register");
+                  setSelectedGrnLineId("");
+                  setDirectRejectedQty("");
+                  setDirectRemarks("");
+                  setDirectSearch("");
+                }}
+                className="flex-1 py-2.5 border border-onyx/10 hover:bg-cream-dark text-xs font-bold rounded-lg transition-colors cursor-pointer"
+                disabled={loading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="flex-1 py-2.5 bg-saffron hover:bg-saffron-dark text-xs font-bold text-onyx rounded-lg shadow-sm transition-all duration-150 cursor-pointer disabled:opacity-50"
+                disabled={loading}
+              >
+                {loading ? "Processing..." : "Submit Rejection & Debit Note"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {/* Action / Edit Modal */}
       {isModalOpen && selectedMaterial && (

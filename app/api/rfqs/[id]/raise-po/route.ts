@@ -163,6 +163,7 @@ export async function POST(
             allocationId: alloc.id, // helper reference
             moq: item.moq,
             itemCode: item.code,
+            brand: qLine.brand,
           });
 
           const basicTaxable = alloc.qty * qLine.rate * (1 - qLine.discount / 100);
@@ -212,6 +213,7 @@ export async function POST(
                 quotationLineId: pld.quotationLineId,
                 rfqLineId: pld.rfqLineId,
                 prLineId: pld.prLineId,
+                brand: pld.brand,
               }))
             }
           },

@@ -3,8 +3,9 @@
 import { auth } from "@/auth";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { RejectedMaterialStatus, GatePassType, GatePassStatus, NoteType } from "@prisma/client";
+import { RejectedMaterialStatus, GatePassType, GatePassStatus, NoteType, LedgerTxnType, GrnStatus } from "@prisma/client";
 import { getNextSequence } from "@/lib/sequences";
+import { postLedgerEntry } from "@/lib/stock";
 
 export async function updateRejectedMaterialStatus(
   id: string,
@@ -214,5 +215,157 @@ export async function updateRejectedMaterialStatus(
   } catch (err: any) {
     console.error("Error updating rejected material:", err);
     return { success: false, error: err.message || "Failed to update status" };
+  }
+}
+
+export async function rejectMaterialDirectly(data: {
+  grnLineId: string;
+  rejectedQty: number;
+  remarks?: string | null;
+}) {
+  const session = await auth();
+  if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  const companyId = (session.user as any).companyId;
+  const actorId = (session.user as any).id;
+
+  try {
+    const result = await db.$transaction(async (tx) => {
+      // 1. Fetch GRN Line and ensure it exists and belongs to company
+      const grnLine = await tx.grnLine.findFirst({
+        where: { id: data.grnLineId, grn: { companyId } },
+        include: { grn: true }
+      });
+
+      if (!grnLine) throw new Error("GRN line not found");
+      if (grnLine.grn.status !== GrnStatus.POSTED) throw new Error("GRN must be POSTED to perform rejection");
+
+      // Resolve item in transaction
+      const item = await tx.item.findFirst({
+        where: { id: grnLine.itemId, companyId }
+      });
+      if (!item) throw new Error("Item not found");
+      if (item.qcRequired) throw new Error("This item requires regular QC inspection; use the QC Inspection module instead");
+
+      // Resolve vendor
+      let vendorName = "Unknown Vendor";
+      if (grnLine.grn.vendorId) {
+        const vendor = await tx.vendor.findFirst({
+          where: { id: grnLine.grn.vendorId, companyId }
+        });
+        if (vendor) {
+          vendorName = vendor.name;
+        }
+      }
+
+      if (data.rejectedQty <= 0) throw new Error("Rejection quantity must be greater than zero");
+      if (data.rejectedQty > grnLine.acceptedQty) {
+        throw new Error(`Rejection quantity cannot exceed current accepted quantity (${grnLine.acceptedQty})`);
+      }
+
+      // 2. Decrease acceptedQty, increase rejectedQty of GrnLine
+      await tx.grnLine.update({
+        where: { id: data.grnLineId },
+        data: {
+          acceptedQty: grnLine.acceptedQty - data.rejectedQty,
+          rejectedQty: grnLine.rejectedQty + data.rejectedQty
+        }
+      });
+
+      // 3. Decrease poLine.receivedQty if linked
+      let rate = 0;
+      let discount = 0;
+      let gstRate = 0;
+      if (grnLine.poLineId) {
+        const poLine = await tx.poLine.findUnique({
+          where: { id: grnLine.poLineId }
+        });
+        if (poLine) {
+          rate = poLine.rate;
+          discount = poLine.discount;
+          gstRate = poLine.gstRate;
+          await tx.poLine.update({
+            where: { id: grnLine.poLineId },
+            data: {
+              receivedQty: Math.max(0, poLine.receivedQty - data.rejectedQty)
+            }
+          });
+        }
+      } else {
+        // Fallback for rate, discount, gstRate
+        const latestPoLine = await tx.poLine.findFirst({
+          where: { itemId: grnLine.itemId, po: { companyId } },
+          orderBy: { id: "desc" }
+        });
+        if (latestPoLine) {
+          rate = latestPoLine.rate;
+          discount = latestPoLine.discount;
+          gstRate = latestPoLine.gstRate;
+        }
+      }
+
+      // 4. Create RejectedMaterial record
+      const rejectedMaterial = await tx.rejectedMaterial.create({
+        data: {
+          companyId,
+          grnLineId: grnLine.id,
+          grnNumber: grnLine.grn.number,
+          itemCode: item.code,
+          itemName: item.name,
+          vendorName: vendorName,
+          rejectedQty: data.rejectedQty,
+          status: "RETURNED_TO_VENDOR",
+          actionDate: new Date(),
+          remarks: data.remarks || "Direct Rejection (No QC)",
+        }
+      });
+
+      // 5. Post stock ledger entry for return to vendor
+      await postLedgerEntry(tx, {
+        companyId,
+        itemId: grnLine.itemId,
+        storeId: grnLine.grn.storeId,
+        binId: grnLine.binId,
+        batchId: grnLine.batchId,
+        txnType: LedgerTxnType.RETURN_TO_VENDOR,
+        qty: -data.rejectedQty, // negative qty
+        rate: rate || null,
+        refType: "REJECTION",
+        refId: rejectedMaterial.id,
+        createdById: actorId
+      });
+
+      // 6. Generate Debit Note
+      let vendorId = grnLine.grn.vendorId;
+
+      if (vendorId) {
+        // Calculate Debit Note value
+        const baseValue = data.rejectedQty * rate * (1 - discount / 100);
+        const gstValue = baseValue * (gstRate / 100);
+        const totalDebitAmount = Math.round((baseValue + gstValue) * 100) / 100;
+
+        const dnNumber = await getNextSequence(companyId, "DN");
+        await tx.debitCreditNote.create({
+          data: {
+            companyId,
+            number: dnNumber,
+            type: NoteType.DEBIT,
+            vendorId,
+            refType: "GRN_REJECTION",
+            refId: rejectedMaterial.id,
+            amount: totalDebitAmount,
+            posted: false
+          }
+        });
+      }
+
+      return rejectedMaterial;
+    });
+
+    revalidatePath("/stores/rejected-material");
+    return { success: true, rejectedMaterial: result };
+  } catch (err: any) {
+    console.error("Error in direct material rejection:", err);
+    return { success: false, error: err.message || "Failed to reject material" };
   }
 }

@@ -1,53 +1,51 @@
 // prisma/schema/core.prisma
 
 model Company {
-
-  id        String   @id @default(cuid())
-  name      String
-  address   String?
-  gstin     String?
-  city      String?
+  id             String   @id @default(cuid())
+  name           String
+  address        String?
+  gstin          String?
+  city           String?
   governingPlace String?
-  createdAt DateTime @default(now())
+  createdAt      DateTime @default(now())
 
   // New fields for company customization
-  legalName        String?
-  displayName      String?      // shown in sidebar (e.g. "Saarlekha Industries Pvt Ltd")
-  logoUrl          String?      // object-storage URL; sidebar + PDFs + login + email
+  legalName         String?
+  displayName       String? // shown in sidebar (e.g. "Saarlekha Industries Pvt Ltd")
+  logoUrl           String? // object-storage URL; sidebar + PDFs + login + email
   registeredAddress String?
-  pan              String?
-  cin              String?
-  contactEmail     String?
-  contactPhone     String?
-  baseCurrency     String   @default("INR")
-  timezone         String   @default("Asia/Kolkata")
-  fyStartMonth     Int      @default(4)   // April
-  defaultStoreId   String?
-  enabledModules   String[] @default(["stores","purchase"])
+  pan               String?
+  cin               String?
+  contactEmail      String?
+  contactPhone      String?
+  baseCurrency      String   @default("INR")
+  timezone          String   @default("Asia/Kolkata")
+  fyStartMonth      Int      @default(4) // April
+  defaultStoreId    String?
+  enabledModules    String[] @default(["stores", "purchase"])
 
   users           User[]
   departments     Department[]
   items           Item[]
   vendors         Vendor[]
+  customers       Customer[]
   stores          Store[]
   shipToLocations ShipToLocation[]
   memberships     CompanyMembership[]
 
   @@schema("core")
-
 }
 
 model User {
-
-  id        String  @id @default(cuid())
-  companyId String
-  email     String
-  name      String?
+  id           String  @id @default(cuid())
+  companyId    String
+  email        String
+  name         String?
   passwordHash String?
-  role      Role    @default(VIEWER)
-  storeId   String?           // optional default store scope
-  deptId    String?
-  company   Company @relation(fields: [companyId], references: [id])
+  role         Role    @default(VIEWER)
+  storeId      String? // optional default store scope
+  deptId       String?
+  company      Company @relation(fields: [companyId], references: [id])
 
   memberships       CompanyMembership[]
   notifications     Notification[]
@@ -56,87 +54,84 @@ model User {
   @@unique([companyId, email])
   @@index([companyId])
   @@schema("core")
-
 }
 
 model CompanyMembership {
-
-  id           String  @id @default(cuid())
-  companyId    String
-  userId       String
-  role         Role
-  status       MembershipStatus @default(INVITED)
-  storeScope   String[]          // store ids; empty = all stores in company
-  deptScope    String[]          // department ids; empty = all
-  approvalLimit Float?           // ₹ ceiling for PR/PO approval (purchase/approver roles)
-  isPrimary    Boolean @default(false)  // default company on login
-  invitedById  String?
-  invitedAt    DateTime @default(now())
-  acceptedAt   DateTime?
-  company      Company @relation(fields: [companyId], references: [id])
-  user         User    @relation(fields: [userId], references: [id])
+  id            String           @id @default(cuid())
+  companyId     String
+  userId        String
+  role          Role
+  status        MembershipStatus @default(INVITED)
+  storeScope    String[] // store ids; empty = all stores in company
+  deptScope     String[] // department ids; empty = all
+  approvalLimit Float? // ₹ ceiling for PR/PO approval (purchase/approver roles)
+  isPrimary     Boolean          @default(false) // default company on login
+  invitedById   String?
+  invitedAt     DateTime         @default(now())
+  acceptedAt    DateTime?
+  company       Company          @relation(fields: [companyId], references: [id])
+  user          User             @relation(fields: [userId], references: [id])
 
   @@unique([companyId, userId])
   @@index([userId])
   @@schema("core")
-
 }
 
 enum MembershipStatus {
   INVITED
   ACTIVE
   SUSPENDED
+
   @@schema("core")
 }
 
-model CompanyDocumentSettings { // headers/footers/signatory on PO/GRN/invoice PDFs
-  id               String  @id @default(cuid())
-  companyId        String  @unique
-  poHeaderNote     String?
-  poFooterNote     String?
+model CompanyDocumentSettings {
+  id                  String  @id @default(cuid())
+  companyId           String  @unique
+  poHeaderNote        String?
+  poFooterNote        String?
   authorizedSignatory String?
-  declaration      String?
-  showBankDetails  Boolean @default(false)
-  bankDetails      Json?
+  declaration         String?
+  showBankDetails     Boolean @default(false)
+  bankDetails         Json?
+
   @@schema("core")
 }
 
-model NumberingScheme {         // per-doc sequence format, FY reset
+model NumberingScheme {
   id        String  @id @default(cuid())
   companyId String
-  docType   String  // PO | GRN | PR | RFQ | IND | ISS | GP | INSP | DN | CN | PAY
+  docType   String // PO | GRN | PR | RFQ | IND | ISS | GP | INSP | DN | CN | PAY
   prefix    String
   padding   Int     @default(5)
   resetOnFY Boolean @default(true)
+
   @@unique([companyId, docType])
   @@schema("core")
 }
 
 model Department {
-
-  id        String  @id @default(cuid())
+  id        String       @id @default(cuid())
   companyId String
   code      String
   name      String
   parentId  String?
   parent    Department?  @relation("DeptTree", fields: [parentId], references: [id])
   children  Department[] @relation("DeptTree")
-  company   Company @relation(fields: [companyId], references: [id])
+  company   Company      @relation(fields: [companyId], references: [id])
   items     Item[]
 
   @@unique([companyId, code])
   @@index([companyId, parentId])
   @@schema("core")
-
 }
 
 model AuditLog {
-
   id        String   @id @default(cuid())
   companyId String
   actorId   String
-  action    String   // APPROVE | REJECT | POST | CANCEL | AMEND | PAYMENT | ...
-  entity    String   // model name
+  action    String // APPROVE | REJECT | POST | CANCEL | AMEND | PAYMENT | ...
+  entity    String // model name
   entityId  String
   before    Json?
   after     Json?
@@ -144,11 +139,9 @@ model AuditLog {
 
   @@index([companyId, entity, entityId])
   @@schema("core")
-
 }
 
 model DocSequence {
-
   id        String @id @default(cuid())
   companyId String
   docType   String // IND | PR | RFQ | PO | GRN | ISS | MRN | GP | INSP | DN | CN | PAY
@@ -156,11 +149,9 @@ model DocSequence {
 
   @@unique([companyId, docType])
   @@schema("core")
-
 }
 
 enum Role {
-
   OWNER
   ADMIN
   PURCHASE_MANAGER
@@ -172,59 +163,61 @@ enum Role {
   APPROVER
   ACCOUNTS
   VIEWER
-  @@schema("core")
 
-}
-
-enum NotifCategory { 
-  APPROVAL  
-  STATUS  
-  PAYMENT  
-  STOCK  
-  QUALITY  
-  SYSTEM  
-  MENTION 
   @@schema("core")
 }
 
-enum NotifSeverity { 
-  INFO  
-  ACTION  
-  WARNING  
-  CRITICAL 
+enum NotifCategory {
+  APPROVAL
+  STATUS
+  PAYMENT
+  STOCK
+  QUALITY
+  SYSTEM
+  MENTION
+
+  @@schema("core")
+}
+
+enum NotifSeverity {
+  INFO
+  ACTION
+  WARNING
+  CRITICAL
+
   @@schema("core")
 }
 
 model Notification {
   id         String        @id @default(cuid())
   companyId  String
-  userId     String        // recipient
+  userId     String // recipient
   category   NotifCategory
   severity   NotifSeverity @default(INFO)
   title      String
   body       String?
   deepLink   String?
-  entityType String?       // "PurchaseOrder" | "Grn" | ...
+  entityType String? // "PurchaseOrder" | "Grn" | ...
   entityId   String?
-  dedupeKey  String?       // collapse repeats (e.g. same PO approval ask)
+  dedupeKey  String? // collapse repeats (e.g. same PO approval ask)
   readAt     DateTime?
   createdAt  DateTime      @default(now())
   user       User          @relation(fields: [userId], references: [id])
 
-  @@index([companyId, userId, readAt])
   @@unique([companyId, userId, dedupeKey])
+  @@index([companyId, userId, readAt])
   @@schema("core")
 }
 
 model NotificationPref {
-  id              String   @id @default(cuid())
+  id              String          @id @default(cuid())
   companyId       String
   userId          String
-  inApp           Boolean  @default(true)
-  email           Boolean  @default(false)
-  emailDigest     String   @default("DAILY")   // OFF | INSTANT | DAILY | WEEKLY
+  inApp           Boolean         @default(true)
+  email           Boolean         @default(false)
+  emailDigest     String          @default("DAILY") // OFF | INSTANT | DAILY | WEEKLY
   mutedCategories NotifCategory[] @default([])
-  user            User     @relation(fields: [userId], references: [id])
+  user            User            @relation(fields: [userId], references: [id])
 
   @@unique([companyId, userId])
   @@schema("core")

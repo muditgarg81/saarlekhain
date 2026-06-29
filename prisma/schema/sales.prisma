@@ -1,0 +1,429 @@
+// prisma/schema/sales.prisma
+//
+// Sales & Dispatch (Order-to-Cash). The symmetric mirror of `purchase`
+// (Procure-to-Pay): Customer ↔ Vendor, SalesOrder ↔ PurchaseOrder,
+// Dispatch ↔ GRN, SalesInvoice ↔ SupplierInvoice, ReceiptVoucher ↔
+// PaymentVoucher, DebtorStatement ↔ CreditorStatement. The Tally bridge
+// (ErpConnection, in `purchase`) pulls debtor statements exactly as it pulls
+// creditor statements — see CustomerErpMap / DebtorStatement below.
+
+enum CustomerStatus {
+  APPROVED
+  HOLD
+  BLACKLISTED
+  PENDING_APPROVAL
+
+  @@schema("sales")
+}
+
+enum CustomerType {
+  B2B
+  B2C
+  EXPORT
+  SEZ
+  DEEMED_EXPORT
+
+  @@schema("sales")
+}
+
+enum SoType {
+  REGULAR
+  BLANKET
+  EXPORT
+  SERVICE
+
+  @@schema("sales")
+}
+
+// Order-to-cash lifecycle (mirror of PoStatus).
+enum SoStatus {
+  DRAFT
+  PENDING_APPROVAL
+  CONFIRMED
+  PARTIALLY_DISPATCHED
+  DISPATCHED
+  INVOICED
+  SHORT_CLOSED
+  CLOSED
+  CANCELLED
+
+  @@schema("sales")
+}
+
+enum SoLineStatus {
+  OPEN
+  PARTIALLY_DISPATCHED
+  DISPATCHED
+  INVOICED
+  SHORT_CLOSED
+  CANCELLED
+
+  @@schema("sales")
+}
+
+// Outward delivery (mirror of GrnStatus, reversed direction).
+enum DispatchStatus {
+  DRAFT
+  PACKED
+  DISPATCHED
+  DELIVERED
+  CANCELLED
+
+  @@schema("sales")
+}
+
+enum SalesInvoiceStatus {
+  DRAFT
+  ISSUED
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+
+  @@schema("sales")
+}
+
+// GST e-invoice (IRN) lifecycle.
+enum EInvoiceStatus {
+  NOT_APPLICABLE
+  PENDING
+  GENERATED
+  CANCELLED
+  FAILED
+
+  @@schema("sales")
+}
+
+// GST e-way bill lifecycle.
+enum EWayBillStatus {
+  NOT_REQUIRED
+  PENDING
+  GENERATED
+  CANCELLED
+  EXPIRED
+  FAILED
+
+  @@schema("sales")
+}
+
+enum SalesNoteType {
+  CREDIT
+  DEBIT
+
+  @@schema("sales")
+}
+
+enum ReceiptMode {
+  NEFT
+  RTGS
+  IMPS
+  UPI
+  CHEQUE
+  CASH
+  CARD
+  ADJUSTMENT
+
+  @@schema("sales")
+}
+
+// Debtor-side ERP ledger mapping status (mirror of ErpMapStatus).
+enum DebtorMapStatus {
+  MAPPED
+  UNMAPPED
+  NOT_BILLWISE
+  CONFLICT
+
+  @@schema("sales")
+}
+
+model Customer {
+  id              String         @id @default(cuid())
+  companyId       String
+  code            String
+  name            String
+  type            CustomerType   @default(B2B)
+  gstin           String?
+  pan             String?
+  stateCode       String? // GST state code (place-of-supply default)
+  billingAddress  String?
+  shippingAddress String?
+  contactPerson   String?
+  contactEmail    String?
+  contactPhone    String?
+  paymentTerms    String?
+  creditDays      Int            @default(0)
+  creditLimit     Float          @default(0) // ₹ ceiling; feeds over-limit reminders
+  tcsApplicable   Boolean        @default(false)
+  bankDetails     Json?
+  rating          Float?
+  status          CustomerStatus @default(PENDING_APPROVAL)
+  deletedAt       DateTime?
+  company         Company        @relation(fields: [companyId], references: [id])
+
+  salesOrders SalesOrder[]
+
+  @@unique([companyId, code])
+  @@index([companyId, status])
+  @@schema("sales")
+}
+
+model SalesOrder {
+  id              String    @id @default(cuid())
+  companyId       String
+  number          String // SO-XXXXX
+  customerId      String
+  type            SoType    @default(REGULAR)
+  status          SoStatus  @default(DRAFT)
+  customerPoNo    String? // customer's own PO reference
+  customerPoDate  DateTime?
+  orderDate       DateTime  @default(now())
+  deliveryDate    DateTime?
+  currency        String    @default("INR")
+  paymentTerms    String?
+  billingAddress  String?
+  shippingAddress String?
+  placeOfSupply   String? // GST state code; drives CGST+SGST vs IGST
+  termsConditions String?
+  otherCharges    Float     @default(0)
+  version         Int       @default(1)
+  approvedById    String?
+  approvedAt      DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime  @default(now())
+
+  customer   Customer       @relation(fields: [customerId], references: [id])
+  lines      SoLine[]
+  dispatches Dispatch[]
+  invoices   SalesInvoice[]
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
+  @@index([companyId, deliveryDate])
+  @@schema("sales")
+}
+
+model SoLine {
+  id            String         @id @default(cuid())
+  soId          String
+  itemId        String
+  qty           Float
+  dispatchedQty Float          @default(0)
+  invoicedQty   Float          @default(0)
+  rate          Float
+  discount      Float          @default(0) // %
+  gstRate       Float          @default(0) // %
+  requiredBy    DateTime?
+  status        SoLineStatus   @default(OPEN)
+  so            SalesOrder     @relation(fields: [soId], references: [id])
+  dispatchLines DispatchLine[]
+
+  @@schema("sales")
+}
+
+model Dispatch {
+  id               String         @id @default(cuid())
+  companyId        String
+  number           String // DC-XXXXX (delivery challan)
+  soId             String?
+  customerId       String
+  status           DispatchStatus @default(DRAFT)
+  dispatchDate     DateTime       @default(now())
+  storeId          String? // store the stock is issued from
+  vehicleNo        String?
+  transporterName  String?
+  transporterGstin String?
+  lrNo             String? // lorry receipt / docket
+  distanceKm       Int?
+  // e-way bill
+  ewayBillNo       String?
+  ewayBillDate     DateTime?
+  ewayValidUpto    DateTime?
+  ewayBillStatus   EWayBillStatus @default(NOT_REQUIRED)
+  ewayBillData     Json? // generated payload + response
+  deletedAt        DateTime?
+  createdById      String
+  createdAt        DateTime       @default(now())
+
+  so       SalesOrder?    @relation(fields: [soId], references: [id])
+  lines    DispatchLine[]
+  invoices SalesInvoice[]
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
+  @@index([companyId, customerId])
+  @@schema("sales")
+}
+
+model DispatchLine {
+  id         String   @id @default(cuid())
+  dispatchId String
+  soLineId   String?
+  itemId     String
+  qty        Float
+  batchNo    String?
+  dispatch   Dispatch @relation(fields: [dispatchId], references: [id])
+  soLine     SoLine?  @relation(fields: [soLineId], references: [id])
+
+  @@schema("sales")
+}
+
+model SalesInvoice {
+  id             String             @id @default(cuid())
+  companyId      String
+  number         String // SI-XXXXX (our tax invoice number)
+  customerId     String
+  soId           String?
+  dispatchId     String?
+  invoiceDate    DateTime           @default(now())
+  dueDate        DateTime? // invoiceDate + creditDays
+  placeOfSupply  String?
+  reverseCharge  Boolean            @default(false)
+  taxableAmount  Float              @default(0)
+  cgst           Float              @default(0)
+  sgst           Float              @default(0)
+  igst           Float              @default(0)
+  otherCharges   Float              @default(0)
+  roundOff       Float              @default(0)
+  totalAmount    Float              @default(0)
+  paidAmount     Float              @default(0)
+  status         SalesInvoiceStatus @default(DRAFT)
+  // GST e-invoice (IRP / IRN)
+  irn            String? // 64-char Invoice Reference Number
+  ackNo          String?
+  ackDate        DateTime?
+  signedQrCode   String? // base64 signed QR from IRP
+  einvoiceStatus EInvoiceStatus     @default(NOT_APPLICABLE)
+  einvoiceData   Json? // generated IRP payload + response
+  deletedAt      DateTime?
+  createdById    String
+  createdAt      DateTime           @default(now())
+
+  so       SalesOrder?        @relation(fields: [soId], references: [id])
+  dispatch Dispatch?          @relation(fields: [dispatchId], references: [id])
+  lines    SalesInvoiceLine[]
+
+  @@unique([companyId, number])
+  @@index([companyId, status])
+  @@index([companyId, dueDate])
+  @@index([companyId, customerId])
+  @@schema("sales")
+}
+
+model SalesInvoiceLine {
+  id        String       @id @default(cuid())
+  invoiceId String
+  itemId    String
+  hsnCode   String?
+  qty       Float
+  rate      Float
+  discount  Float        @default(0)
+  gstRate   Float        @default(0)
+  taxable   Float        @default(0)
+  invoice   SalesInvoice @relation(fields: [invoiceId], references: [id])
+
+  @@schema("sales")
+}
+
+model SalesNote {
+  id          String        @id @default(cuid())
+  companyId   String
+  number      String // SCN-XXXXX (credit) or SDN-XXXXX (debit)
+  type        SalesNoteType
+  customerId  String
+  invoiceId   String?
+  refType     String? // SALES_RETURN | RATE_DIFF | DISCOUNT | ...
+  refId       String?
+  amount      Float
+  reason      String?
+  posted      Boolean       @default(false) // immutable once posted
+  createdById String
+  createdAt   DateTime      @default(now())
+
+  @@unique([companyId, number])
+  @@index([companyId, customerId])
+  @@schema("sales")
+}
+
+model ReceiptVoucher {
+  id           String      @id @default(cuid())
+  companyId    String
+  number       String // RV-XXXXX
+  customerId   String
+  invoiceId    String?
+  amount       Float
+  receivedOn   DateTime
+  mode         ReceiptMode @default(NEFT) // recorded, NOT executed
+  reference    String? // UTR / cheque no
+  recordedById String
+  createdAt    DateTime    @default(now())
+
+  @@unique([companyId, number])
+  @@index([companyId, customerId])
+  @@schema("sales")
+}
+
+// ─── Debtor-side ERP / Tally bridge (mirror of VendorErpMap / CreditorStatement) ───
+// These hang off the same ErpConnection in `purchase`. The bridge agent pulls
+// "Receivables / Bills Receivable" the same way it pulls "Bills Payable".
+
+model CustomerErpMap {
+  id            String          @id @default(cuid())
+  companyId     String
+  connectionId  String
+  customerId    String
+  erpLedgerName String
+  erpLedgerGuid String? // Tally master GUID — stable across renames
+  billwise      Boolean         @default(false)
+  status        DebtorMapStatus @default(UNMAPPED)
+  connection    ErpConnection   @relation(fields: [connectionId], references: [id])
+
+  @@unique([companyId, connectionId, customerId])
+  @@index([companyId, connectionId, erpLedgerGuid])
+  @@schema("sales")
+}
+
+model DebtorStatement {
+  id           String        @id @default(cuid())
+  companyId    String
+  connectionId String
+  customerId   String
+  currency     String        @default("INR")
+  outstanding  Float         @default(0) // net receivable
+  asOf         DateTime
+  connection   ErpConnection @relation(fields: [connectionId], references: [id])
+  bills        DebtorBill[]
+
+  @@unique([companyId, connectionId, customerId])
+  @@index([companyId, customerId])
+  @@schema("sales")
+}
+
+model DebtorBill {
+  id               String          @id @default(cuid())
+  companyId        String
+  statementId      String
+  billRef          String // Tally bill reference
+  billDate         DateTime?
+  dueDate          DateTime?
+  openingAmount    Float           @default(0)
+  pendingAmount    Float           @default(0)
+  overdueDays      Int?
+  matchedInvoiceId String? // optional link to SalesInvoice.id
+  statement        DebtorStatement @relation(fields: [statementId], references: [id])
+
+  @@index([companyId, statementId])
+  @@index([companyId, dueDate])
+  @@schema("sales")
+}
+
+// Idempotency guard for order-to-cash conversions (mirror of FlowConversion).
+model SalesFlowConversion {
+  id             String   @id @default(cuid())
+  companyId      String
+  step           String // SO_TO_DISPATCH | DISPATCH_TO_INVOICE | SO_TO_INVOICE
+  sourceId       String
+  idempotencyKey String
+  createdAt      DateTime @default(now())
+
+  @@unique([companyId, idempotencyKey])
+  @@schema("sales")
+}

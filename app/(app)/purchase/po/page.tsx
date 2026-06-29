@@ -230,6 +230,7 @@ export default async function PurchaseOrdersPage() {
           discount: line.discount,
           gstRate: line.gstRate,
           receivedQty: line.receivedQty,
+          brand: line.brand,
         };
       }),
       amendments: po.amendments.map((am) => {

@@ -5,12 +5,16 @@ import { db } from "./db";
  * Runs inside a database transaction to prevent duplicate sequences.
  * 
  * @param companyId The ID of the tenant company
- * @param docType The document type code (IND | PR | RFQ | PO | GRN | ISS | MRN | GP | INSP | DN | CN | PAY)
+ * @param docType The document type code (IND | PR | RFQ | PO | GRN | ISS | MRN | GP | INSP | DN | CN | PAY | SO | DC | SI | RV | SCN | SDN)
  * @returns Formatted sequence string (e.g. "IND-00001")
  */
 export async function getNextSequence(
   companyId: string,
-  docType: "IND" | "PR" | "RFQ" | "PO" | "GRN" | "ISS" | "MRN" | "GP" | "INSP" | "DN" | "CN" | "PAY" | "PRQ"
+  docType:
+    | "IND" | "PR" | "RFQ" | "PO" | "GRN" | "ISS" | "MRN" | "GP" | "INSP" | "DN" | "CN" | "PAY" | "PRQ"
+    // Sales & Dispatch (order-to-cash): Sales Order, Delivery Challan/Dispatch,
+    // Sales Invoice, Receipt Voucher, Sales Credit/Debit Note.
+    | "SO" | "DC" | "SI" | "RV" | "SCN" | "SDN"
 ): Promise<string> {
   return await db.$transaction(async (tx) => {
     const sequence = await tx.docSequence.upsert({

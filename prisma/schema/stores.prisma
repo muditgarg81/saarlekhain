@@ -1,7 +1,6 @@
 // prisma/schema/stores.prisma
 
 enum ItemType {
-
   RAW_MATERIAL
   CONSUMABLE
   SPARE
@@ -9,38 +8,34 @@ enum ItemType {
   PACKING
   SEMI_FINISHED
   FINISHED_GOOD
-  @@schema("stores")
 
+  @@schema("stores")
 }
 
 enum ValuationMethod {
-
   WEIGHTED_AVG
   FIFO
-  @@schema("stores")
 
+  @@schema("stores")
 }
 
 enum AbcClass {
-
   A
   B
   C
   NONE
-  @@schema("stores")
 
+  @@schema("stores")
 }
 
 enum MasterStatus {
-
   ACTIVE
   INACTIVE
-  @@schema("stores")
 
+  @@schema("stores")
 }
 
 enum LedgerTxnType {
-
   OPENING
   GRN_RECEIPT
   ISSUE
@@ -50,12 +45,11 @@ enum LedgerTxnType {
   TRANSFER_OUT
   ADJUSTMENT
   SCRAP_OUT
-  @@schema("stores")
 
+  @@schema("stores")
 }
 
 enum IndentStatus {
-
   DRAFT
   SUBMITTED
   APPROVED
@@ -66,18 +60,18 @@ enum IndentStatus {
   PARTIALLY_ORDERED
   SHORT_CLOSED
   CLOSED
-  @@schema("stores")
 
+  @@schema("stores")
 }
 
 enum IndentSource {
   MANUAL
   AUTO_REORDER
+
   @@schema("stores")
 }
 
 enum GrnStatus {
-
   DRAFT
   QC_PENDING
   QC_DONE
@@ -85,64 +79,58 @@ enum GrnStatus {
   PARTIALLY_ACCEPTED
   POSTED
   CANCELLED
-  @@schema("stores")
 
+  @@schema("stores")
 }
 
 enum GrnSource {
-
   AGAINST_PO
   FREE_SAMPLE
   RETURNABLE
   JOBWORK_RETURN
   WITHOUT_PO
-  @@schema("stores")
 
+  @@schema("stores")
 }
 
 enum InspectionDisposition {
-
   ACCEPT
   REJECT
   ACCEPT_WITH_DEVIATION
   REWORK
-  @@schema("stores")
 
+  @@schema("stores")
 }
 
 enum IssueType {
-
   TO_DEPARTMENT
   TO_JOB_ORDER
   RETURN_TO_VENDOR
   JOBWORK_OUT
   SCRAP
-  @@schema("stores")
 
+  @@schema("stores")
 }
 
 enum GatePassType {
-
   RETURNABLE
   NON_RETURNABLE
-  @@schema("stores")
 
+  @@schema("stores")
 }
 
 enum GatePassStatus {
-
   OPEN
   PARTIALLY_RETURNED
   RETURNED
   OVERDUE
   CLOSED
-  @@schema("stores")
 
+  @@schema("stores")
 }
 
 model ItemCategory {
-
-  id        String  @id @default(cuid())
+  id        String         @id @default(cuid())
   companyId String
   code      String
   name      String
@@ -152,24 +140,21 @@ model ItemCategory {
 
   @@unique([companyId, code])
   @@schema("stores")
-
 }
 
 model ItemCodeScheme {
-
   id        String @id @default(cuid())
   companyId String @unique
   segments  Json
   separator String @default("-")
-  @@schema("stores")
 
+  @@schema("stores")
 }
 
 model Item {
-
-  id            String   @id @default(cuid())
+  id            String          @id @default(cuid())
   companyId     String
-  code          String              // generated from scheme, override allowed
+  code          String // generated from scheme, override allowed
   name          String
   description   String?
   categoryId    String?
@@ -177,24 +162,24 @@ model Item {
   type          ItemType
   baseUom       String
   altUom        String?
-  altUomFactor  Float?              // 1 altUom = factor * baseUom
+  altUomFactor  Float? // 1 altUom = factor * baseUom
   make          String?
   specification String?
   hsnCode       String?
   gstRate       Float?
-  reorderLevel  Float    @default(0)
-  minStock      Float    @default(0)
-  maxStock      Float    @default(0)
-  leadTimeDays  Int      @default(0)
-  shelfLifeDays Int?                // null = no expiry tracking
-  qcRequired    Boolean  @default(false)
+  reorderLevel  Float           @default(0)
+  minStock      Float           @default(0)
+  maxStock      Float           @default(0)
+  leadTimeDays  Int             @default(0)
+  shelfLifeDays Int? // null = no expiry tracking
+  qcRequired    Boolean         @default(false)
   valuation     ValuationMethod @default(WEIGHTED_AVG)
-  abcClass      AbcClass @default(NONE)
-  status        MasterStatus @default(ACTIVE)
+  abcClass      AbcClass        @default(NONE)
+  status        MasterStatus    @default(ACTIVE)
   deletedAt     DateTime?
-  moq           Float    @default(1)
-  company       Company  @relation(fields: [companyId], references: [id])
-  department    Department? @relation(fields: [departmentId], references: [id])
+  moq           Float           @default(1)
+  company       Company         @relation(fields: [companyId], references: [id])
+  department    Department?     @relation(fields: [departmentId], references: [id])
 
   inspectionPlan InspectionPlan?
   ledger         StockLedger[]
@@ -203,53 +188,47 @@ model Item {
   @@index([companyId, categoryId])
   @@index([companyId, departmentId])
   @@schema("stores")
-
 }
 
 model InspectionPlan {
+  id         String            @id @default(cuid())
+  companyId  String
+  itemId     String            @unique
+  sampleSize Int               @default(1)
+  acceptRule String? // e.g. "AQL 1.0" or free text
+  item       Item              @relation(fields: [itemId], references: [id])
+  params     InspectionParam[]
 
-  id        String  @id @default(cuid())
-  companyId String
-  itemId    String  @unique
-  sampleSize Int    @default(1)
-  acceptRule String?            // e.g. "AQL 1.0" or free text
-  item      Item    @relation(fields: [itemId], references: [id])
-  params    InspectionParam[]
   @@schema("stores")
-
 }
 
 model InspectionParam {
-
-  id        String  @id @default(cuid())
-  planId    String
-  name      String              // e.g. "Tensile strength"
-  uom       String?
-  specMin   Float?
-  specMax   Float?
+  id         String         @id @default(cuid())
+  planId     String
+  name       String // e.g. "Tensile strength"
+  uom        String?
+  specMin    Float?
+  specMax    Float?
   specTarget Float?
-  plan      InspectionPlan @relation(fields: [planId], references: [id])
-  @@schema("stores")
+  plan       InspectionPlan @relation(fields: [planId], references: [id])
 
+  @@schema("stores")
 }
 
 model Store {
-
-  id        String  @id @default(cuid())
+  id        String       @id @default(cuid())
   companyId String
   code      String
   name      String
   status    MasterStatus @default(ACTIVE)
-  company   Company @relation(fields: [companyId], references: [id])
+  company   Company      @relation(fields: [companyId], references: [id])
   bins      Bin[]
 
   @@unique([companyId, code])
   @@schema("stores")
-
 }
 
 model Bin {
-
   id      String @id @default(cuid())
   storeId String
   code    String
@@ -257,276 +236,255 @@ model Bin {
 
   @@unique([storeId, code])
   @@schema("stores")
-
 }
 
 model Batch {
-
-  id        String   @id @default(cuid())
-  companyId String
-  itemId    String
-  lotNo     String
-  mfgDate   DateTime?
+  id         String    @id @default(cuid())
+  companyId  String
+  itemId     String
+  lotNo      String
+  mfgDate    DateTime?
   expiryDate DateTime?
 
   @@unique([companyId, itemId, lotNo])
   @@index([companyId, expiryDate])
   @@schema("stores")
-
 }
 
 model StockLedger {
-
-  id        String        @id @default(cuid())
-  companyId String
-  itemId    String
-  storeId   String
-  binId     String?
-  batchId   String?
-  txnType   LedgerTxnType
-  qty       Float         // signed, in base UOM
-  rate      Float?        // unit cost for valuation
-  refType   String?       // GRN | ISSUE | MRN | TRANSFER | ADJUSTMENT | ...
-  refId     String?
+  id          String        @id @default(cuid())
+  companyId   String
+  itemId      String
+  storeId     String
+  binId       String?
+  batchId     String?
+  txnType     LedgerTxnType
+  qty         Float // signed, in base UOM
+  rate        Float? // unit cost for valuation
+  refType     String? // GRN | ISSUE | MRN | TRANSFER | ADJUSTMENT | ...
+  refId       String?
   createdById String
-  createdAt DateTime      @default(now())
-  item      Item          @relation(fields: [itemId], references: [id])
+  createdAt   DateTime      @default(now())
+  item        Item          @relation(fields: [itemId], references: [id])
 
   @@index([companyId, itemId, storeId])
   @@index([companyId, refType, refId])
   @@schema("stores")
-
 }
 
 model Indent {
-
-  id          String       @id @default(cuid())
-  companyId   String
-  number      String       // IND-XXXXX
-  deptId      String?
+  id            String       @id @default(cuid())
+  companyId     String
+  number        String // IND-XXXXX
+  deptId        String?
   requestedById String
-  priority    String       @default("NORMAL")
-  purpose     String?
-  status      IndentStatus @default(DRAFT)
-  source      IndentSource @default(MANUAL)
-  approvedById String?
-  approvedAt  DateTime?
-  deletedAt   DateTime?
-  createdAt   DateTime     @default(now())
-  lines       IndentLine[]
+  priority      String       @default("NORMAL")
+  purpose       String?
+  status        IndentStatus @default(DRAFT)
+  source        IndentSource @default(MANUAL)
+  approvedById  String?
+  approvedAt    DateTime?
+  deletedAt     DateTime?
+  createdAt     DateTime     @default(now())
+  lines         IndentLine[]
 
   @@unique([companyId, number])
   @@index([companyId, status])
   @@schema("stores")
-
 }
 
 model IndentLine {
-
-  id           String  @id @default(cuid())
-  indentId     String
-  itemId       String
-  qty          Float
-  requiredBy   DateTime?
-  issuedQty    Float   @default(0)
-  remarks      String?
-  purchaseQty  Float   @default(0)   // qty routed to purchase (vs issued from stock)
-  orderedQty     Float      @default(0)
-  shortClosedQty Float      @default(0)
-  status         LineStatus @default(OPEN)
-  prLineId     String?              // set on conversion
-  prLine       PrLine? @relation(fields: [prLineId], references: [id])
+  id                  String             @id @default(cuid())
+  indentId            String
+  itemId              String
+  qty                 Float
+  requiredBy          DateTime?
+  issuedQty           Float              @default(0)
+  remarks             String?
+  purchaseQty         Float              @default(0) // qty routed to purchase (vs issued from stock)
+  orderedQty          Float              @default(0)
+  shortClosedQty      Float              @default(0)
+  status              LineStatus         @default(OPEN)
+  prLineId            String? // set on conversion
+  prLine              PrLine?            @relation(fields: [prLineId], references: [id])
   reorderSuggestionId String?
   reorderSuggestion   ReorderSuggestion? @relation(fields: [reorderSuggestionId], references: [id])
-  indent       Indent  @relation(fields: [indentId], references: [id])
-  @@schema("stores")
+  indent              Indent             @relation(fields: [indentId], references: [id])
 
+  @@schema("stores")
 }
 
 model Grn {
-
-  id          String    @id @default(cuid())
-  companyId   String
-  number      String    // GRN-XXXXX
-  source      GrnSource @default(AGAINST_PO)
-  vendorId    String?
-  poId        String?
-  storeId     String
-  dcNo        String?
-  dcDate      DateTime?
-  invoiceNo   String?
-  ocrDraft    Json?     // raw Gemini extraction, pre-review
-  status      GrnStatus @default(DRAFT)
-  postedById  String?
-  postedAt    DateTime?
-  deletedAt   DateTime?
-  createdAt   DateTime  @default(now())
-  lines       GrnLine[]
-  inspections Inspection[]
+  id              String           @id @default(cuid())
+  companyId       String
+  number          String // GRN-XXXXX
+  source          GrnSource        @default(AGAINST_PO)
+  vendorId        String?
+  poId            String?
+  storeId         String
+  dcNo            String?
+  dcDate          DateTime?
+  invoiceNo       String?
+  ocrDraft        Json? // raw Gemini extraction, pre-review
+  status          GrnStatus        @default(DRAFT)
+  postedById      String?
+  postedAt        DateTime?
+  deletedAt       DateTime?
+  createdAt       DateTime         @default(now())
+  lines           GrnLine[]
+  inspections     Inspection[]
   paymentRequests PaymentRequest[]
 
   @@unique([companyId, number])
   @@index([companyId, status])
   @@index([companyId, poId])
   @@schema("stores")
-
 }
 
 model GrnLine {
+  id          String  @id @default(cuid())
+  grnId       String
+  itemId      String
+  poLineId    String?
+  receivedQty Float
+  acceptedQty Float   @default(0)
+  rejectedQty Float   @default(0)
+  batchId     String?
+  binId       String?
+  grn         Grn     @relation(fields: [grnId], references: [id])
 
-  id           String @id @default(cuid())
-  grnId        String
-  itemId       String
-  poLineId     String?
-  receivedQty  Float
-  acceptedQty  Float  @default(0)
-  rejectedQty  Float  @default(0)
-  batchId      String?
-  binId        String?
-  grn          Grn    @relation(fields: [grnId], references: [id])
   @@schema("stores")
-
 }
 
 model Inspection {
-
-  id          String  @id @default(cuid())
-  companyId   String
-  number      String  // INSP-XXXXX
-  grnId       String
-  grnLineId   String
-  itemId      String
-  sampleSize  Int     @default(1)
-  disposition InspectionDisposition?
-  mtcRef      String?            // supplier test certificate reference
-  ocrDraft    Json?              // Gemini MTC extraction, pre-review
+  id            String                 @id @default(cuid())
+  companyId     String
+  number        String // INSP-XXXXX
+  grnId         String
+  grnLineId     String
+  itemId        String
+  sampleSize    Int                    @default(1)
+  disposition   InspectionDisposition?
+  mtcRef        String? // supplier test certificate reference
+  ocrDraft      Json? // Gemini MTC extraction, pre-review
   inspectedById String?
-  inspectedAt DateTime?
-  grn         Grn     @relation(fields: [grnId], references: [id])
-  results     InspectionResult[]
+  inspectedAt   DateTime?
+  grn           Grn                    @relation(fields: [grnId], references: [id])
+  results       InspectionResult[]
 
   @@unique([companyId, number])
   @@schema("stores")
-
 }
 
 model InspectionResult {
-
-  id           String  @id @default(cuid())
+  id           String     @id @default(cuid())
   inspectionId String
   paramName    String
   observed     Float?
   observedText String?
   pass         Boolean?
   inspection   Inspection @relation(fields: [inspectionId], references: [id])
-  @@schema("stores")
 
+  @@schema("stores")
 }
 
 model Issue {
-
-  id          String    @id @default(cuid())
+  id          String      @id @default(cuid())
   companyId   String
-  number      String    // ISS-XXXXX
-  type        IssueType @default(TO_DEPARTMENT)
+  number      String // ISS-XXXXX
+  type        IssueType   @default(TO_DEPARTMENT)
   storeId     String
   deptId      String?
   issuedTo    String?
-  jobOrderRef String?              // links to Operations module job order
+  jobOrderRef String? // links to Operations module job order
   indentId    String?
   postedById  String?
   postedAt    DateTime?
   deletedAt   DateTime?
-  createdAt   DateTime  @default(now())
+  createdAt   DateTime    @default(now())
   lines       IssueLine[]
 
   @@unique([companyId, number])
   @@index([companyId, type])
   @@schema("stores")
-
 }
 
 model IssueLine {
-
-  id      String @id @default(cuid())
+  id      String  @id @default(cuid())
   issueId String
   itemId  String
   qty     Float
   batchId String?
-  issue   Issue  @relation(fields: [issueId], references: [id])
-  @@schema("stores")
+  issue   Issue   @relation(fields: [issueId], references: [id])
 
+  @@schema("stores")
 }
 
 model MaterialReturn {
-
-  id         String   @id @default(cuid())
+  id         String               @id @default(cuid())
   companyId  String
-  number     String   // MRN-XXXXX
+  number     String // MRN-XXXXX
   storeId    String
   issueId    String?
   postedById String?
   postedAt   DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime             @default(now())
   lines      MaterialReturnLine[]
 
   @@unique([companyId, number])
   @@schema("stores")
-
 }
 
 model MaterialReturnLine {
+  id     String         @id @default(cuid())
+  mrnId  String
+  itemId String
+  qty    Float
+  mrn    MaterialReturn @relation(fields: [mrnId], references: [id])
 
-  id        String @id @default(cuid())
-  mrnId     String
-  itemId    String
-  qty       Float
-  mrn       MaterialReturn @relation(fields: [mrnId], references: [id])
   @@schema("stores")
-
 }
 
 model GatePass {
-
-  id          String        @id @default(cuid())
+  id          String         @id @default(cuid())
   companyId   String
-  number      String        // GP-XXXXX
-  type        GatePassType  @default(RETURNABLE)
+  number      String // GP-XXXXX
+  type        GatePassType   @default(RETURNABLE)
   status      GatePassStatus @default(OPEN)
   vendorId    String?
-  purpose     String?       // JOBWORK | REPAIR | SCRAP | ...
-  dueBack     DateTime?     // for RETURNABLE; overdue feeds reminders
+  purpose     String? // JOBWORK | REPAIR | SCRAP | ...
+  dueBack     DateTime? // for RETURNABLE; overdue feeds reminders
   createdById String
-  createdAt   DateTime      @default(now())
+  createdAt   DateTime       @default(now())
   lines       GatePassLine[]
 
   @@unique([companyId, number])
   @@index([companyId, status, dueBack])
   @@schema("stores")
-
 }
 
 model GatePassLine {
+  id          String   @id @default(cuid())
+  gatePassId  String
+  itemId      String
+  qty         Float
+  returnedQty Float    @default(0)
+  gatePass    GatePass @relation(fields: [gatePassId], references: [id])
 
-  id        String @id @default(cuid())
-  gatePassId String
-  itemId    String
-  qty       Float
-  returnedQty Float @default(0)
-  gatePass  GatePass @relation(fields: [gatePassId], references: [id])
   @@schema("stores")
-
 }
 
 enum ReorderReason {
   BELOW_REORDER
   BELOW_MIN
+
   @@schema("stores")
 }
 
 enum ReorderRunTrigger {
   CRON
   MANUAL
+
   @@schema("stores")
 }
 
@@ -537,6 +495,7 @@ enum SuggestionStatus {
   REJECTED
   CONVERTED
   SUPERSEDED
+
   @@schema("stores")
 }
 
@@ -544,6 +503,7 @@ enum ReorderMethod {
   REORDER_TO_MAX
   FIXED_QTY
   EOQ
+
   @@schema("stores")
 }
 
@@ -556,19 +516,20 @@ model ReplenishmentRun {
   suggestedCount Int                 @default(0)
   runAt          DateTime            @default(now())
   suggestions    ReorderSuggestion[]
+
   @@index([companyId, runAt])
   @@schema("stores")
 }
 
 model ReorderSuggestion {
-  id                String           @id @default(cuid())
+  id                String            @id @default(cuid())
   companyId         String
   runId             String?
   itemId            String
   storeId           String
   onHand            Float
-  onOrder           Float            @default(0)
-  inPipeline        Float            @default(0)
+  onOrder           Float             @default(0)
+  inPipeline        Float             @default(0)
   netAvailable      Float
   reorderLevel      Float
   minStock          Float
@@ -576,17 +537,17 @@ model ReorderSuggestion {
   suggestedQty      Float
   approvedQty       Float?
   reason            ReorderReason
-  priority          String           @default("NORMAL")
+  priority          String            @default("NORMAL")
   preferredVendorId String?
   lastPurchasePrice Float?
-  leadTimeDays      Int              @default(0)
+  leadTimeDays      Int               @default(0)
   estValue          Float?
-  status            SuggestionStatus @default(PENDING)
+  status            SuggestionStatus  @default(PENDING)
   reviewedById      String?
   approvedById      String?
   indentId          String?
   indentLineId      String?
-  createdAt         DateTime         @default(now())
+  createdAt         DateTime          @default(now())
   run               ReplenishmentRun? @relation(fields: [runId], references: [id])
   indentLines       IndentLine[]
 
@@ -605,24 +566,25 @@ model ReorderPolicy {
   autoApproveBelowValue    Float?
   criticalClasses          String[]      @default(["A"])
   secondApprovalAboveValue Float?
+
   @@schema("stores")
 }
 
 model RejectedMaterial {
-  id           String    @id @default(cuid())
-  companyId    String
-  grnLineId    String    @unique
-  grnNumber    String
-  itemCode     String
-  itemName     String
-  vendorName   String
-  rejectedQty  Float
-  status       RejectedMaterialStatus @default(PENDING_RETURN)
-  gatepassRef  String?
-  actionDate   DateTime?
-  remarks      String?
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
+  id          String                 @id @default(cuid())
+  companyId   String
+  grnLineId   String                 @unique
+  grnNumber   String
+  itemCode    String
+  itemName    String
+  vendorName  String
+  rejectedQty Float
+  status      RejectedMaterialStatus @default(PENDING_RETURN)
+  gatepassRef String?
+  actionDate  DateTime?
+  remarks     String?
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
 
   @@schema("stores")
 }
@@ -632,5 +594,6 @@ enum RejectedMaterialStatus {
   RETURNED_TO_VENDOR
   DISPOSED
   SHORT_SUPPLY
+
   @@schema("stores")
 }
