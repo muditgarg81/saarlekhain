@@ -300,7 +300,30 @@ export default function RejectedMaterialClient({ initialMaterials, nonQcLines = 
           <h2 className="text-xl font-bold tracking-tight text-onyx">Rejected Material Register</h2>
           <p className="text-xs text-onyx/50 mt-1">Track and manage disposal or return-to-vendor actions for incoming QC failures.</p>
         </div>
-        <div>
+        <div className="flex items-center space-x-2">
+          {activeTab === "register" ? (
+            <button
+              onClick={() => setActiveTab("reject")}
+              className="flex items-center space-x-1 px-3 py-2 bg-saffron hover:bg-saffron-dark text-onyx text-xs font-bold rounded-lg shadow-sm transition-all cursor-pointer"
+            >
+              <Plus size={14} className="mr-1" />
+              <span>Direct Rejection (No QC)</span>
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setActiveTab("register");
+                setSelectedGrnLineId("");
+                setDirectRejectedQty("");
+                setDirectRemarks("");
+                setDirectSearch("");
+              }}
+              className="flex items-center space-x-1 px-3 py-2 bg-onyx text-cream hover:bg-onyx-light text-xs font-bold rounded-lg shadow-sm transition-all cursor-pointer"
+            >
+              <ArrowLeft size={14} className="mr-1" />
+              <span>Back to Register</span>
+            </button>
+          )}
           <Link
             href="/stores/inspection"
             className="flex items-center space-x-1 px-3 py-2 border border-onyx/10 hover:bg-cream-dark text-xs font-bold rounded-lg shadow-sm transition-all"
@@ -309,30 +332,6 @@ export default function RejectedMaterialClient({ initialMaterials, nonQcLines = 
             <span>Back to QC Inspection</span>
           </Link>
         </div>
-      </div>
-
-      {/* Navigation Tabs */}
-      <div className="flex border-b border-onyx/10 space-x-6 text-sm font-semibold mb-2">
-        <button
-          onClick={() => setActiveTab("register")}
-          className={`pb-2.5 border-b-2 transition-all cursor-pointer ${
-            activeTab === "register"
-              ? "border-saffron text-onyx font-bold"
-              : "border-transparent text-onyx/50 hover:text-onyx"
-          }`}
-        >
-          Material Register
-        </button>
-        <button
-          onClick={() => setActiveTab("reject")}
-          className={`pb-2.5 border-b-2 transition-all cursor-pointer ${
-            activeTab === "reject"
-              ? "border-saffron text-onyx font-bold"
-              : "border-transparent text-onyx/50 hover:text-onyx"
-          }`}
-        >
-          Reject Item (No QC)
-        </button>
       </div>
 
       {/* Global Message Alerts */}
