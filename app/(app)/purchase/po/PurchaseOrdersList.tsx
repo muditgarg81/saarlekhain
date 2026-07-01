@@ -1058,7 +1058,7 @@ export default function PurchaseOrdersList({
                 <th>Type</th>
                 <th>Order Date</th>
                 <th>Landed Value</th>
-                <th>Source RFQ</th>
+                <th>Source Trail</th>
                 <th className="text-center">Status</th>
                 <th className="text-center">Actions</th>
               </tr>
@@ -1300,7 +1300,7 @@ export default function PurchaseOrdersList({
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Source RFQ</span>
+                      <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Source Trail</span>
                       {po.rfqNumbers && po.rfqNumbers.length > 0 ? (
                         <button
                           type="button"
