@@ -85,15 +85,19 @@ export default async function PurchaseOrdersPage() {
     })
   ]);
 
-  // Get all unique rfqLineIds and prLineIds from all POs to map numbers
+  // Get all unique rfqLineIds, prLineIds, and direct po.prIds from all POs to map numbers
   const allRfqLineIds = Array.from(
     new Set(pos.flatMap((po) => po.lines.map((l) => l.rfqLineId).filter(Boolean)))
   ) as string[];
   const allPrLineIds = Array.from(
     new Set(pos.flatMap((po) => po.lines.map((l) => l.prLineId).filter(Boolean)))
   ) as string[];
+  const allPoPrIds = Array.from(
+    new Set(pos.map((po) => po.prId).filter(Boolean))
+  ) as string[];
 
-  const [rfqLines, prLines] = await Promise.all([
+  // 1. Fetch direct links & references
+  const [rfqLines, prLines, directRfqs] = await Promise.all([
     db.rfqLine.findMany({
       where: { id: { in: allRfqLineIds } },
       include: { rfq: true },
@@ -109,7 +113,47 @@ export default async function PurchaseOrdersPage() {
         },
       },
     }),
+    db.rfq.findMany({
+      where: { id: { in: allPoPrIds } },
+    }),
   ]);
+
+  // Collect all unique PR IDs we need to query for details
+  const prIdsToFetch = new Set<string>();
+
+  // Add direct PR IDs on POs (some in allPoPrIds might be PRs, some are RFQs)
+  allPoPrIds.forEach((id) => prIdsToFetch.add(id));
+
+  // Add from rfqLines' rfq.prId
+  rfqLines.forEach((rl) => {
+    if (rl.rfq?.prId) prIdsToFetch.add(rl.rfq.prId);
+  });
+
+  // Add from directRfqs' prId
+  directRfqs.forEach((rfq) => {
+    if (rfq.prId) prIdsToFetch.add(rfq.prId);
+  });
+
+  // Add from prLines
+  prLines.forEach((pl) => {
+    if (pl.prId) prIdsToFetch.add(pl.prId);
+  });
+
+  // 2. Fetch all unique PRs with their indents
+  const prs = await db.purchaseRequisition.findMany({
+    where: { id: { in: Array.from(prIdsToFetch) } },
+    include: {
+      lines: {
+        include: {
+          indentLines: {
+            include: {
+              indent: true,
+            },
+          },
+        },
+      },
+    },
+  });
 
   const rfqLineIdToNumberMap = new Map<string, string>();
   rfqLines.forEach((rl) => {
@@ -124,6 +168,21 @@ export default async function PurchaseOrdersPage() {
     if (indentNums.length > 0) {
       prLineIdToIndentNumbersMap.set(pl.id, Array.from(new Set(indentNums)));
     }
+  });
+
+  const prIdToPrNumberMap = new Map<string, string>();
+  const prIdToIndentNumbersMap = new Map<string, string[]>();
+  prs.forEach((pr) => {
+    prIdToPrNumberMap.set(pr.id, pr.number);
+    const indentNums = pr.lines.flatMap((l) => l.indentLines.map((il) => il.indent?.number)).filter(Boolean) as string[];
+    if (indentNums.length > 0) {
+      prIdToIndentNumbersMap.set(pr.id, Array.from(new Set(indentNums)));
+    }
+  });
+
+  const rfqIdToRfqNumberMap = new Map<string, string>();
+  directRfqs.forEach((rfq) => {
+    rfqIdToRfqNumberMap.set(rfq.id, rfq.number);
   });
 
   // Merge presets (company overrides override system ones)
@@ -163,10 +222,24 @@ export default async function PurchaseOrdersPage() {
     const indentNumbersSet = new Set<string>();
 
     po.lines.forEach((line) => {
+      // Trace RFQ line
       if (line.rfqLineId) {
         const rfqNum = rfqLineIdToNumberMap.get(line.rfqLineId);
         if (rfqNum) rfqNumbersSet.add(rfqNum);
+
+        const rfqLine = rfqLines.find((rl) => rl.id === line.rfqLineId);
+        if (rfqLine?.rfq?.prId) {
+          const prNum = prIdToPrNumberMap.get(rfqLine.rfq.prId);
+          if (prNum) prNumbersSet.add(prNum);
+
+          const indNums = prIdToIndentNumbersMap.get(rfqLine.rfq.prId);
+          if (indNums) {
+            indNums.forEach((num) => indentNumbersSet.add(num));
+          }
+        }
       }
+
+      // Trace PR line
       if (line.prLineId) {
         const prNum = prLineIdToNumberMap.get(line.prLineId);
         if (prNum) prNumbersSet.add(prNum);
@@ -177,6 +250,36 @@ export default async function PurchaseOrdersPage() {
         }
       }
     });
+
+    // Trace PO Header level prId references
+    if (po.prId) {
+      // Is it a PR?
+      const prNum = prIdToPrNumberMap.get(po.prId);
+      if (prNum) {
+        prNumbersSet.add(prNum);
+        const indNums = prIdToIndentNumbersMap.get(po.prId);
+        if (indNums) {
+          indNums.forEach((num) => indentNumbersSet.add(num));
+        }
+      }
+
+      // Is it an RFQ?
+      const rfqNum = rfqIdToRfqNumberMap.get(po.prId);
+      if (rfqNum) {
+        rfqNumbersSet.add(rfqNum);
+
+        const rfq = directRfqs.find((r) => r.id === po.prId);
+        if (rfq?.prId) {
+          const rPrNum = prIdToPrNumberMap.get(rfq.prId);
+          if (rPrNum) prNumbersSet.add(rPrNum);
+
+          const rIndNums = prIdToIndentNumbersMap.get(rfq.prId);
+          if (rIndNums) {
+            rIndNums.forEach((num) => indentNumbersSet.add(num));
+          }
+        }
+      }
+    }
 
     const rfqNumbers = Array.from(rfqNumbersSet);
     const prNumbers = Array.from(prNumbersSet);
