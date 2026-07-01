@@ -155,6 +155,20 @@ export default async function PurchaseOrdersPage() {
     },
   });
 
+  // Fetch direct Indents associated with the PR headers
+  const directIndentIdsSet = new Set<string>();
+  prs.forEach((pr) => {
+    if (pr.indentId) directIndentIdsSet.add(pr.indentId);
+  });
+  prLines.forEach((pl) => {
+    if (pl.pr?.indentId) directIndentIdsSet.add(pl.pr.indentId);
+  });
+
+  const directIndents = await db.indent.findMany({
+    where: { id: { in: Array.from(directIndentIdsSet) } },
+    select: { id: true, number: true }
+  });
+
   const rfqLineIdToNumberMap = new Map<string, string>();
   rfqLines.forEach((rl) => {
     if (rl.rfq) rfqLineIdToNumberMap.set(rl.id, rl.rfq.number);
@@ -165,6 +179,12 @@ export default async function PurchaseOrdersPage() {
   prLines.forEach((pl) => {
     if (pl.pr) prLineIdToNumberMap.set(pl.id, pl.pr.number);
     const indentNums = pl.indentLines.map((il) => il.indent?.number).filter(Boolean) as string[];
+    if (pl.pr?.indentId) {
+      const directInd = directIndents.find((ind) => ind.id === pl.pr.indentId);
+      if (directInd) {
+        indentNums.push(directInd.number);
+      }
+    }
     if (indentNums.length > 0) {
       prLineIdToIndentNumbersMap.set(pl.id, Array.from(new Set(indentNums)));
     }
@@ -175,6 +195,12 @@ export default async function PurchaseOrdersPage() {
   prs.forEach((pr) => {
     prIdToPrNumberMap.set(pr.id, pr.number);
     const indentNums = pr.lines.flatMap((l) => l.indentLines.map((il) => il.indent?.number)).filter(Boolean) as string[];
+    if (pr.indentId) {
+      const directInd = directIndents.find((ind) => ind.id === pr.indentId);
+      if (directInd) {
+        indentNums.push(directInd.number);
+      }
+    }
     if (indentNums.length > 0) {
       prIdToIndentNumbersMap.set(pr.id, Array.from(new Set(indentNums)));
     }
