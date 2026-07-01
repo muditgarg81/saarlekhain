@@ -197,6 +197,7 @@ export default function PurchaseOrdersList({
   const [isOpen, setIsOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [isAmendOpen, setIsAmendOpen] = useState(false);
+  const [isAuditOpen, setIsAuditOpen] = useState(false);
   const [selectedPO, setSelectedPO] = useState<PORecord | null>(null);
   const [editingPOId, setEditingPOId] = useState<string | null>(null);
   const [selectedPOIds, setSelectedPOIds] = useState<string[]>([]);
@@ -1093,8 +1094,32 @@ export default function PurchaseOrdersList({
                       <td>{po.type}</td>
                       <td suppressHydrationWarning>{new Date(po.orderDate).toLocaleDateString()}</td>
                       <td className="font-mono font-bold">₹{po.totalValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
-                      <td className="font-mono text-xs text-onyx/70">
-                        {po.rfqNumbers && po.rfqNumbers.length > 0 ? po.rfqNumbers.join(", ") : "-"}
+                      <td className="font-mono text-xs">
+                        {po.rfqNumbers && po.rfqNumbers.length > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPO(po);
+                              setIsAuditOpen(true);
+                            }}
+                            className="text-blue-600 hover:text-blue-800 underline font-semibold text-left cursor-pointer focus:outline-none"
+                            title="Click to view reference audit trail"
+                          >
+                            {po.rfqNumbers.join(", ")}
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedPO(po);
+                              setIsAuditOpen(true);
+                            }}
+                            className="text-onyx/40 hover:text-onyx text-left cursor-pointer focus:outline-none"
+                            title="Click to view reference audit trail"
+                          >
+                            -
+                          </button>
+                        )}
                       </td>
                       <td className="text-center">
                         <div className="flex flex-wrap items-center justify-center gap-1.5">
@@ -1276,9 +1301,31 @@ export default function PurchaseOrdersList({
                     </div>
                     <div>
                       <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Source RFQ</span>
-                      <span className="font-mono font-semibold text-onyx/85">
-                        {po.rfqNumbers && po.rfqNumbers.length > 0 ? po.rfqNumbers.join(", ") : "-"}
-                      </span>
+                      {po.rfqNumbers && po.rfqNumbers.length > 0 ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedPO(po);
+                            setIsAuditOpen(true);
+                          }}
+                          className="font-mono text-xs font-semibold text-blue-600 hover:text-blue-800 underline text-left cursor-pointer focus:outline-none"
+                          title="Click to view reference audit trail"
+                        >
+                          {po.rfqNumbers.join(", ")}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedPO(po);
+                            setIsAuditOpen(true);
+                          }}
+                          className="font-mono text-xs font-semibold text-onyx/40 hover:text-onyx text-left cursor-pointer focus:outline-none"
+                          title="Click to view reference audit trail"
+                        >
+                          -
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2340,6 +2387,129 @@ export default function PurchaseOrdersList({
                 className="flex-1 py-2.5 bg-onyx text-cream-light font-bold rounded-lg text-xs hover:bg-onyx-light cursor-pointer"
               >
                 Close Details
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reference Audit Trail Modal */}
+      {isAuditOpen && selectedPO && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-cream max-w-md w-full flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
+              <h3 className="font-heading text-sm font-bold flex items-center gap-2">
+                <History size={16} className="text-saffron" />
+                <span>PO Reference Audit Trail</span>
+              </h3>
+              <button onClick={() => setIsAuditOpen(false)} className="hover:text-saffron cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              {/* Header Details */}
+              <div className="flex items-center justify-between pb-4 border-b border-onyx/5">
+                <div>
+                  <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">PO Number</span>
+                  <span className="font-mono font-bold text-onyx text-sm">{selectedPO.number}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Order Date</span>
+                  <span className="font-semibold text-onyx text-xs" suppressHydrationWarning>
+                    {new Date(selectedPO.orderDate).toLocaleDateString()}
+                  </span>
+                </div>
+              </div>
+
+              {/* Timeline Flow */}
+              <div className="relative pl-6 space-y-6 border-l-2 border-dashed border-onyx/10 ml-3 py-1">
+                {/* 1. Indent Status */}
+                <div className="relative">
+                  <div className="absolute -left-[31px] top-0 bg-white p-1 rounded-full border-2 border-onyx/20 text-onyx/65 shadow-sm">
+                    <FileText size={12} />
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/40">1. Indent Stage</h4>
+                    {selectedPO.indentNumbers && selectedPO.indentNumbers.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {selectedPO.indentNumbers.map((num) => (
+                          <span key={num} className="font-mono text-[10px] font-bold px-2 py-0.5 bg-blue-50 border border-blue-200 text-blue-800 rounded">
+                            {num}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-onyx/50 italic mt-0.5">Direct PO (No Indent reference)</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. PR Status */}
+                <div className="relative">
+                  <div className="absolute -left-[31px] top-0 bg-white p-1 rounded-full border-2 border-onyx/20 text-onyx/65 shadow-sm">
+                    <FileText size={12} />
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/40">2. Purchase Requisition (PR)</h4>
+                    {selectedPO.prNumbers && selectedPO.prNumbers.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {selectedPO.prNumbers.map((num) => (
+                          <span key={num} className="font-mono text-[10px] font-bold px-2 py-0.5 bg-purple-50 border border-purple-200 text-purple-800 rounded">
+                            {num}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-onyx/50 italic mt-0.5">Direct PO (No PR reference)</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. RFQ Status */}
+                <div className="relative">
+                  <div className="absolute -left-[31px] top-0 bg-white p-1 rounded-full border-2 border-onyx/20 text-onyx/65 shadow-sm">
+                    <RefreshCw size={12} />
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/40">3. Request For Quotation (RFQ)</h4>
+                    {selectedPO.rfqNumbers && selectedPO.rfqNumbers.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {selectedPO.rfqNumbers.map((num) => (
+                          <span key={num} className="font-mono text-[10px] font-bold px-2 py-0.5 bg-saffron/20 border border-saffron/40 text-onyx-dark rounded">
+                            {num}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-onyx/50 italic mt-0.5">Direct PO (No RFQ reference)</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4. PO Status */}
+                <div className="relative">
+                  <div className="absolute -left-[31px] top-0 bg-saffron p-1 rounded-full border-2 border-saffron text-onyx shadow-sm">
+                    <ShieldCheck size={12} />
+                  </div>
+                  <div>
+                    <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/40">4. Purchase Order (PO)</h4>
+                    <div className="mt-1 bg-cream-dark/20 p-2.5 rounded-lg border border-onyx/5 text-xs">
+                      <div className="font-bold text-onyx">{selectedPO.vendorName}</div>
+                      <div className="text-[10px] text-onyx/60 mt-0.5">Landed Value: <span className="font-mono font-bold">₹{selectedPO.totalValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+                      <div className="text-[10px] text-onyx/60">Status: <span className="font-bold">{selectedPO.status}</span></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-cream-dark/20 border-t border-onyx/5 flex justify-end">
+              <button
+                onClick={() => setIsAuditOpen(false)}
+                className="px-4 py-2 bg-onyx text-cream-light font-bold rounded-lg text-xs hover:bg-onyx-light cursor-pointer"
+              >
+                Close Audit Trail
               </button>
             </div>
           </div>
