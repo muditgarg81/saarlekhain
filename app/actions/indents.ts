@@ -456,28 +456,21 @@ export async function convertShortageToPr(indentId: string) {
     const validStatus = indent.status === IndentStatus.APPROVED || indent.status === IndentStatus.PARTIALLY_ISSUED;
     if (!validStatus) return { success: false, error: "Only approved or partially issued indents can be converted to PR" };
 
-    // Find shortage line items
+    // Find line items to convert
     const prLinesToCreate: { itemId: string; qty: number }[] = [];
 
     for (const line of indent.lines) {
       const remainingQty = line.qty - line.issuedQty;
       if (remainingQty <= 0) continue;
 
-      // Get derived stock on hand across all stores
-      const stock = await getItemStock(companyId, line.itemId);
-      
-      // If stock is less than remaining indent line qty, we have a shortage
-      if (stock < remainingQty) {
-        const shortage = remainingQty - stock;
-        prLinesToCreate.push({
-          itemId: line.itemId,
-          qty: shortage
-        });
-      }
+      prLinesToCreate.push({
+        itemId: line.itemId,
+        qty: remainingQty
+      });
     }
 
     if (prLinesToCreate.length === 0) {
-      return { success: false, error: "No shortage found. Available stock covers all remaining requested quantities." };
+      return { success: false, error: "No remaining quantities found to convert (all items are already issued)." };
     }
 
     const prNumber = await getNextSequence(companyId, "PR");
@@ -595,33 +588,26 @@ export async function convertMultipleIndentsToPR(indentIds: string[]) {
     }[] = [];
 
     for (const [itemId, req] of Object.entries(itemRequirements)) {
-      // Get stock level for item across all stores
-      const stock = await getItemStock(companyId, itemId);
-      
-      if (stock < req.qtyNeeded) {
-        const shortageQty = req.qtyNeeded - stock;
-        
-        // Find earliest requiredBy date among the contributing lines
-        let earliestRequiredBy: Date | null = null;
-        for (const line of req.lines) {
-          if (line.requiredBy) {
-            if (!earliestRequiredBy || new Date(line.requiredBy) < new Date(earliestRequiredBy)) {
-              earliestRequiredBy = line.requiredBy;
-            }
+      // Find earliest requiredBy date among the contributing lines
+      let earliestRequiredBy: Date | null = null;
+      for (const line of req.lines) {
+        if (line.requiredBy) {
+          if (!earliestRequiredBy || new Date(line.requiredBy) < new Date(earliestRequiredBy)) {
+            earliestRequiredBy = line.requiredBy;
           }
         }
-
-        prLinesToCreate.push({
-          itemId,
-          qty: shortageQty,
-          requiredBy: earliestRequiredBy || new Date(),
-          originatingLineIds: req.lines.map(l => l.id)
-        });
       }
+
+      prLinesToCreate.push({
+        itemId,
+        qty: req.qtyNeeded,
+        requiredBy: earliestRequiredBy || new Date(),
+        originatingLineIds: req.lines.map(l => l.id)
+      });
     }
 
     if (prLinesToCreate.length === 0) {
-      return { success: false, error: "No shortage found. Available stock covers all remaining requested quantities." };
+      return { success: false, error: "No remaining quantities found to convert (all items are already issued)." };
     }
 
     // Generate sequence number

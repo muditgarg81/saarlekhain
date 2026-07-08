@@ -547,7 +547,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
                               </button>
                               <button
                                 onClick={() => handleWorkflowAction("convert_pr", ind)}
-                                title="Convert Shortages to PR"
+                                title="Convert to PR"
                                 className="p-1 hover:bg-purple-50 text-purple-600 hover:text-purple-700 rounded border border-transparent hover:border-purple-200"
                                 type="button"
                               >
@@ -711,7 +711,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
                       </button>
                       <button
                         onClick={() => handleWorkflowAction("convert_pr", ind)}
-                        title="Convert Shortages to PR"
+                        title="Convert to PR"
                         className="p-1.5 hover:bg-purple-50 text-purple-600 hover:text-purple-700 rounded border border-transparent hover:border-purple-200"
                         type="button"
                       >
