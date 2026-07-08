@@ -1346,7 +1346,7 @@ export default function RequisitionsList({
 
       {/* Log Quote Modal */}
       {isQuoteOpen && selectedRfq && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-[60] p-4">
           <div className="bg-cream max-w-2xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
             <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
               <h3 className="font-heading text-lg font-bold">{editingQuotationId ? "Edit Supplier Quotation" : "Log Supplier Quotation"} ({selectedRfq.number})</h3>
