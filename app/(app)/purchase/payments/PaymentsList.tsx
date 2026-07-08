@@ -246,6 +246,28 @@ export default function PaymentsList({
     };
   }, []);
 
+  // Load active tab from query parameter on mount
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const params = new URLSearchParams(window.location.search);
+      const tab = params.get("tab");
+      if (tab === "REQUESTS" || tab === "DUE_GRNS" || tab === "VOUCHERS") {
+        setActiveTab(tab);
+      }
+    }
+  }, []);
+
+  // Sync tab changes with URL parameters to preserve view on reload
+  const handleTabChange = (tab: "VOUCHERS" | "REQUESTS" | "DUE_GRNS") => {
+    setActiveTab(tab);
+    setSelectedIds([]);
+    if (typeof window !== "undefined") {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", tab);
+      window.history.replaceState({}, "", url.toString());
+    }
+  };
+
   // Close dropdown when active tab changes
   useEffect(() => {
     setActiveDropdownId(null);
@@ -327,7 +349,7 @@ export default function PaymentsList({
 
     if (res.success) {
       setIsOpen(false);
-      window.location.reload();
+      window.location.href = `/purchase/payments?tab=${activeTab}`;
     } else {
       setErrorMsg(res.error || "Failed to log payment");
     }
@@ -372,7 +394,7 @@ export default function PaymentsList({
 
     if (res.success) {
       setIsEditOpen(false);
-      window.location.reload();
+      window.location.href = `/purchase/payments?tab=${activeTab}`;
     } else {
       setErrorMsg(res.error || "Failed to update payment voucher");
     }
@@ -386,7 +408,7 @@ export default function PaymentsList({
     setActionLoading(false);
 
     if (res.success) {
-      window.location.reload();
+      window.location.href = `/purchase/payments?tab=${activeTab}`;
     } else {
       alert(res.error || "Failed to delete payment voucher");
     }
@@ -402,7 +424,7 @@ export default function PaymentsList({
 
     if (res.success) {
       setSelectedIds([]);
-      window.location.reload();
+      window.location.href = `/purchase/payments?tab=${activeTab}`;
     } else {
       alert(res.error || "Failed to bulk delete payment vouchers");
     }
@@ -445,7 +467,7 @@ export default function PaymentsList({
     setActionLoading(false);
     if (res.success) {
       setIsReqOpen(false);
-      window.location.reload();
+      window.location.href = `/purchase/payments?tab=${activeTab}`;
     } else {
       setErrorMsg(res.error || "Failed to create payment request");
     }
@@ -483,7 +505,7 @@ export default function PaymentsList({
     setActionLoading(false);
     if (res.success) {
       setIsEditReqOpen(false);
-      window.location.reload();
+      window.location.href = `/purchase/payments?tab=${activeTab}`;
     } else {
       setErrorMsg(res.error || "Failed to update payment request");
     }
@@ -495,7 +517,7 @@ export default function PaymentsList({
     const res = await deletePaymentRequest(id);
     setActionLoading(false);
     if (res.success) {
-      window.location.reload();
+      window.location.href = `/purchase/payments?tab=${activeTab}`;
     } else {
       alert(res.error || "Failed to delete payment request");
     }
@@ -522,7 +544,7 @@ export default function PaymentsList({
     setActionLoading(false);
     if (res.success) {
       setIsEditStatusOpen(false);
-      window.location.reload();
+      window.location.href = `/purchase/payments?tab=${activeTab}`;
     } else {
       setErrorMsg(res.error || "Failed to update payment request status");
     }
@@ -530,14 +552,15 @@ export default function PaymentsList({
 
 
   const handleReviewRequest = async (id: string, status: "APPROVED" | "REJECTED") => {
-    if (!confirm(`Are you sure you want to ${status.toLowerCase()} this payment request?`)) return;
+    const actionVerb = status === "APPROVED" ? "approve" : "reject";
+    if (!confirm(`Are you sure you want to ${actionVerb} this payment request?`)) return;
     setActionLoading(true);
     const res = await reviewPaymentRequest(id, status);
     setActionLoading(false);
     if (res.success) {
-      window.location.reload();
+      window.location.href = `/purchase/payments?tab=${activeTab}`;
     } else {
-      alert(res.error || `Failed to ${status.toLowerCase()} payment request`);
+      alert(res.error || `Failed to ${actionVerb} payment request`);
     }
   };
 
@@ -591,9 +614,34 @@ export default function PaymentsList({
     setActionLoading(false);
     if (res.success) {
       setIsConfirmOpen(false);
-      window.location.reload();
+      window.location.href = `/purchase/payments?tab=${activeTab}`;
     } else {
       setErrorMsg(res.error || "Failed to confirm payment");
+    }
+  };
+
+  const handleMarkAsPaidClosed = async (grn: any) => {
+    if (!confirm(`Are you sure you want to mark GRN "${grn.number}" as paid and close it? This will record a payment voucher for ₹${grn.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}.`)) {
+      return;
+    }
+
+    setActionLoading(true);
+    setErrorMsg(null);
+
+    const res = await recordPayment({
+      vendorId: grn.vendorId,
+      invoiceId: null,
+      amount: grn.amount,
+      paidOn: new Date().toISOString().split("T")[0],
+      mode: "CASH",
+      reference: `Marked as Paid/Closed (GRN: ${grn.number})`,
+    });
+
+    setActionLoading(false);
+    if (res.success) {
+      window.location.href = `/purchase/payments?tab=${activeTab}`;
+    } else {
+      alert(res.error || "Failed to mark GRN as paid/closed");
     }
   };
 
@@ -1000,10 +1048,7 @@ export default function PaymentsList({
       {/* Sub Tabs */}
       <div className="flex border-b border-onyx/10 space-x-6 text-xs font-bold uppercase tracking-wider text-onyx/65 pb-0.5">
         <button
-          onClick={() => {
-            setActiveTab("VOUCHERS");
-            setSelectedIds([]);
-          }}
+          onClick={() => handleTabChange("VOUCHERS")}
           className={`pb-2 px-1 border-b-2 cursor-pointer transition-all ${
             activeTab === "VOUCHERS" ? "border-saffron text-onyx font-extrabold" : "border-transparent hover:text-onyx"
           }`}
@@ -1011,10 +1056,7 @@ export default function PaymentsList({
           Payment Vouchers ({payments.length})
         </button>
         <button
-          onClick={() => {
-            setActiveTab("REQUESTS");
-            setSelectedIds([]);
-          }}
+          onClick={() => handleTabChange("REQUESTS")}
           className={`pb-2 px-1 border-b-2 cursor-pointer transition-all ${
             activeTab === "REQUESTS" ? "border-saffron text-onyx font-extrabold" : "border-transparent hover:text-onyx"
           }`}
@@ -1022,10 +1064,7 @@ export default function PaymentsList({
           Payment Requests ({pendingRequestsCount})
         </button>
         <button
-          onClick={() => {
-            setActiveTab("DUE_GRNS");
-            setSelectedIds([]);
-          }}
+          onClick={() => handleTabChange("DUE_GRNS")}
           className={`pb-2 px-1 border-b-2 cursor-pointer transition-all ${
             activeTab === "DUE_GRNS" ? "border-saffron text-onyx font-extrabold" : "border-transparent hover:text-onyx"
           }`}
@@ -1936,6 +1975,16 @@ export default function PaymentsList({
                                     <Check size={13} />
                                     <span>Confirm Pay</span>
                                   </button>
+                                  <button
+                                    onClick={() => {
+                                      handleMarkAsPaidClosed(grn);
+                                      setActiveDropdownId(null);
+                                    }}
+                                    className="w-full text-left px-4 py-2 hover:bg-blue-50 text-blue-600 flex items-center space-x-2 transition-colors duration-150 font-semibold"
+                                  >
+                                    <CheckCircle size={13} />
+                                    <span>Mark as Paid/Closed</span>
+                                  </button>
                                 </div>
                               )}
                             </div>
@@ -2055,6 +2104,13 @@ export default function PaymentsList({
                       >
                         <Check size={12} />
                         <span>Confirm Pay</span>
+                      </button>
+                      <button
+                        onClick={() => handleMarkAsPaidClosed(grn)}
+                        className="px-2.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-bold shadow-sm flex items-center space-x-1 cursor-pointer"
+                      >
+                        <CheckCircle size={12} />
+                        <span>Paid/Closed</span>
                       </button>
                     </div>
                   </div>
