@@ -470,11 +470,74 @@ export async function amendPO(
         },
       });
 
+      // 4. Handle automatic Advance Payment Request creation or updates based on amended values
+      const updatedStatus = shouldReTriggerApproval ? PoStatus.PENDING_APPROVAL : PoStatus.APPROVED;
+      const isAdvance = isAdvancePaymentTerm(data.paymentTerms !== undefined ? data.paymentTerms : po.paymentTerms);
+      
+      if (isAdvance) {
+        const existingRequest = await tx.paymentRequest.findFirst({
+          where: {
+            companyId,
+            poId: poId,
+            type: PaymentRequestType.ADVANCE,
+          },
+        });
+
+        if (existingRequest) {
+          // If it is not paid yet, update the amount to match the new PO total value
+          if (existingRequest.status !== PaymentRequestStatus.PAID) {
+            const updatedPrq = await tx.paymentRequest.update({
+              where: { id: existingRequest.id },
+              data: {
+                amount: newTotalVal,
+                remarks: `${existingRequest.remarks || ""}\n[Updated automatically via PO Amendment to match new PO total value of ₹${newTotalVal.toLocaleString("en-IN")}]`.trim()
+              }
+            });
+            await logAudit(tx, companyId, actorId, "UPDATE_PAYMENT_REQUEST", "PaymentRequest", existingRequest.id, existingRequest, updatedPrq);
+          }
+        } else if (updatedStatus === PoStatus.APPROVED) {
+          // If it doesn't exist and PO is auto-approved, create it
+          const number = await getNextSequenceTx(tx, companyId, "PRQ");
+          const prq = await tx.paymentRequest.create({
+            data: {
+              companyId,
+              number,
+              vendorId: po.vendorId,
+              poId: poId,
+              grnId: null,
+              type: PaymentRequestType.ADVANCE,
+              amount: newTotalVal,
+              remarks: `Automatic advance request from PO ${po.number} (Amended)`,
+              status: PaymentRequestStatus.PENDING,
+              recordedById: actorId,
+            },
+          });
+          await logAudit(tx, companyId, actorId, "CREATE_PAYMENT_REQUEST", "PaymentRequest", prq.id, null, prq);
+        }
+      } else {
+        // If the amended PO no longer has advance payment terms, delete any pending advance request
+        const existingRequest = await tx.paymentRequest.findFirst({
+          where: {
+            companyId,
+            poId: poId,
+            type: PaymentRequestType.ADVANCE,
+            status: PaymentRequestStatus.PENDING
+          },
+        });
+        if (existingRequest) {
+          await tx.paymentRequest.delete({
+            where: { id: existingRequest.id }
+          });
+          await logAudit(tx, companyId, actorId, "DELETE_PAYMENT_REQUEST", "PaymentRequest", existingRequest.id, existingRequest, null);
+        }
+      }
+
       await logAudit(tx, companyId, actorId, "AMEND", "PurchaseOrder", poId, po, updated);
       return updated;
     });
 
     revalidatePath("/purchase/po");
+    revalidatePath("/purchase/payments");
     return { success: true, po: result };
   } catch (err: any) {
     console.error("Error amending PO:", err);

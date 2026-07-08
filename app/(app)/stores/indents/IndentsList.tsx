@@ -254,6 +254,40 @@ export default function IndentsList({ initialIndents, items, stores, departments
       alert("Please add at least one line item");
       return;
     }
+
+    // Check for open indents with the same items
+    const openStatuses = ["DRAFT", "SUBMITTED", "APPROVED", "PARTIALLY_ISSUED"];
+    const warnings: string[] = [];
+
+    newIndent.lines.forEach((newLine) => {
+      const item = items.find((i) => i.id === newLine.itemId);
+      const itemName = item?.name || "Unknown Item";
+
+      // Find any other open indents containing this itemId
+      indents.forEach((ind) => {
+        // Skip checking the indent currently being edited
+        if (editingIndentId && ind.id === editingIndentId) return;
+
+        if (openStatuses.includes(ind.status)) {
+          const hasItem = ind.lines.some((l) => l.itemId === newLine.itemId);
+          if (hasItem) {
+            warnings.push(
+              `- Item "${itemName}" is already in open Indent "${ind.number}" (Status: ${ind.status})`
+            );
+          }
+        }
+      });
+    });
+
+    if (warnings.length > 0) {
+      const msg = `WARNING: Duplicate items found in active indents:\n\n` +
+                  warnings.join("\n") +
+                  `\n\nDo you still want to proceed with raising this indent?`;
+      if (!window.confirm(msg)) {
+        return;
+      }
+    }
+
     setActionLoading(true);
     let res;
     if (editingIndentId) {
