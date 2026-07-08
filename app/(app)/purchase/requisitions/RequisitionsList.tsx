@@ -1949,6 +1949,25 @@ export default function RequisitionsList({
                           return;
                         }
 
+                        // Pre-populate pre-flight terms from the awarded quotation(s)
+                        const awardedVendorIds = Array.from(new Set(Object.values(allocState).flat().map(a => a.vendorId)));
+                        const awardedQuotes = compData.rfq.quotations.filter((q: any) => awardedVendorIds.includes(q.vendorId));
+                        
+                        let payTerms = "Net 30";
+                        let frgTerms = "FOB Destination";
+                        
+                        if (awardedQuotes.length > 0) {
+                          const firstQuote = awardedQuotes[0];
+                          if (firstQuote.paymentTerms) payTerms = firstQuote.paymentTerms;
+                          if (firstQuote.terms) frgTerms = firstQuote.terms;
+                        }
+                        
+                        setPoPreflightDetails(prev => ({
+                          ...prev,
+                          paymentTerms: payTerms,
+                          freightTerms: frgTerms
+                        }));
+
                         setIsPoDetailsModalOpen(true);
                       }}
                       disabled={actionLoading || Object.values(allocState).flat().length === 0}
