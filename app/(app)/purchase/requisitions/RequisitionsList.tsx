@@ -1295,7 +1295,7 @@ export default function RequisitionsList({
               </button>
             </div>
 
-            <form onSubmit={handleCreateRfq} className="p-6 space-y-6">
+            <form onSubmit={handleCreateRfq} className="flex-1 overflow-y-auto p-6 space-y-6">
               {errorMsg && (
                 <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded text-xs text-red-800 font-semibold">
                   <span>{errorMsg}</span>
