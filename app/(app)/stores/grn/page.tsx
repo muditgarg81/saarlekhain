@@ -72,7 +72,7 @@ export default async function GrnPage() {
     new Set(purchaseOrders.map((po) => po.prId).filter(Boolean))
   ) as string[];
 
-  const [rfqLines, prLines, directRfqs] = await Promise.all([
+  const [rfqLines, prLines] = await Promise.all([
     db.rfqLine.findMany({
       where: { id: { in: allRfqLineIds } },
       include: { rfq: true },
@@ -88,37 +88,47 @@ export default async function GrnPage() {
         },
       },
     }),
-    db.rfq.findMany({
-      where: { id: { in: allPoPrIds } },
-    }),
   ]);
+
+  const rfqIdsToFetch = new Set<string>();
+  allPoPrIds.forEach((id) => rfqIdsToFetch.add(id));
+  rfqLines.forEach((rl) => {
+    if (rl.rfqId) rfqIdsToFetch.add(rl.rfqId);
+  });
 
   const prIdsToFetch = new Set<string>();
   allPoPrIds.forEach((id) => prIdsToFetch.add(id));
   rfqLines.forEach((rl) => {
     if (rl.rfq?.prId) prIdsToFetch.add(rl.rfq.prId);
   });
-  directRfqs.forEach((rfq) => {
-    if (rfq.prId) prIdsToFetch.add(rfq.prId);
-  });
   prLines.forEach((pl) => {
     if (pl.prId) prIdsToFetch.add(pl.prId);
   });
 
-  const prs = await db.purchaseRequisition.findMany({
-    where: { id: { in: Array.from(prIdsToFetch) } },
-    include: {
-      lines: {
-        include: {
-          indentLines: {
-            include: {
-              indent: true,
+  const [rfqs, prs] = await Promise.all([
+    db.rfq.findMany({
+      where: {
+        OR: [
+          { id: { in: Array.from(rfqIdsToFetch) } },
+          { prId: { in: Array.from(prIdsToFetch) } }
+        ]
+      }
+    }),
+    db.purchaseRequisition.findMany({
+      where: { id: { in: Array.from(prIdsToFetch) } },
+      include: {
+        lines: {
+          include: {
+            indentLines: {
+              include: {
+                indent: true,
+              },
             },
           },
         },
       },
-    },
-  });
+    }),
+  ]);
 
   const directIndentIdsSet = new Set<string>();
   prs.forEach((pr) => {
@@ -171,7 +181,7 @@ export default async function GrnPage() {
   });
 
   const rfqIdToRfqNumberMap = new Map<string, string>();
-  directRfqs.forEach((rfq) => {
+  rfqs.forEach((rfq) => {
     rfqIdToRfqNumberMap.set(rfq.id, rfq.number);
   });
 
@@ -231,6 +241,12 @@ export default async function GrnPage() {
           if (indNums) {
             indNums.forEach((num) => indentNumbersSet.add(num));
           }
+
+          // Trace any RFQs linked to this PR
+          const linkedRfqs = rfqs.filter((r) => r.prId === po.prId);
+          linkedRfqs.forEach((rfq) => {
+            rfqNumbersSet.add(rfq.number);
+          });
         }
 
         // Is it an RFQ?
@@ -238,7 +254,7 @@ export default async function GrnPage() {
         if (rfqNum) {
           rfqNumbersSet.add(rfqNum);
 
-          const rfq = directRfqs.find((r) => r.id === po.prId);
+          const rfq = rfqs.find((r) => r.id === po.prId);
           if (rfq?.prId) {
             const rPrNum = prIdToPrNumberMap.get(rfq.prId);
             if (rPrNum) prNumbersSet.add(rPrNum);
