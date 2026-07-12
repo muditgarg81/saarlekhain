@@ -3,7 +3,14 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import PurchaseReportsList from "./PurchaseReportsList";
 
-export default async function PurchaseReportsPage() {
+interface PageProps {
+  searchParams: Promise<{ period?: string }>;
+}
+
+export default async function PurchaseReportsPage(props: { searchParams: PageProps["searchParams"] }) {
+  const searchParams = await props.searchParams;
+  const period = searchParams.period || "all";
+
   const session = await auth();
   if (!session || !session.user) {
     redirect("/auth/signin");
@@ -11,10 +18,30 @@ export default async function PurchaseReportsPage() {
 
   const companyId = (session.user as any).companyId || "demo-company-id";
 
+  let dateFilter: any = {};
+  if (period !== "all") {
+    const startDate = new Date();
+    if (period === "1m") {
+      startDate.setMonth(startDate.getMonth() - 1);
+    } else if (period === "3m") {
+      startDate.setMonth(startDate.getMonth() - 3);
+    } else if (period === "6m") {
+      startDate.setMonth(startDate.getMonth() - 6);
+    } else if (period === "1y") {
+      startDate.setFullYear(startDate.getFullYear() - 1);
+    }
+    startDate.setHours(0, 0, 0, 0);
+    dateFilter = { gte: startDate };
+  }
+
   // Fetch all necessary database records concurrently
   const [purchaseOrders, supplierInvoices, paymentVouchers, items, vendors, users] = await Promise.all([
     db.purchaseOrder.findMany({
-      where: { companyId, deletedAt: null },
+      where: { 
+        companyId, 
+        deletedAt: null,
+        ...(period !== "all" ? { orderDate: dateFilter } : {})
+      },
       include: {
         vendor: true,
         lines: true,
@@ -25,14 +52,21 @@ export default async function PurchaseReportsPage() {
       orderBy: { orderDate: "desc" },
     }),
     db.supplierInvoice.findMany({
-      where: { companyId, deletedAt: null },
+      where: { 
+        companyId, 
+        deletedAt: null,
+        ...(period !== "all" ? { invoiceDate: dateFilter } : {})
+      },
       include: {
         lines: true,
       },
       orderBy: { invoiceDate: "desc" },
     }),
     db.paymentVoucher.findMany({
-      where: { companyId },
+      where: { 
+        companyId,
+        ...(period !== "all" ? { paidOn: dateFilter } : {})
+      },
       orderBy: { paidOn: "desc" },
     }),
     db.item.findMany({
@@ -269,6 +303,7 @@ export default async function PurchaseReportsPage() {
       items={mappedItems}
       invoices={mappedInvoices}
       stats={invoiceStats}
+      period={period}
     />
   );
 }

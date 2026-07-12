@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { 
   Search, 
   FileSpreadsheet, 
@@ -108,6 +109,7 @@ interface PurchaseReportsListProps {
   items: ItemRow[];
   invoices: InvoiceRow[];
   stats: Stats;
+  period: string;
 }
 
 type TabType = "pos" | "vendors" | "items" | "ap";
@@ -117,7 +119,8 @@ export default function PurchaseReportsList({
   vendors,
   items,
   invoices,
-  stats
+  stats,
+  period,
 }: PurchaseReportsListProps) {
   const [activeTab, setActiveTab] = useState<TabType>("pos");
   const [search, setSearch] = useState("");
@@ -126,6 +129,19 @@ export default function PurchaseReportsList({
   // PO details states
   const [selectedPO, setSelectedPO] = useState<PoRow | null>(null);
   const [isPODetailOpen, setIsPODetailOpen] = useState(false);
+
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  const handlePeriodChange = (val: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (val === "all") {
+      params.delete("period");
+    } else {
+      params.set("period", val);
+    }
+    router.push(`/purchase/reports?${params.toString()}`);
+  };
 
   const computePoTotals = (
     lines: { qty: number; rate: number; discount: number; gstRate: number }[],
@@ -331,7 +347,20 @@ export default function PurchaseReportsList({
             Real-time visual metrics, price trend tracking, and reconciliation audits.
           </p>
         </div>
-        <div>
+        <div className="flex items-center space-x-3">
+          {/* Date Range Select */}
+          <select
+            value={period}
+            onChange={(e) => handlePeriodChange(e.target.value)}
+            className="text-xs bg-white border border-onyx/10 rounded-lg px-3.5 py-2 focus:outline-none focus:border-saffron shadow-sm cursor-pointer"
+          >
+            <option value="all">All Time</option>
+            <option value="1m">Last 1 Month</option>
+            <option value="3m">Last 3 Months</option>
+            <option value="6m">Last 6 Months</option>
+            <option value="1y">Last 1 Year</option>
+          </select>
+
           <button
             onClick={handleExport}
             className="flex items-center space-x-2 px-3.5 py-2 bg-white hover:bg-cream-dark/50 border border-onyx/10 rounded-lg text-xs font-semibold text-onyx shadow-sm transition-all duration-150 cursor-pointer"
