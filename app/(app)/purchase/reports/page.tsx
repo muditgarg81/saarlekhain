@@ -12,18 +12,15 @@ export default async function PurchaseReportsPage() {
   const companyId = (session.user as any).companyId || "demo-company-id";
 
   // Fetch all necessary database records concurrently
-  const [purchaseOrders, supplierInvoices, paymentVouchers, items, vendors] = await Promise.all([
+  const [purchaseOrders, supplierInvoices, paymentVouchers, items, vendors, users] = await Promise.all([
     db.purchaseOrder.findMany({
       where: { companyId, deletedAt: null },
       include: {
-        vendor: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-          },
-        },
+        vendor: true,
         lines: true,
+        amendments: {
+          orderBy: { version: "desc" },
+        },
       },
       orderBy: { orderDate: "desc" },
     }),
@@ -56,6 +53,10 @@ export default async function PurchaseReportsPage() {
         rating: true,
       },
     }),
+    db.user.findMany({
+      where: { companyId },
+      select: { id: true, name: true, email: true },
+    }),
   ]);
 
   // Helper to calculate total value of a PO
@@ -74,6 +75,32 @@ export default async function PurchaseReportsPage() {
     const totalReceived = po.lines.reduce((sum, l) => sum + l.receivedQty, 0);
     const fulfillmentPercent = totalQty > 0 ? (totalReceived / totalQty) * 100 : 0;
 
+    const poLines = po.lines.map((line) => {
+      const item = items.find((i) => i.id === line.itemId);
+      return {
+        id: line.id,
+        itemId: line.itemId,
+        itemName: item?.name || "Unknown Item",
+        itemCode: item?.code || "N/A",
+        qty: line.qty,
+        rate: line.rate,
+        discount: line.discount,
+        gstRate: line.gstRate,
+        receivedQty: line.receivedQty,
+      };
+    });
+
+    const mappedAmendments = po.amendments?.map((am) => {
+      const creator = users.find((u) => u.id === am.createdById);
+      return {
+        id: am.id,
+        version: am.version,
+        reason: am.reason,
+        createdAt: am.createdAt.toISOString(),
+        createdBy: creator ? (creator.name || creator.email) : "System",
+      };
+    }) || [];
+
     return {
       id: po.id,
       number: po.number,
@@ -84,6 +111,20 @@ export default async function PurchaseReportsPage() {
       totalValue,
       fulfillmentPercent,
       itemCount: po.lines.length,
+      version: po.version,
+      type: po.type,
+      paymentTerms: po.paymentTerms,
+      freightTerms: po.freightTerms,
+      deliveryDate: po.deliveryDate ? po.deliveryDate.toISOString() : null,
+      vendorGstin: po.vendor?.gstin || "N/A",
+      vendorPan: po.vendor?.pan || "N/A",
+      vendorAddress: po.vendor?.address || "N/A",
+      shipTo: po.shipTo,
+      otherCharges: po.otherCharges,
+      resolvedTermsText: po.resolvedTermsText,
+      termsConditions: po.termsConditions,
+      lines: poLines,
+      amendments: mappedAmendments,
     };
   });
 
