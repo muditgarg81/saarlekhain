@@ -110,6 +110,8 @@ interface PurchaseReportsListProps {
   invoices: InvoiceRow[];
   stats: Stats;
   period: string;
+  startDate: string;
+  endDate: string;
 }
 
 type TabType = "pos" | "vendors" | "items" | "ap";
@@ -121,6 +123,8 @@ export default function PurchaseReportsList({
   invoices,
   stats,
   period,
+  startDate,
+  endDate,
 }: PurchaseReportsListProps) {
   const [activeTab, setActiveTab] = useState<TabType>("pos");
   const [search, setSearch] = useState("");
@@ -137,10 +141,29 @@ export default function PurchaseReportsList({
     const params = new URLSearchParams(searchParams.toString());
     if (val === "all") {
       params.delete("period");
+      params.delete("startDate");
+      params.delete("endDate");
+    } else if (val === "custom") {
+      params.set("period", "custom");
     } else {
       params.set("period", val);
+      params.delete("startDate");
+      params.delete("endDate");
     }
     router.push(`/purchase/reports?${params.toString()}`);
+    router.refresh();
+  };
+
+  const handleCustomDateChange = (key: "startDate" | "endDate", val: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("period", "custom");
+    if (val) {
+      params.set(key, val);
+    } else {
+      params.delete(key);
+    }
+    router.push(`/purchase/reports?${params.toString()}`);
+    router.refresh();
   };
 
   const computePoTotals = (
@@ -347,7 +370,7 @@ export default function PurchaseReportsList({
             Real-time visual metrics, price trend tracking, and reconciliation audits.
           </p>
         </div>
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-3">
           {/* Date Range Select */}
           <select
             value={period}
@@ -359,7 +382,27 @@ export default function PurchaseReportsList({
             <option value="3m">Last 3 Months</option>
             <option value="6m">Last 6 Months</option>
             <option value="1y">Last 1 Year</option>
+            <option value="custom">Custom Range</option>
           </select>
+
+          {/* Custom Date Pickers */}
+          {period === "custom" && (
+            <div className="flex items-center space-x-2 animate-in fade-in slide-in-from-left-2 duration-150">
+              <input
+                type="date"
+                value={startDate}
+                onChange={(e) => handleCustomDateChange("startDate", e.target.value)}
+                className="text-xs bg-white border border-onyx/10 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-saffron shadow-sm cursor-pointer"
+              />
+              <span className="text-[10px] text-onyx/40 font-bold uppercase">to</span>
+              <input
+                type="date"
+                value={endDate}
+                onChange={(e) => handleCustomDateChange("endDate", e.target.value)}
+                className="text-xs bg-white border border-onyx/10 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-saffron shadow-sm cursor-pointer"
+              />
+            </div>
+          )}
 
           <button
             onClick={handleExport}

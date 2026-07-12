@@ -1,15 +1,23 @@
+export const dynamic = "force-dynamic";
+
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import PurchaseReportsList from "./PurchaseReportsList";
 
 interface PageProps {
-  searchParams: Promise<{ period?: string }>;
+  searchParams: Promise<{ 
+    period?: string; 
+    startDate?: string; 
+    endDate?: string; 
+  }>;
 }
 
 export default async function PurchaseReportsPage(props: { searchParams: PageProps["searchParams"] }) {
   const searchParams = await props.searchParams;
   const period = searchParams.period || "all";
+  const startDateStr = searchParams.startDate;
+  const endDateStr = searchParams.endDate;
 
   const session = await auth();
   if (!session || !session.user) {
@@ -19,7 +27,18 @@ export default async function PurchaseReportsPage(props: { searchParams: PagePro
   const companyId = (session.user as any).companyId || "demo-company-id";
 
   let dateFilter: any = {};
-  if (period !== "all") {
+  if (period === "custom") {
+    if (startDateStr) {
+      const start = new Date(startDateStr);
+      start.setHours(0, 0, 0, 0);
+      dateFilter.gte = start;
+    }
+    if (endDateStr) {
+      const end = new Date(endDateStr);
+      end.setHours(23, 59, 59, 999);
+      dateFilter.lte = end;
+    }
+  } else if (period !== "all") {
     const startDate = new Date();
     if (period === "1m") {
       startDate.setMonth(startDate.getMonth() - 1);
@@ -34,13 +53,15 @@ export default async function PurchaseReportsPage(props: { searchParams: PagePro
     dateFilter = { gte: startDate };
   }
 
+  const hasDateFilter = period !== "all" && (period !== "custom" || Object.keys(dateFilter).length > 0);
+
   // Fetch all necessary database records concurrently
   const [purchaseOrders, supplierInvoices, paymentVouchers, items, vendors, users] = await Promise.all([
     db.purchaseOrder.findMany({
       where: { 
         companyId, 
         deletedAt: null,
-        ...(period !== "all" ? { orderDate: dateFilter } : {})
+        ...(hasDateFilter ? { orderDate: dateFilter } : {})
       },
       include: {
         vendor: true,
@@ -55,7 +76,7 @@ export default async function PurchaseReportsPage(props: { searchParams: PagePro
       where: { 
         companyId, 
         deletedAt: null,
-        ...(period !== "all" ? { invoiceDate: dateFilter } : {})
+        ...(hasDateFilter ? { invoiceDate: dateFilter } : {})
       },
       include: {
         lines: true,
@@ -65,7 +86,7 @@ export default async function PurchaseReportsPage(props: { searchParams: PagePro
     db.paymentVoucher.findMany({
       where: { 
         companyId,
-        ...(period !== "all" ? { paidOn: dateFilter } : {})
+        ...(hasDateFilter ? { paidOn: dateFilter } : {})
       },
       orderBy: { paidOn: "desc" },
     }),
@@ -304,6 +325,8 @@ export default async function PurchaseReportsPage(props: { searchParams: PagePro
       invoices={mappedInvoices}
       stats={invoiceStats}
       period={period}
+      startDate={startDateStr || ""}
+      endDate={endDateStr || ""}
     />
   );
 }
