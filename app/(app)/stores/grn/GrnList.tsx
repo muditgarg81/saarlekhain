@@ -62,6 +62,9 @@ interface Grn {
   status: string;
   createdAt: string;
   lines: GrnLine[];
+  rfqNumbers?: string[];
+  prNumbers?: string[];
+  indentNumbers?: string[];
 }
 
 interface POItem {
@@ -123,6 +126,10 @@ export default function GrnList({
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isDetailOpen, setIsDetailOpen] = useState(false);
   const [selectedGrn, setSelectedGrn] = useState<Grn | null>(null);
+  
+  // Audit trail states
+  const [selectedAuditGrn, setSelectedAuditGrn] = useState<Grn | null>(null);
+  const [isAuditTrailOpen, setIsAuditTrailOpen] = useState(false);
   
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [isEditOpen, setIsEditOpen] = useState(false);
@@ -716,7 +723,18 @@ export default function GrnList({
                           )}
                         </button>
                       </td>
-                      <td className="font-mono font-bold text-xs text-onyx/85">{g.number}</td>
+                      <td className="font-mono font-bold text-xs">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedAuditGrn(g);
+                            setIsAuditTrailOpen(true);
+                          }}
+                          className="hover:underline text-saffron-dark font-bold text-xs cursor-pointer text-left"
+                        >
+                          {g.number}
+                        </button>
+                      </td>
                       <td className="font-semibold">{g.vendorName || "Free Sample"}</td>
                       <td className="font-mono text-[11px] text-onyx/75">{g.poNumber || "-"}</td>
                       <td>{g.storeName}</td>
@@ -1661,6 +1679,144 @@ export default function GrnList({
           >
             <X size={14} />
           </button>
+        </div>
+      )}
+
+      {/* ==================== AUDIT TRAIL MODAL ==================== */}
+      {isAuditTrailOpen && selectedAuditGrn && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-cream max-w-md w-full rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
+            <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
+              <h3 className="font-heading text-sm font-bold uppercase tracking-wider">Document Audit Trail ({selectedAuditGrn.number})</h3>
+              <button onClick={() => {
+                setIsAuditTrailOpen(false);
+                setSelectedAuditGrn(null);
+              }} className="hover:text-saffron cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-6">
+              <p className="text-xs text-onyx/60">
+                Below is the upstream procurement and sourcing document history linked to this Goods Receipt Note.
+              </p>
+
+              {/* Timeline layout */}
+              <div className="relative pl-6 space-y-6 before:absolute before:bottom-2 before:top-2 before:left-2.5 before:w-0.5 before:bg-onyx/10">
+                
+                {/* 1. Indents */}
+                <div className="relative">
+                  <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-cream border-2 border-onyx/20 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-onyx/40" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-onyx/50 uppercase tracking-wider text-[10px]">1. Purchase Indent(s)</h4>
+                    {selectedAuditGrn.indentNumbers && selectedAuditGrn.indentNumbers.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {selectedAuditGrn.indentNumbers.map((num) => (
+                          <span key={num} className="font-mono text-xs font-bold bg-cream-dark px-2 py-0.5 rounded text-onyx">
+                            {num}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-onyx/40 mt-0.5 italic">No Indents linked (Direct PR/PO)</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 2. PRs */}
+                <div className="relative">
+                  <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-cream border-2 border-onyx/20 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-onyx/40" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-onyx/50 uppercase tracking-wider text-[10px]">2. Purchase Requisition(s)</h4>
+                    {selectedAuditGrn.prNumbers && selectedAuditGrn.prNumbers.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {selectedAuditGrn.prNumbers.map((num) => (
+                          <span key={num} className="font-mono text-xs font-bold bg-cream-dark px-2 py-0.5 rounded text-onyx">
+                            {num}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-onyx/40 mt-0.5 italic">No PRs linked (Direct PO)</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 3. RFQs */}
+                <div className="relative">
+                  <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-cream border-2 border-onyx/20 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-onyx/40" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-onyx/50 uppercase tracking-wider text-[10px]">3. Request For Quote(s)</h4>
+                    {selectedAuditGrn.rfqNumbers && selectedAuditGrn.rfqNumbers.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {selectedAuditGrn.rfqNumbers.map((num) => (
+                          <span key={num} className="font-mono text-xs font-bold bg-cream-dark px-2 py-0.5 rounded text-onyx">
+                            {num}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-onyx/40 mt-0.5 italic">No RFQs linked (Direct PO without bidding)</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 4. PO */}
+                <div className="relative">
+                  <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-cream border-2 border-onyx/20 flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-onyx/40" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-onyx/50 uppercase tracking-wider text-[10px]">4. Purchase Order</h4>
+                    {selectedAuditGrn.poNumber ? (
+                      <div className="mt-1">
+                        <span className="font-mono text-xs font-bold bg-saffron/20 border border-saffron/30 px-2 py-0.5 rounded text-onyx">
+                          {selectedAuditGrn.poNumber}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-xs text-onyx/40 mt-0.5 italic">Direct Receipt without PO</p>
+                    )}
+                  </div>
+                </div>
+
+                {/* 5. GRN */}
+                <div className="relative">
+                  <div className="absolute -left-6 top-1 w-5 h-5 rounded-full bg-saffron border-2 border-saffron-dark flex items-center justify-center">
+                    <div className="w-1.5 h-1.5 rounded-full bg-onyx" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-saffron-dark uppercase tracking-wider text-[10px]">5. Goods Receipt Note (GRN)</h4>
+                    <div className="mt-1">
+                      <span className="font-mono text-xs font-bold bg-saffron px-2.5 py-1 rounded text-onyx shadow-sm">
+                        {selectedAuditGrn.number}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+              </div>
+            </div>
+
+            <div className="px-6 py-4 bg-cream-dark/30 border-t border-onyx/10 flex justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setIsAuditTrailOpen(false);
+                  setSelectedAuditGrn(null);
+                }}
+                className="px-4 py-2 bg-onyx hover:bg-onyx-light text-cream-light font-bold rounded-lg text-xs cursor-pointer"
+              >
+                Close Audit Trail
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
