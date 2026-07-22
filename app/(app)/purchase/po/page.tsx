@@ -37,7 +37,7 @@ export default async function PurchaseOrdersPage() {
     }),
     db.item.findMany({
       where: { companyId, status: "ACTIVE", deletedAt: null },
-      select: { id: true, code: true, name: true, baseUom: true },
+      select: { id: true, code: true, name: true, baseUom: true, gstRate: true, make: true, specification: true },
       orderBy: { code: "asc" },
     }),
     db.vendor.findMany({
@@ -374,6 +374,7 @@ export default async function PurchaseOrdersPage() {
           gstRate: line.gstRate,
           receivedQty: line.receivedQty,
           brand: line.brand,
+          specification: line.specification,
         };
       }),
       amendments: po.amendments.map((am) => {

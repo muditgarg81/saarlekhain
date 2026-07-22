@@ -94,6 +94,9 @@ interface Item {
   code: string;
   name: string;
   baseUom: string;
+  gstRate?: number | null;
+  make?: string | null;
+  specification?: string | null;
 }
 
 interface Vendor {
@@ -214,7 +217,7 @@ export default function PurchaseOrdersList({
     termsConditions: string;
     termsPresetId: string;
     otherCharges: number;
-    lines: { itemId: string; qty: number; rate: number; discount: number; gstRate: number; brand: string }[];
+    lines: { itemId: string; qty: number; rate: number; discount: number; gstRate: number; brand: string; specification?: string }[];
     rfqId?: string | null;
   }>({
     vendorId: "",
