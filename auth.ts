@@ -6,8 +6,9 @@ import { db } from "./lib/db";
 import { authConfig } from "./auth.config";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { cookies } from "next/headers";
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
+const { handlers: rawHandlers, auth: rawAuth, signIn, signOut } = NextAuth({
   ...authConfig,
   adapter: PrismaAdapter(db),
   session: { strategy: "jwt" },
@@ -192,3 +193,14 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     }),
   ],
 });
+
+export const handlers = rawHandlers;
+export { signIn, signOut };
+export const auth = async (...args: any[]) => {
+  if (typeof window === "undefined") {
+    // Calling cookies() forces Next.js to recognize any page calling auth() as dynamic.
+    // This throws the correct internal dynamic signal during static page generation.
+    await cookies();
+  }
+  return (rawAuth as any)(...args);
+};

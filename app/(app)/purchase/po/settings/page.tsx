@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { redirect } from "next/navigation";
 import { getPresets, getTermsConfig, getCompanyProfile } from "@/app/actions/termsPresets";
 import PoTermsSettingsClient from "./PoTermsSettingsClient";

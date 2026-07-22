@@ -4,6 +4,8 @@ import AppLayoutClient from "@/components/AppLayoutClient";
 import { SessionProvider } from "next-auth/react";
 import { getFreshUser } from "@/app/actions/auth";
 
+export const dynamic = "force-dynamic";
+
 export default async function AppLayout({
   children,
 }: {

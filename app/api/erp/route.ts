@@ -136,7 +136,7 @@ async function cacheStatement(companyId: string, connectionId: string, result: a
 }
 
 // Function to enqueue a job from the Next.js server side
-export async function enqueueErpJob(companyId: string, type: "LIST_LEDGERS" | "PULL_STATEMENT" | "WRITEBACK", payload: any) {
+async function enqueueErpJob(companyId: string, type: "LIST_LEDGERS" | "PULL_STATEMENT" | "WRITEBACK", payload: any) {
   const jobId = `job_${Math.random().toString(36).substring(2, 11)}`;
   const job: ErpJob = {
     id: jobId,

@@ -85,40 +85,10 @@ export async function uploadCompanyLogo(base64Data: string, fileName: string) {
   if (!companyId) throw new Error("No active company found in session");
 
   try {
-    // Ensure upload directory exists
-    const uploadDir = path.join(process.cwd(), "public", "uploads");
-    if (!fs.existsSync(uploadDir)) {
-      fs.mkdirSync(uploadDir, { recursive: true });
-    }
-
-    // Strip content type prefix if present
-    const matches = base64Data.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    let base64Content = base64Data;
-    let extension = "png";
-
-    if (matches && matches.length === 3) {
-      const mimeType = matches[1];
-      base64Content = matches[2];
-      extension = mimeType.split("/")[1] || "png";
-    } else {
-      // Deduce from filename
-      const fileExt = fileName.split(".").pop();
-      if (fileExt) extension = fileExt;
-    }
-
-    const buffer = Buffer.from(base64Content, "base64");
-    const logoFileName = `${companyId}_logo.${extension}`;
-    const logoPath = path.join(uploadDir, logoFileName);
-
-    // Save file
-    fs.writeFileSync(logoPath, buffer);
-
-    const logoUrl = `/uploads/${logoFileName}`;
-
-    // Update company
+    // Save base64 string directly to DB to support read-only/serverless platforms (like Vercel)
     await db.company.update({
       where: { id: companyId },
-      data: { logoUrl },
+      data: { logoUrl: base64Data },
     });
 
     // Log action
@@ -129,13 +99,13 @@ export async function uploadCompanyLogo(base64Data: string, fileName: string) {
         action: "UPLOAD_LOGO",
         entity: "Company",
         entityId: companyId,
-        after: { logoUrl },
+        after: { logoUrl: "[BASE64_IMAGE_DATA]" }, // Avoid bloating audit log text columns if possible
       },
     });
 
-    return { success: true, logoUrl };
+    return { success: true, logoUrl: base64Data };
   } catch (err: any) {
-    console.error("Error writing logo file:", err);
+    console.error("Error saving logo to database:", err);
     throw new Error(`Logo upload failed: ${err.message}`);
   }
 }

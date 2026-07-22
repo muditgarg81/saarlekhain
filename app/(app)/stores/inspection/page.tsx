@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import InspectionList from "./InspectionList";
 
+export const dynamic = "force-dynamic";
+
 export default async function InspectionPage() {
   const session = await auth();
   if (!session || !session.user) {
