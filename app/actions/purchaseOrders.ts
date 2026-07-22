@@ -16,6 +16,7 @@ const poLineSchema = z.object({
   gstRate: z.number().nonnegative().default(0),
   requiredBy: z.string().optional().nullable(),
   brand: z.string().optional().nullable(),
+  specification: z.string().optional().nullable(),
 });
 
 const poSchema = z.object({
@@ -194,6 +195,7 @@ export async function createPO(data: z.infer<typeof poSchema>) {
               gstRate: l.gstRate,
               requiredBy: l.requiredBy ? new Date(l.requiredBy) : null,
               brand: l.brand || null,
+              specification: l.specification || null,
             })),
           },
         },
@@ -388,7 +390,7 @@ export async function amendPO(
     termsConditions?: string | null;
     termsPresetId?: string | null;
     otherCharges?: number;
-    lines: { itemId: string; qty: number; rate: number; discount: number; gstRate: number; brand?: string | null }[];
+    lines: { itemId: string; qty: number; rate: number; discount: number; gstRate: number; brand?: string | null; specification?: string | null }[];
   }
 ) {
   const session = await auth();
@@ -462,6 +464,7 @@ export async function amendPO(
               discount: l.discount,
               gstRate: l.gstRate,
               brand: l.brand || null,
+              specification: l.specification || null,
             })),
           },
         },
@@ -1218,6 +1221,7 @@ export async function updatePO(poId: string, data: z.infer<typeof poSchema>) {
               gstRate: l.gstRate,
               requiredBy: l.requiredBy ? new Date(l.requiredBy) : null,
               brand: l.brand || null,
+              specification: l.specification || null,
             })),
           },
         },

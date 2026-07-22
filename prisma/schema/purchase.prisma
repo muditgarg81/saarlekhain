@@ -281,6 +281,7 @@ model PoLine {
   prLineId        String? // denormalized for fast trace
   po              PurchaseOrder  @relation(fields: [poId], references: [id])
   brand           String?
+  specification   String?
 
   @@schema("purchase")
 }

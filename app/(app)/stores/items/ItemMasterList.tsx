@@ -11,7 +11,8 @@ import {
   createDepartment,
   updateDepartment,
   deleteDepartment,
-  updateReorderLevels
+  updateReorderLevels,
+  createCategory
 } from "@/app/actions/items";
 import { 
   Search, 
@@ -96,6 +97,11 @@ export default function ItemMasterList({ initialItems, categories, departments }
   // Tab states
   const [activeTab, setActiveTab] = useState<"items" | "departments">("items");
   const [departmentsList, setDepartmentsList] = useState<Department[]>(departments);
+  const [localCategories, setLocalCategories] = useState<Category[]>(categories);
+  const [isAddCatOpen, setIsAddCatOpen] = useState(false);
+  const [catFormData, setCatFormData] = useState({ code: "", name: "", parentId: "" });
+  const [catFormLoading, setCatFormLoading] = useState(false);
+  const [catFormError, setCatFormError] = useState<string | null>(null);
 
   // Department Form states
   const [deptFormData, setDeptFormData] = useState({
@@ -378,7 +384,7 @@ export default function ItemMasterList({ initialItems, categories, departments }
           if (!categoryCode) {
             errors.push("Category Code is required");
           } else {
-            matchedCat = categories.find(c => c.code.toUpperCase() === categoryCode);
+            matchedCat = localCategories.find(c => c.code.toUpperCase() === categoryCode);
             if (!matchedCat) {
               warnings.push(`Category Code '${categoryCode}' will be created`);
             }
@@ -566,7 +572,7 @@ export default function ItemMasterList({ initialItems, categories, departments }
     const dataToExport = itemsToExport.map(item => ({
       "Item Code": item.code,
       "Item Name": item.name,
-      "Category": categories.find(c => c.id === item.categoryId)?.name || "N/A",
+      "Category": localCategories.find(c => c.id === item.categoryId)?.name || "N/A",
       "Department": getDepartmentName(item.departmentId),
       "Department Code": departmentsList.find(d => d.id === item.departmentId)?.code || "N/A",
       "Type": item.type,
@@ -591,7 +597,7 @@ export default function ItemMasterList({ initialItems, categories, departments }
     setFormData(prev => ({ ...prev, categoryId: catId }));
     if (!catId) return;
 
-    const cat = categories.find(c => c.id === catId);
+    const cat = localCategories.find(c => c.id === catId);
     if (cat && modalMode === "create") {
       try {
         const suggestedCode = await getNextCode(cat.code);
@@ -609,7 +615,7 @@ export default function ItemMasterList({ initialItems, categories, departments }
       id: "",
       name: "",
       description: "",
-      categoryId: categories[0]?.id || "",
+      categoryId: localCategories[0]?.id || "",
       departmentId: "",
       type: "RAW_MATERIAL",
       baseUom: "KG",
@@ -631,9 +637,9 @@ export default function ItemMasterList({ initialItems, categories, departments }
     setIsModalOpen(true);
     
     // Auto fill suggested code for first category
-    if (categories[0]) {
+    if (localCategories[0]) {
       try {
-        const suggestedCode = await getNextCode(categories[0].code);
+        const suggestedCode = await getNextCode(localCategories[0].code);
         setFormData(prev => ({ ...prev, code: suggestedCode }));
       } catch (err) {
         console.error(err);
@@ -795,7 +801,7 @@ export default function ItemMasterList({ initialItems, categories, departments }
     const dataToExport = filteredItems.map(item => ({
       "Item Code": item.code,
       "Item Name": item.name,
-      "Category": categories.find(c => c.id === item.categoryId)?.name || "N/A",
+      "Category": localCategories.find(c => c.id === item.categoryId)?.name || "N/A",
       "Department": getDepartmentName(item.departmentId),
       "Department Code": departmentsList.find(d => d.id === item.departmentId)?.code || "N/A",
       "Type": item.type,
@@ -899,7 +905,7 @@ export default function ItemMasterList({ initialItems, categories, departments }
             className="text-xs bg-cream-dark/45 border border-onyx/10 rounded-lg px-3 py-2 focus:outline-none focus:border-saffron"
           >
             <option value="all">All Categories</option>
-            {categories.map(c => (
+            {localCategories.map(c => (
               <option key={c.id} value={c.id}>{c.name}</option>
             ))}
           </select>
@@ -1074,7 +1080,7 @@ export default function ItemMasterList({ initialItems, categories, departments }
                 </tr>
               ) : (
                 filteredItems.map((item) => {
-                  const cat = categories.find(c => c.id === item.categoryId);
+                  const cat = localCategories.find(c => c.id === item.categoryId);
                   return (
                     <tr key={item.id}>
                       <td className="text-center">
@@ -1186,7 +1192,7 @@ export default function ItemMasterList({ initialItems, categories, departments }
           </div>
         ) : (
           filteredItems.map((item) => {
-            const cat = categories.find(c => c.id === item.categoryId);
+            const cat = localCategories.find(c => c.id === item.categoryId);
             return (
               <div
                 key={item.id}
@@ -1523,18 +1529,30 @@ export default function ItemMasterList({ initialItems, categories, departments }
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                     Item Category *
                   </label>
-                  <select
-                    value={formData.categoryId}
-                    onChange={(e) => handleFormCategoryChange(e.target.value)}
-                    disabled={modalMode === "edit"}
-                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
-                    required
-                  >
-                    <option value="">Select Category</option>
-                    {categories.map(c => (
-                      <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
-                    ))}
-                  </select>
+                  <div className="flex items-center space-x-1.5">
+                    <select
+                      value={formData.categoryId}
+                      onChange={(e) => handleFormCategoryChange(e.target.value)}
+                      disabled={modalMode === "edit"}
+                      className="flex-1 text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                      required
+                    >
+                      <option value="">Select Category</option>
+                      {localCategories.map(c => (
+                        <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                      ))}
+                    </select>
+                    {modalMode === "create" && (
+                      <button
+                        type="button"
+                        onClick={() => setIsAddCatOpen(true)}
+                        className="p-2 bg-saffron hover:bg-saffron-dark text-onyx rounded-lg text-xs font-bold transition-all cursor-pointer inline-flex items-center justify-center"
+                        title="Add New Category"
+                      >
+                        <Plus size={16} />
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
@@ -1820,6 +1838,105 @@ export default function ItemMasterList({ initialItems, categories, departments }
                   className="px-4 py-2 bg-saffron hover:bg-saffron-dark rounded-lg text-xs font-bold text-onyx shadow shadow-saffron-dark/50 cursor-pointer disabled:opacity-50"
                 >
                   {formLoading ? "Saving..." : "Save Item to Master"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Category Creation Nested Modal */}
+      {isAddCatOpen && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-xs flex items-center justify-center z-[60] p-4">
+          <div className="bg-cream max-w-md w-full rounded-xl shadow-2xl border border-onyx/10 overflow-hidden animate-in zoom-in-95 duration-150">
+            <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
+              <h4 className="font-heading text-base font-bold text-cream-light">Add New Item Category</h4>
+              <button onClick={() => { setIsAddCatOpen(false); setCatFormError(null); }} className="hover:text-saffron cursor-pointer">
+                <X size={18} />
+              </button>
+            </div>
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              if (!catFormData.name || !catFormData.code) return;
+              setCatFormLoading(true);
+              setCatFormError(null);
+              const res = await createCategory({
+                code: catFormData.code.toUpperCase(),
+                name: catFormData.name,
+                parentId: catFormData.parentId || null
+              });
+              setCatFormLoading(false);
+              if (res.success && res.category) {
+                const newCat = {
+                  id: res.category.id,
+                  companyId: res.category.companyId,
+                  code: res.category.code,
+                  name: res.category.name,
+                  parentId: res.category.parentId
+                };
+                setLocalCategories(prev => [...prev, newCat]);
+                // Automatically select this category
+                handleFormCategoryChange(newCat.id);
+                setIsAddCatOpen(false);
+                setCatFormData({ code: "", name: "", parentId: "" });
+              } else {
+                setCatFormError(res.error || "Failed to create category");
+              }
+            }} className="p-6 space-y-4">
+              {catFormError && (
+                <div className="bg-red-50 border-l-4 border-red-500 p-3 rounded text-xs text-red-800 font-semibold">
+                  {catFormError}
+                </div>
+              )}
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Category Code *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. MECH, ELEC, RM"
+                  value={catFormData.code}
+                  onChange={(e) => setCatFormData(prev => ({ ...prev, code: e.target.value }))}
+                  className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono uppercase"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Category Name *</label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Mechanical Spares"
+                  value={catFormData.name}
+                  onChange={(e) => setCatFormData(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">Parent Category (Optional)</label>
+                <select
+                  value={catFormData.parentId}
+                  onChange={(e) => setCatFormData(prev => ({ ...prev, parentId: e.target.value }))}
+                  className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                >
+                  <option value="">None (Top-Level Category)</option>
+                  {localCategories.map(c => (
+                    <option key={c.id} value={c.id}>{c.name} ({c.code})</option>
+                  ))}
+                </select>
+              </div>
+              <div className="flex space-x-2 pt-2">
+                <button
+                  type="button"
+                  onClick={() => { setIsAddCatOpen(false); setCatFormError(null); }}
+                  className="flex-1 py-2 border border-onyx/10 hover:bg-cream-dark text-xs font-bold rounded-lg cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={catFormLoading}
+                  className="flex-1 py-2 bg-saffron hover:bg-saffron-dark text-xs font-bold text-onyx rounded-lg shadow-sm cursor-pointer disabled:opacity-50"
+                >
+                  {catFormLoading ? "Saving..." : "Add Category"}
                 </button>
               </div>
             </form>

@@ -925,3 +925,48 @@ export async function getItemStockLogs(
   }
 }
 
+const categorySchema = z.object({
+  code: z.string().min(1, "Category code is required").max(10).toUpperCase(),
+  name: z.string().min(2, "Category name must be at least 2 characters"),
+  parentId: z.string().optional().nullable(),
+});
+
+export async function createCategory(data: z.infer<typeof categorySchema>) {
+  const session = await auth();
+  if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  const companyId = (session.user as any).companyId;
+  const actorId = (session.user as any).id;
+
+  try {
+    const validated = categorySchema.parse(data);
+
+    // Check if code already exists
+    const exists = await db.itemCategory.findFirst({
+      where: { companyId, code: validated.code }
+    });
+    if (exists) {
+      return { success: false, error: `Category code '${validated.code}' already exists` };
+    }
+
+    const category = await db.$transaction(async (tx) => {
+      const cat = await tx.itemCategory.create({
+        data: {
+          companyId,
+          code: validated.code,
+          name: validated.name,
+          parentId: validated.parentId || null,
+        }
+      });
+      await logAudit(tx, companyId, actorId, "CREATE", "ItemCategory", cat.id, null, cat);
+      return cat;
+    });
+
+    revalidatePath("/stores/items");
+    return { success: true, category };
+  } catch (err: any) {
+    console.error("Error creating category:", err);
+    return { success: false, error: err.message || "Failed to create category" };
+  }
+}
+

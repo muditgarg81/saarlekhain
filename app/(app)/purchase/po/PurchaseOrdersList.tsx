@@ -46,6 +46,7 @@ interface LineItem {
   gstRate: number;
   receivedQty: number;
   brand: string | null;
+  specification: string | null;
 }
 
 interface AmendmentRecord {
@@ -227,7 +228,7 @@ export default function PurchaseOrdersList({
     otherCharges: 0,
     lines: []
   });
-  const [newPoLine, setNewPoLine] = useState({ itemId: "", qty: 1, rate: 0, discount: 0, gstRate: 18, brand: "" });
+  const [newPoLine, setNewPoLine] = useState({ itemId: "", qty: 1, rate: 0, discount: 0, gstRate: 18, brand: "", specification: "" });
 
   // Amend Form State
   const [amendForm, setAmendForm] = useState({
@@ -239,7 +240,7 @@ export default function PurchaseOrdersList({
     termsConditions: "",
     termsPresetId: "",
     otherCharges: 0,
-    lines: [] as { itemId: string; qty: number; rate: number; discount: number; gstRate: number; brand?: string | null }[]
+    lines: [] as { itemId: string; qty: number; rate: number; discount: number; gstRate: number; brand?: string | null; specification?: string | null }[]
   });
 
   const [actionLoading, setActionLoading] = useState(false);
@@ -634,10 +635,17 @@ export default function PurchaseOrdersList({
         totalTaxable,
         po.otherCharges
       );
+      let desc = line.itemName;
+      if (line.brand) {
+        desc += `\nBrand/Make: ${line.brand}`;
+      }
+      if (line.specification) {
+        desc += `\nTech Specs: ${line.specification}`;
+      }
       return [
         index + 1,
         line.itemCode,
-        line.brand ? `${line.itemName}\nBrand/Make: ${line.brand}` : line.itemName,
+        desc,
         line.qty,
         line.rate.toFixed(2),
         line.discount + "%",
@@ -778,7 +786,7 @@ export default function PurchaseOrdersList({
       ...prev,
       lines: [...prev.lines, { ...newPoLine }]
     }));
-    setNewPoLine({ itemId: "", qty: 1, rate: 0, discount: 0, gstRate: 18, brand: "" });
+    setNewPoLine({ itemId: "", qty: 1, rate: 0, discount: 0, gstRate: 18, brand: "", specification: "" });
   };
 
   const toggleSelect = (id: string) => {
@@ -831,7 +839,8 @@ export default function PurchaseOrdersList({
         rate: line.rate,
         discount: line.discount,
         gstRate: line.gstRate,
-        brand: line.brand || ""
+        brand: line.brand || "",
+        specification: line.specification || ""
       }))
     });
     setIsOpen(true);
@@ -911,7 +920,8 @@ export default function PurchaseOrdersList({
         rate: l.rate,
         discount: l.discount,
         gstRate: l.gstRate,
-        brand: l.brand || ""
+        brand: l.brand || "",
+        specification: l.specification || ""
       }))
     });
     setIsAmendOpen(true);
@@ -1646,22 +1656,47 @@ export default function PurchaseOrdersList({
               {/* Add line item */}
               <div className="p-4 bg-cream-dark/30 border border-onyx/5 rounded-xl space-y-3">
                 <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/60">Add Line Item</h4>
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                  <div className="sm:col-span-3">
+                
+                {/* Item Select and Tech Specs row */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                  <div className="sm:col-span-4">
                     <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
                     <SearchableItemSelect
                       items={items}
                       value={newPoLine.itemId}
-                      onChange={(val) => setNewPoLine(prev => ({ ...prev, itemId: val }))}
+                      onChange={(val) => {
+                        const item = items.find(i => i.id === val);
+                        setNewPoLine(prev => ({
+                          ...prev,
+                          itemId: val,
+                          gstRate: item?.gstRate ?? prev.gstRate,
+                          brand: item?.make ?? prev.brand ?? "",
+                          specification: item?.specification ?? "",
+                        }));
+                      }}
                       placeholder="Select Item"
                     />
                   </div>
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-8">
+                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Tech Specs / Technical Specification</label>
+                    <input
+                      type="text"
+                      placeholder="e.g. Size, Grade, Standards, drawing ref..."
+                      value={newPoLine.specification}
+                      onChange={(e) => setNewPoLine(prev => ({ ...prev, specification: e.target.value }))}
+                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                    />
+                  </div>
+                </div>
+
+                {/* Quantities, pricing and action row */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                  <div className="sm:col-span-3">
                     <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Brand / Make</label>
                     <input
                       type="text"
                       placeholder="e.g. Tata, SKF"
-                      value={newPoLine.brand}
+                      value={newPoLine.brand || ""}
                       onChange={(e) => setNewPoLine(prev => ({ ...prev, brand: e.target.value }))}
                       className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg"
                     />
@@ -1675,7 +1710,7 @@ export default function PurchaseOrdersList({
                       className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
                     />
                   </div>
-                  <div className="sm:col-span-2">
+                  <div className="sm:col-span-3">
                     <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Basic Rate *</label>
                     <input
                       type="number"
@@ -1685,7 +1720,7 @@ export default function PurchaseOrdersList({
                       className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
                     />
                   </div>
-                  <div className="sm:col-span-1">
+                  <div className="sm:col-span-2">
                     <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Discount %</label>
                     <input
                       type="number"
@@ -1761,9 +1796,14 @@ export default function PurchaseOrdersList({
                             <tr key={idx} className="border-t border-onyx/5">
                               <td className="p-2">
                                 <div>[{item?.code}] {item?.name}</div>
-                                {line.brand && (
-                                  <div className="text-[10px] text-emerald-800 font-bold mt-0.5">Brand/Make: {line.brand}</div>
-                                )}
+                                <div className="flex flex-wrap gap-x-3 mt-0.5">
+                                  {line.brand && (
+                                    <span className="text-[10px] text-emerald-800 font-bold">Brand: {line.brand}</span>
+                                  )}
+                                  {line.specification && (
+                                    <span className="text-[10px] text-onyx/60 font-medium">Specs: {line.specification}</span>
+                                  )}
+                                </div>
                               </td>
                               <td className="p-2 text-right font-mono">{line.qty}</td>
                               <td className="p-2 text-right font-mono">₹{line.rate.toFixed(2)}</td>
@@ -2058,6 +2098,14 @@ export default function PurchaseOrdersList({
                           <tr key={line.itemId} className="border-t border-onyx/5">
                             <td className="p-2.5">
                               <p className="font-semibold">[{originalLine?.itemCode}] {originalLine?.itemName}</p>
+                              <div className="flex flex-wrap gap-x-3 mt-0.5">
+                                {line.brand && (
+                                  <span className="text-[10px] text-emerald-800 font-bold">Brand: {line.brand}</span>
+                                )}
+                                {line.specification && (
+                                  <span className="text-[10px] text-onyx/60 font-medium">Specs: {line.specification}</span>
+                                )}
+                              </div>
                             </td>
                             <td className="p-2.5">
                               <input
@@ -2280,9 +2328,14 @@ export default function PurchaseOrdersList({
                           <tr key={line.id} className="border-t border-onyx/5">
                             <td className="p-2.5">
                               <div>[{line.itemCode}] {line.itemName}</div>
-                              {line.brand && (
-                                <div className="text-[10px] text-emerald-800 font-bold mt-0.5">Brand/Make: {line.brand}</div>
-                              )}
+                              <div className="flex flex-wrap gap-x-3 mt-0.5">
+                                {line.brand && (
+                                  <span className="text-[10px] text-emerald-800 font-bold">Brand: {line.brand}</span>
+                                )}
+                                {line.specification && (
+                                  <span className="text-[10px] text-onyx/60 font-medium">Specs: {line.specification}</span>
+                                )}
+                              </div>
                             </td>
                             <td className="p-2.5 text-right font-mono">₹{line.rate.toFixed(2)}</td>
                             <td className="p-2.5 text-right font-mono font-bold">{line.qty}</td>
