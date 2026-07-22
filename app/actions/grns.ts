@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { getNextSequence } from "@/lib/sequences";
 import { postLedgerEntry } from "@/lib/stock";
 import { revalidatePath } from "next/cache";
-import { GrnStatus, LedgerTxnType, PoStatus, GrnSource } from "@prisma/client";
+import { GrnStatus, LedgerTxnType, PoStatus, GrnSource, InvoiceMatchStatus } from "@prisma/client";
 import { recalculateInvoiceMatchStatus } from "./invoices";
 
 interface GrnLineInput {
@@ -273,6 +273,9 @@ export async function postGrn(id: string) {
         await recalculateInvoiceMatchStatus(tx, companyId, grn.poId);
       }
 
+      // Auto-create draft SupplierInvoice
+      await autoCreateDraftInvoice(tx, companyId, grn.id, actorId);
+
       // Fetch the updated GRN to log its current state accurately in the audit log
       const fullyUpdatedGrn = await tx.grn.findUnique({
         where: { id },
@@ -297,6 +300,7 @@ export async function postGrn(id: string) {
     revalidatePath("/stores/grn");
     revalidatePath("/stores/reports");
     revalidatePath("/purchase/po");
+    revalidatePath("/purchase/invoices");
     return { success: true, grn: result };
   } catch (err: any) {
     console.error("Error posting GRN:", err);
@@ -536,6 +540,9 @@ export async function updateGrn(
             data: { status: nextPoStatus }
           });
         }
+
+        // Auto-create draft SupplierInvoice
+        await autoCreateDraftInvoice(tx, companyId, id, actorId);
       }
 
       // Recalculate invoice matching status if linked to a PO
@@ -564,6 +571,7 @@ export async function updateGrn(
     revalidatePath("/stores/inspection");
     revalidatePath("/purchase/po");
     revalidatePath("/stores/reports");
+    revalidatePath("/purchase/invoices");
     return { success: true, grn: result };
   } catch (err: any) {
     console.error("Error updating GRN:", err);
@@ -693,4 +701,113 @@ export async function bulkDeleteGrns(ids: string[]) {
     console.error("Error bulk deleting GRNs:", err);
     return { success: false, error: err.message || "Failed to bulk delete GRNs" };
   }
+}
+
+/**
+ * Automatically creates a SupplierInvoice draft (PENDING match status) when a GRN is posted.
+ */
+async function autoCreateDraftInvoice(
+  tx: any,
+  companyId: string,
+  grnId: string,
+  actorId: string
+) {
+  // 1. Fetch the GRN with its lines inside the transaction boundary
+  const grn = await tx.grn.findUnique({
+    where: { id: grnId },
+    include: { lines: true }
+  });
+  if (!grn || grn.status !== GrnStatus.POSTED) return;
+
+  // 2. Resolve vendorId
+  let vendorId = grn.vendorId;
+  if (!vendorId && grn.poId) {
+    const po = await tx.purchaseOrder.findUnique({
+      where: { id: grn.poId },
+      select: { vendorId: true }
+    });
+    if (po) {
+      vendorId = po.vendorId;
+    }
+  }
+  if (!vendorId) return; // Cannot create invoice without vendorId
+
+  // 3. Resolve invoiceNo
+  const invoiceNo = grn.invoiceNo || grn.dcNo || `DRAFT_${grn.number}`;
+
+  // 4. Check if an invoice with this invoiceNo already exists for this vendor to prevent unique constraint error
+  const existing = await tx.supplierInvoice.findUnique({
+    where: {
+      companyId_vendorId_invoiceNo: {
+        companyId,
+        vendorId,
+        invoiceNo
+      }
+    }
+  });
+  if (existing) return; // Skip if already exists
+
+  // 5. Gather line items and compute rates & amounts
+  const invoiceLinesData = [];
+  let totalAmount = 0;
+
+  for (const line of grn.lines) {
+    if (line.acceptedQty <= 0) continue;
+
+    let rate = 0;
+    if (line.poLineId) {
+      const poLine = await tx.poLine.findUnique({
+        where: { id: line.poLineId },
+        select: { rate: true, discount: true }
+      });
+      if (poLine) {
+        // Apply PO line discount
+        rate = poLine.rate * (1 - poLine.discount / 100);
+      }
+    } else {
+      // Fallback: search for last PO line rate or invoice line rate for this item
+      const lastPoLine = await tx.poLine.findFirst({
+        where: { itemId: line.itemId },
+        orderBy: { id: "desc" },
+        select: { rate: true }
+      });
+      rate = lastPoLine?.rate || 0;
+    }
+
+    invoiceLinesData.push({
+      itemId: line.itemId,
+      qty: line.acceptedQty,
+      rate: rate
+    });
+    totalAmount += line.acceptedQty * rate;
+  }
+
+  if (invoiceLinesData.length === 0) return;
+
+  // 6. Get credit days for the vendor
+  const vendor = await tx.vendor.findFirst({
+    where: { id: vendorId, companyId },
+    select: { creditDays: true }
+  });
+  const creditDays = vendor?.creditDays || 0;
+  const invoiceDateObj = new Date(grn.dcDate || grn.postedAt || new Date());
+  const dueDateObj = new Date(invoiceDateObj);
+  dueDateObj.setDate(dueDateObj.getDate() + creditDays);
+
+  // 7. Create SupplierInvoice
+  await tx.supplierInvoice.create({
+    data: {
+      companyId,
+      vendorId,
+      poId: grn.poId || null,
+      invoiceNo,
+      invoiceDate: invoiceDateObj,
+      amount: totalAmount,
+      dueDate: dueDateObj,
+      matchStatus: InvoiceMatchStatus.PENDING,
+      lines: {
+        create: invoiceLinesData
+      }
+    }
+  });
 }
