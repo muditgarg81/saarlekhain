@@ -1668,7 +1668,7 @@ export default function PurchaseOrdersList({
                       items={items}
                       value={newPoLine.itemId}
                       onChange={(val) => {
-                        const item = items.find(i => i.id === val);
+                        const item = items.find(i => i.id === val) as any;
                         setNewPoLine(prev => ({
                           ...prev,
                           itemId: val,
