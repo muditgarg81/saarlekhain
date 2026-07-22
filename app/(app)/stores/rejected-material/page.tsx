@@ -44,7 +44,7 @@ export default async function RejectedMaterialPage() {
       select: { id: true, code: true, name: true, qcRequired: true }
     }),
     db.vendor.findMany({
-      where: { companyId, deletedAt: null },
+      where: { companyId, status: "APPROVED", deletedAt: null },
       select: { id: true, name: true }
     }),
     db.grn.findMany({

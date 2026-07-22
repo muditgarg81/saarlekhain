@@ -67,6 +67,7 @@ export default async function OutwardsPage() {
     db.vendor.findMany({
       where: {
         companyId,
+        status: "APPROVED",
         deletedAt: null,
       },
       select: {

@@ -49,7 +49,7 @@ export default async function RequisitionsPage() {
       orderBy: { code: "asc" },
     }),
     db.vendor.findMany({
-      where: { companyId, deletedAt: null },
+      where: { companyId, status: "APPROVED", deletedAt: null },
       select: { id: true, name: true, code: true, minOrderValue: true },
       orderBy: { code: "asc" },
     }),

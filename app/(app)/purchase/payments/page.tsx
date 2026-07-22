@@ -59,7 +59,7 @@ export default async function PaymentsPage() {
       orderBy: { invoiceDate: "desc" },
     }),
     db.vendor.findMany({
-      where: { companyId, deletedAt: null },
+      where: { companyId, status: "APPROVED", deletedAt: null },
       select: { id: true, name: true, code: true, creditDays: true, address: true, gstin: true, pan: true },
       orderBy: { code: "asc" },
     }),

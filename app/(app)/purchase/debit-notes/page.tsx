@@ -20,7 +20,7 @@ export default async function DebitNotesPage() {
       orderBy: { createdAt: "desc" }
     }),
     db.vendor.findMany({
-      where: { companyId, deletedAt: null },
+      where: { companyId, status: "APPROVED", deletedAt: null },
       select: { id: true, name: true, code: true },
       orderBy: { code: "asc" }
     })
