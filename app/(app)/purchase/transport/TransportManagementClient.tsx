@@ -515,8 +515,8 @@ export default function TransportManagementClient({
         </div>
       </div>
 
-      {/* Tabs Menu */}
-      <div className="flex border-b border-onyx/10">
+      {/* Tabs Menu — hidden on dashboard */}
+      <div className={`flex border-b border-onyx/10 ${activeTab === "dashboard" ? "hidden" : ""}`}>
         {[
           { id: "dashboard", label: "Dashboard" },
           { id: "orders", label: "Transport Orders" },
