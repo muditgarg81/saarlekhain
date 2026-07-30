@@ -21,6 +21,8 @@ import {
   ChevronDown,
   ChevronUp,
   Route,
+  Pencil,
+  Printer,
 } from "lucide-react";
 import { 
   createTransportRate, 
@@ -144,6 +146,12 @@ export default function TransportManagementClient({
 
   const [freightRateLocked, setFreightRateLocked] = useState(false);
   const [selectedContractId, setSelectedContractId] = useState("");
+  const [editingOrder, setEditingOrder] = useState<Order | null>(null);
+  const [editForm, setEditForm] = useState({
+    vehicleNo: "", driverName: "", driverPhone: "",
+    loadingPoint: "", unloadingPoint: "", tripDescription: "",
+    freightAmount: 0, otherCharges: 0, taxRate: 5, poId: "",
+  });
 
   // Modals state
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -406,6 +414,45 @@ export default function TransportManagementClient({
     }
   };
 
+  // Edit order
+  const handleOpenEdit = (o: Order) => {
+    setEditingOrder(o);
+    setEditForm({
+      vehicleNo: o.vehicleNo || "",
+      driverName: o.driverName || "",
+      driverPhone: o.driverPhone || "",
+      loadingPoint: o.loadingPoint || "",
+      unloadingPoint: o.unloadingPoint || "",
+      tripDescription: o.tripDescription || "",
+      freightAmount: o.freightAmount,
+      otherCharges: o.otherCharges,
+      taxRate: o.taxRate,
+      poId: o.poId || "",
+    });
+  };
+
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingOrder) return;
+    const res = await updateTransportOrder(editingOrder.id, {
+      vehicleNo: editForm.vehicleNo || undefined,
+      driverName: editForm.driverName || undefined,
+      driverPhone: editForm.driverPhone || undefined,
+      loadingPoint: editForm.loadingPoint || undefined,
+      unloadingPoint: editForm.unloadingPoint || undefined,
+      tripDescription: editForm.tripDescription || null,
+      freightAmount: editForm.freightAmount,
+      otherCharges: editForm.otherCharges,
+      taxRate: editForm.taxRate,
+      poId: editForm.poId || null,
+    });
+    if (res.success) {
+      setEditingOrder(null);
+    } else {
+      alert(res.error);
+    }
+  };
+
   // Actions
   const handleUpdateOrderStatus = async (id: string, nextStatus: string) => {
     const res = await updateTransportOrder(id, { status: nextStatus as any });
@@ -551,8 +598,8 @@ export default function TransportManagementClient({
         </div>
       </div>
 
-      {/* Tabs Menu — hidden on dashboard */}
-      <div className={`flex border-b border-onyx/10 ${activeTab === "dashboard" ? "hidden" : ""}`}>
+      {/* Tabs Menu — hidden (navigation via sidebar) */}
+      <div className="hidden">
         {[
           { id: "dashboard", label: "Dashboard" },
           { id: "orders", label: "Transport Orders" },
@@ -779,6 +826,20 @@ export default function TransportManagementClient({
                             Delivered
                           </button>
                         )}
+                        <button
+                          onClick={() => handleOpenEdit(o)}
+                          className="text-saffron hover:text-saffron/70 p-1 cursor-pointer"
+                          title="Edit Order"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={() => window.open(`/logistics/orders/${o.id}/print`, "_blank")}
+                          className="text-blue-500 hover:text-blue-700 p-1 cursor-pointer"
+                          title="Print / PDF"
+                        >
+                          <Printer size={14} />
+                        </button>
                         <button
                           onClick={() => handleDeleteOrder(o.id)}
                           className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
@@ -1263,6 +1324,110 @@ export default function TransportManagementClient({
             <div className="p-4 border-t border-onyx/5 flex items-center justify-end space-x-3">
               <button type="button" onClick={() => { setShowOrderModal(false); setFreightRateLocked(false); setSelectedContractId(""); }} className="px-4 py-2 border border-onyx/10 rounded-lg text-xs font-semibold hover:bg-cream-dark/10 transition cursor-pointer">Cancel</button>
               <button type="submit" className="px-4 py-2 bg-saffron hover:bg-saffron-dark text-onyx rounded-lg text-xs font-bold shadow transition cursor-pointer">Place Transport Order</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL: EDIT TRANSPORT ORDER */}
+      {editingOrder && (
+        <div className="fixed inset-0 bg-onyx-dark/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleEditSubmit} className="bg-white rounded-xl shadow-xl w-full max-w-2xl border border-onyx/10 flex flex-col max-h-[90vh]">
+            <div className="p-4 border-b border-onyx/5 bg-cream-dark/15 flex items-center justify-between">
+              <h3 className="font-bold text-onyx flex items-center text-sm uppercase">
+                <Pencil className="mr-2 text-saffron" size={16} />
+                Edit Transport Order — <span className="font-mono ml-1">{editingOrder.number}</span>
+              </h3>
+              <button type="button" onClick={() => setEditingOrder(null)} className="text-onyx/40 hover:text-onyx transition cursor-pointer">✕</button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4 text-xs">
+              {/* Vehicle & Driver */}
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">Vehicle No.</label>
+                  <input className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron"
+                    value={editForm.vehicleNo} onChange={e => setEditForm(f => ({ ...f, vehicleNo: e.target.value }))} placeholder="MH49AT1466" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">Driver Name</label>
+                  <input className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron"
+                    value={editForm.driverName} onChange={e => setEditForm(f => ({ ...f, driverName: e.target.value }))} placeholder="Driver name" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">Driver Phone</label>
+                  <input className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron"
+                    value={editForm.driverPhone} onChange={e => setEditForm(f => ({ ...f, driverPhone: e.target.value }))} placeholder="9876543210" />
+                </div>
+              </div>
+
+              {/* Loading / Unloading */}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">Loading Point</label>
+                  <input className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron"
+                    value={editForm.loadingPoint} onChange={e => setEditForm(f => ({ ...f, loadingPoint: e.target.value }))} placeholder="e.g. Main Gate" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">Unloading Point</label>
+                  <input className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron"
+                    value={editForm.unloadingPoint} onChange={e => setEditForm(f => ({ ...f, unloadingPoint: e.target.value }))} placeholder="e.g. Warehouse B" />
+                </div>
+              </div>
+
+              {/* Trip Description */}
+              <div>
+                <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">Trip Description / Remarks</label>
+                <textarea rows={2} className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron resize-none"
+                  value={editForm.tripDescription} onChange={e => setEditForm(f => ({ ...f, tripDescription: e.target.value }))} placeholder="Goods description, special instructions..." />
+              </div>
+
+              {/* Linked PO */}
+              <div>
+                <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">Linked Purchase Order</label>
+                <select className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron"
+                  value={editForm.poId} onChange={e => setEditForm(f => ({ ...f, poId: e.target.value }))}>
+                  <option value="">— None —</option>
+                  {purchaseOrders.map(po => <option key={po.id} value={po.id}>{po.number}</option>)}
+                </select>
+              </div>
+
+              {/* Freight Costs */}
+              <div className="border-t border-onyx/5 pt-4">
+                <p className="text-[10px] font-bold uppercase text-onyx/40 tracking-wider mb-3">Freight Cost Details</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">Base Freight (₹)</label>
+                    <input type="number" min="0" step="0.01" required
+                      className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron"
+                      value={editForm.freightAmount} onChange={e => setEditForm(f => ({ ...f, freightAmount: parseFloat(e.target.value) || 0 }))} />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">Other Charges (₹)</label>
+                    <input type="number" min="0" step="0.01"
+                      className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron"
+                      value={editForm.otherCharges} onChange={e => setEditForm(f => ({ ...f, otherCharges: parseFloat(e.target.value) || 0 }))} />
+                  </div>
+                  <div>
+                    <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">GST Rate (%)</label>
+                    <select className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron"
+                      value={editForm.taxRate} onChange={e => setEditForm(f => ({ ...f, taxRate: parseFloat(e.target.value) }))}>
+                      <option value={0}>0%</option>
+                      <option value={5}>5%</option>
+                      <option value={12}>12%</option>
+                      <option value={18}>18%</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-2 text-right font-bold text-sm text-onyx">
+                  Total: ₹{((editForm.freightAmount + editForm.otherCharges) * (1 + editForm.taxRate / 100)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-onyx/5 flex items-center justify-end space-x-3">
+              <button type="button" onClick={() => setEditingOrder(null)} className="px-4 py-2 border border-onyx/10 rounded-lg text-xs font-semibold hover:bg-cream-dark/10 transition cursor-pointer">Cancel</button>
+              <button type="submit" className="px-4 py-2 bg-saffron hover:bg-saffron-dark text-onyx rounded-lg text-xs font-bold shadow transition cursor-pointer">Save Changes</button>
             </div>
           </form>
         </div>

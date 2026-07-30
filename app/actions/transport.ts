@@ -182,6 +182,7 @@ export async function updateTransportOrder(
     freightAmount?: number;
     otherCharges?: number;
     taxRate?: number;
+    tripDescription?: string | null;
     status?: TransportOrderStatus;
     poId?: string | null;
     grnId?: string | null;
@@ -218,6 +219,7 @@ export async function updateTransportOrder(
         otherCharges: other,
         taxRate: tax,
         totalAmount,
+        tripDescription: data.tripDescription,
         status: data.status,
         poId: data.poId,
         grnId: data.grnId,
