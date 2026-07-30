@@ -55,6 +55,7 @@ export async function getLogisticsData(companyId: string) {
 
   const mappedRates = rates.map((r) => ({
     id: r.id,
+    contractNo: r.contractNo,
     transporterId: r.transporterId,
     transporterName: r.transporter.name,
     fromLocation: r.fromLocation,

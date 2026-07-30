@@ -19,7 +19,8 @@ import {
   Trash2,
   Edit2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Route,
 } from "lucide-react";
 import { 
   createTransportRate, 
@@ -44,6 +45,7 @@ interface Transporter {
 
 interface Rate {
   id: string;
+  contractNo: string | null;
   transporterId: string;
   transporterName: string;
   fromLocation: string;
@@ -140,6 +142,7 @@ export default function TransportManagementClient({
   const [expandedBillId, setExpandedBillId] = useState<string | null>(null);
 
   const [freightRateLocked, setFreightRateLocked] = useState(false);
+  const [selectedContractId, setSelectedContractId] = useState("");
 
   // Modals state
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -210,6 +213,27 @@ export default function TransportManagementClient({
     return match ? match.rate : null;
   };
 
+  // Populate all order fields from a selected contract
+  const handleContractSelect = (contractId: string) => {
+    setSelectedContractId(contractId);
+    if (!contractId) {
+      setFreightRateLocked(false);
+      return;
+    }
+    const contract = rates.find((r) => r.id === contractId);
+    if (contract) {
+      setNewOrder((prev) => ({
+        ...prev,
+        transporterId: contract.transporterId,
+        vehicleCapacity: contract.vehicleCapacity,
+        fromLocation: contract.fromLocation,
+        toLocation: contract.toLocation,
+        freightAmount: contract.rate,
+      }));
+      setFreightRateLocked(true);
+    }
+  };
+
   // Auto-rate trigger during order form input
   const triggerRateFill = (field: string, val: string) => {
     const updated = { ...newOrder, [field]: val };
@@ -249,6 +273,7 @@ export default function TransportManagementClient({
     if (res.success) {
       setShowOrderModal(false);
       setFreightRateLocked(false);
+      setSelectedContractId("");
       setNewOrder({
         transporterId: "",
         vehicleCapacity: "1000 kgs",
@@ -777,17 +802,19 @@ export default function TransportManagementClient({
             <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-cream-dark/50 border-b border-onyx/5">
                 <tr>
+                  <th className="p-3 font-bold uppercase text-onyx/60">Contract No</th>
                   <th className="p-3 font-bold uppercase text-onyx/60">Transporter</th>
                   <th className="p-3 font-bold uppercase text-onyx/60">From Location</th>
                   <th className="p-3 font-bold uppercase text-onyx/60">To Location</th>
                   <th className="p-3 font-bold uppercase text-onyx/60">Vehicle Capacity</th>
-                  <th className="p-3 font-bold uppercase text-right text-onyx/60">Standard Rate (₹)</th>
+                  <th className="p-3 font-bold uppercase text-right text-onyx/60">Rate (₹)</th>
                   <th className="p-3 font-bold uppercase text-center text-onyx/60">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-onyx/5 font-mono">
                 {filteredContracts.map((r) => (
                   <tr key={r.id} className="hover:bg-cream-dark/15 transition-colors">
+                    <td className="p-3 font-mono font-bold text-onyx">{r.contractNo || "—"}</td>
                     <td className="p-3 font-sans font-semibold text-onyx">{r.transporterName}</td>
                     <td className="p-3 font-sans text-onyx">{r.fromLocation}</td>
                     <td className="p-3 font-sans text-onyx">{r.toLocation}</td>
@@ -807,8 +834,8 @@ export default function TransportManagementClient({
                 ))}
                 {filteredContracts.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-onyx/40 font-medium font-sans">
-                      No contracts defined. Click "Define Route Rate" to add.
+                    <td colSpan={7} className="p-8 text-center text-onyx/40 font-medium font-sans">
+                      No contracts defined yet. Click "Define Route Rate" to add one.
                     </td>
                   </tr>
                 )}
@@ -988,6 +1015,33 @@ export default function TransportManagementClient({
             </div>
 
             <div className="p-6 space-y-4 overflow-y-auto flex-1">
+              {/* Contract selector */}
+              {rates.length > 0 && (
+                <div className="bg-saffron/5 border border-saffron/20 rounded-xl p-3 space-y-1">
+                  <label className="text-[10px] font-bold uppercase text-onyx/60 flex items-center gap-1">
+                    <Route size={11} className="text-saffron" />
+                    Select Contract to Auto-Fill
+                  </label>
+                  <select
+                    value={selectedContractId}
+                    onChange={(e) => handleContractSelect(e.target.value)}
+                    className="w-full text-xs p-2 bg-white border border-saffron/30 rounded-lg focus:outline-none focus:border-saffron"
+                  >
+                    <option value="">— Pick a contract (optional) —</option>
+                    {rates.map((r) => (
+                      <option key={r.id} value={r.id}>
+                        {r.contractNo ? `[${r.contractNo}] ` : ""}{r.transporterName} · {r.fromLocation} → {r.toLocation} · {r.vehicleCapacity} · ₹{r.rate.toLocaleString("en-IN")}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedContractId && (
+                    <p className="text-[10px] text-emerald-700 font-semibold mt-1">
+                      ✓ Contract applied — transporter, route, capacity and rate are pre-filled and locked.
+                    </p>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {/* Transporter */}
                 <div className="space-y-1">
@@ -996,7 +1050,8 @@ export default function TransportManagementClient({
                     value={newOrder.transporterId}
                     onChange={(e) => triggerRateFill("transporterId", e.target.value)}
                     required
-                    className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                    disabled={!!selectedContractId}
+                    className={`w-full text-xs p-2 bg-white border rounded-lg focus:outline-none ${selectedContractId ? "border-emerald-200 bg-emerald-50 text-emerald-800 cursor-not-allowed" : "border-onyx/10 focus:border-saffron"}`}
                   >
                     <option value="">Select Transporter</option>
                     {transporters.map((t) => (
@@ -1012,7 +1067,8 @@ export default function TransportManagementClient({
                     value={newOrder.vehicleCapacity}
                     onChange={(e) => triggerRateFill("vehicleCapacity", e.target.value)}
                     required
-                    className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                    disabled={!!selectedContractId}
+                    className={`w-full text-xs p-2 bg-white border rounded-lg focus:outline-none ${selectedContractId ? "border-emerald-200 bg-emerald-50 text-emerald-800 cursor-not-allowed" : "border-onyx/10 focus:border-saffron"}`}
                   >
                     {LOAD_CAPACITIES.map((c) => (
                       <option key={c} value={c}>{c}</option>
@@ -1026,10 +1082,11 @@ export default function TransportManagementClient({
                   <input
                     type="text"
                     required
+                    readOnly={!!selectedContractId}
                     placeholder="e.g. Warehouse Delhi"
                     value={newOrder.fromLocation}
                     onChange={(e) => triggerRateFill("fromLocation", e.target.value)}
-                    className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                    className={`w-full text-xs p-2 border rounded-lg focus:outline-none ${selectedContractId ? "border-emerald-200 bg-emerald-50 text-emerald-800 cursor-not-allowed" : "border-onyx/10 focus:border-saffron"}`}
                   />
                 </div>
 
@@ -1039,10 +1096,11 @@ export default function TransportManagementClient({
                   <input
                     type="text"
                     required
+                    readOnly={!!selectedContractId}
                     placeholder="e.g. Factory Pune"
                     value={newOrder.toLocation}
                     onChange={(e) => triggerRateFill("toLocation", e.target.value)}
-                    className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                    className={`w-full text-xs p-2 border rounded-lg focus:outline-none ${selectedContractId ? "border-emerald-200 bg-emerald-50 text-emerald-800 cursor-not-allowed" : "border-onyx/10 focus:border-saffron"}`}
                   />
                 </div>
 
@@ -1183,7 +1241,7 @@ export default function TransportManagementClient({
             </div>
 
             <div className="p-4 border-t border-onyx/5 flex items-center justify-end space-x-3">
-              <button type="button" onClick={() => { setShowOrderModal(false); setFreightRateLocked(false); }} className="px-4 py-2 border border-onyx/10 rounded-lg text-xs font-semibold hover:bg-cream-dark/10 transition cursor-pointer">Cancel</button>
+              <button type="button" onClick={() => { setShowOrderModal(false); setFreightRateLocked(false); setSelectedContractId(""); }} className="px-4 py-2 border border-onyx/10 rounded-lg text-xs font-semibold hover:bg-cream-dark/10 transition cursor-pointer">Cancel</button>
               <button type="submit" className="px-4 py-2 bg-saffron hover:bg-saffron-dark text-onyx rounded-lg text-xs font-bold shadow transition cursor-pointer">Place Transport Order</button>
             </div>
           </form>

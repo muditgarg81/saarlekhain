@@ -22,9 +22,11 @@ export async function createTransportRate(data: {
   const companyId = (session.user as any).companyId;
 
   try {
+    const contractNo = await getNextSequence(companyId, "TRC");
     const rate = await db.transportRate.create({
       data: {
         companyId,
+        contractNo,
         transporterId: data.transporterId,
         fromLocation: data.fromLocation.trim(),
         toLocation: data.toLocation.trim(),
@@ -34,6 +36,11 @@ export async function createTransportRate(data: {
     });
 
     revalidatePath("/purchase/transport");
+    revalidatePath("/logistics/orders");
+    revalidatePath("/logistics/contracts");
+    revalidatePath("/logistics/bills");
+    revalidatePath("/logistics/payments");
+    revalidatePath("/logistics/contracts");
     return { success: true, rate };
   } catch (err: any) {
     console.error("Error creating transport rate:", err);
@@ -58,6 +65,10 @@ export async function updateTransportRate(
     });
 
     revalidatePath("/purchase/transport");
+    revalidatePath("/logistics/orders");
+    revalidatePath("/logistics/contracts");
+    revalidatePath("/logistics/bills");
+    revalidatePath("/logistics/payments");
     return { success: true, count: rate.count };
   } catch (err: any) {
     console.error("Error updating transport rate:", err);
@@ -77,6 +88,10 @@ export async function deleteTransportRate(id: string) {
     });
 
     revalidatePath("/purchase/transport");
+    revalidatePath("/logistics/orders");
+    revalidatePath("/logistics/contracts");
+    revalidatePath("/logistics/bills");
+    revalidatePath("/logistics/payments");
     return { success: true };
   } catch (err: any) {
     console.error("Error deleting transport rate:", err);
@@ -140,6 +155,10 @@ export async function createTransportOrder(data: {
     });
 
     revalidatePath("/purchase/transport");
+    revalidatePath("/logistics/orders");
+    revalidatePath("/logistics/contracts");
+    revalidatePath("/logistics/bills");
+    revalidatePath("/logistics/payments");
     return { success: true, order };
   } catch (err: any) {
     console.error("Error creating transport order:", err);
@@ -204,6 +223,10 @@ export async function updateTransportOrder(
     });
 
     revalidatePath("/purchase/transport");
+    revalidatePath("/logistics/orders");
+    revalidatePath("/logistics/contracts");
+    revalidatePath("/logistics/bills");
+    revalidatePath("/logistics/payments");
     return { success: true, order };
   } catch (err: any) {
     console.error("Error updating transport order:", err);
@@ -223,6 +246,10 @@ export async function deleteTransportOrder(id: string) {
     });
 
     revalidatePath("/purchase/transport");
+    revalidatePath("/logistics/orders");
+    revalidatePath("/logistics/contracts");
+    revalidatePath("/logistics/bills");
+    revalidatePath("/logistics/payments");
     return { success: true };
   } catch (err: any) {
     console.error("Error deleting transport order:", err);
@@ -265,6 +292,10 @@ export async function createTransportBill(data: {
     });
 
     revalidatePath("/purchase/transport");
+    revalidatePath("/logistics/orders");
+    revalidatePath("/logistics/contracts");
+    revalidatePath("/logistics/bills");
+    revalidatePath("/logistics/payments");
     return { success: true, bill };
   } catch (err: any) {
     console.error("Error creating transport bill:", err);
@@ -284,6 +315,10 @@ export async function deleteTransportBill(id: string) {
     });
 
     revalidatePath("/purchase/transport");
+    revalidatePath("/logistics/orders");
+    revalidatePath("/logistics/contracts");
+    revalidatePath("/logistics/bills");
+    revalidatePath("/logistics/payments");
     return { success: true };
   } catch (err: any) {
     console.error("Error deleting transport bill:", err);
@@ -347,6 +382,10 @@ export async function recordTransportPayment(data: {
     });
 
     revalidatePath("/purchase/transport");
+    revalidatePath("/logistics/orders");
+    revalidatePath("/logistics/contracts");
+    revalidatePath("/logistics/bills");
+    revalidatePath("/logistics/payments");
     return { success: true, payment };
   } catch (err: any) {
     console.error("Error recording transport payment:", err);

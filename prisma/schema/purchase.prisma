@@ -735,6 +735,7 @@ enum TransportBillPaymentStatus {
 model TransportRate {
   id               String    @id @default(cuid())
   companyId        String
+  contractNo       String?
   transporterId    String
   fromLocation     String
   toLocation       String
@@ -747,6 +748,7 @@ model TransportRate {
   transporter      Vendor    @relation(fields: [transporterId], references: [id])
 
   @@unique([companyId, transporterId, fromLocation, toLocation, vehicleCapacity])
+  @@index([companyId, contractNo])
   @@schema("purchase")
 }
 
