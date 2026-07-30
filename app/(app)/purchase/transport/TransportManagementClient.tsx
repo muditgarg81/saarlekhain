@@ -139,6 +139,8 @@ export default function TransportManagementClient({
   const [searchTerm, setSearchTerm] = useState("");
   const [expandedBillId, setExpandedBillId] = useState<string | null>(null);
 
+  const [freightRateLocked, setFreightRateLocked] = useState(false);
+
   // Modals state
   const [showOrderModal, setShowOrderModal] = useState(false);
   const [showRateModal, setShowRateModal] = useState(false);
@@ -222,7 +224,12 @@ export default function TransportManagementClient({
       );
       if (rate !== null) {
         setNewOrder((prev) => ({ ...prev, freightAmount: rate }));
+        setFreightRateLocked(true);
+      } else {
+        setFreightRateLocked(false);
       }
+    } else {
+      setFreightRateLocked(false);
     }
   };
 
@@ -241,6 +248,7 @@ export default function TransportManagementClient({
 
     if (res.success) {
       setShowOrderModal(false);
+      setFreightRateLocked(false);
       setNewOrder({
         transporterId: "",
         vehicleCapacity: "1000 kgs",
@@ -1122,13 +1130,25 @@ export default function TransportManagementClient({
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-onyx/60">Base Freight Rate *</label>
+                    <div className="flex items-center justify-between">
+                      <label className="text-[10px] font-bold uppercase text-onyx/60">Base Freight Rate *</label>
+                      {freightRateLocked && (
+                        <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
+                          From Contract
+                        </span>
+                      )}
+                    </div>
                     <input
                       type="number"
                       required
+                      readOnly={freightRateLocked}
                       value={newOrder.freightAmount}
-                      onChange={(e) => setNewOrder((p) => ({ ...p, freightAmount: parseFloat(e.target.value) || 0 }))}
-                      className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono"
+                      onChange={(e) => !freightRateLocked && setNewOrder((p) => ({ ...p, freightAmount: parseFloat(e.target.value) || 0 }))}
+                      className={`w-full text-xs p-2 border rounded-lg font-mono focus:outline-none transition-colors ${
+                        freightRateLocked
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-800 cursor-not-allowed"
+                          : "border-onyx/10 focus:border-saffron"
+                      }`}
                     />
                   </div>
 
@@ -1163,7 +1183,7 @@ export default function TransportManagementClient({
             </div>
 
             <div className="p-4 border-t border-onyx/5 flex items-center justify-end space-x-3">
-              <button type="button" onClick={() => setShowOrderModal(false)} className="px-4 py-2 border border-onyx/10 rounded-lg text-xs font-semibold hover:bg-cream-dark/10 transition cursor-pointer">Cancel</button>
+              <button type="button" onClick={() => { setShowOrderModal(false); setFreightRateLocked(false); }} className="px-4 py-2 border border-onyx/10 rounded-lg text-xs font-semibold hover:bg-cream-dark/10 transition cursor-pointer">Cancel</button>
               <button type="submit" className="px-4 py-2 bg-saffron hover:bg-saffron-dark text-onyx rounded-lg text-xs font-bold shadow transition cursor-pointer">Place Transport Order</button>
             </div>
           </form>
