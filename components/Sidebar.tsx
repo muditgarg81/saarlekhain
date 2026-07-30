@@ -3,12 +3,12 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { 
-  LayoutDashboard, 
-  Package, 
-  ShoppingCart, 
-  Database, 
-  Settings, 
+import {
+  LayoutDashboard,
+  Package,
+  ShoppingCart,
+  Database,
+  Settings,
   FileText,
   ClipboardList,
   ShieldCheck,
@@ -26,7 +26,10 @@ import {
   PackageOpen,
   QrCode,
   ChevronDown,
-  X
+  X,
+  Route,
+  FileCheck,
+  Banknote,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { can, SessionUser } from "@/lib/rbac";
@@ -147,6 +150,8 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
                      can(user, "payment.record") ||
                      can(user, "ledger.view") ||
                      ["ACCOUNTS", "ADMIN", "OWNER"].includes(role);
+
+  const isLogistics = isPurchase || isStore || ["ADMIN", "OWNER", "PURCHASE_MANAGER", "PURCHASE_OFFICER", "STORE_MANAGER"].includes(role);
 
 
 
@@ -436,19 +441,7 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
                 <span>Purchase Orders</span>
               </Link>
 
-              {(can(user, "po.approve") || can(user, "company.settings.edit") || ["ADMIN", "OWNER", "PURCHASE_MANAGER", "APPROVER"].includes(role)) && (
-                <Link
-                  href="/purchase/po/settings"
-                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
-                    isActive("/purchase/po/settings")
-                      ? "bg-saffron text-onyx font-semibold shadow-md"
-                      : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
-                  }`}
-                >
-                  <Settings size={18} />
-                  <span>PO Terms Settings</span>
-                </Link>
-              )}
+
 
               {can(user, "invoice.match") && (
                 <Link
@@ -515,11 +508,94 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
                 <FileText size={18} />
                 <span>Purchase Register</span>
               </Link>
+
             </div>
           </div>
         )}
 
 
+
+        {/* Logistics Management */}
+        {isLogistics && (
+          <div>
+            <h2 className="text-[10px] uppercase font-semibold text-cream-dark/40 tracking-wider mb-3 px-2">
+              Logistics Management
+            </h2>
+            <div className="space-y-1">
+              <Link
+                href="/logistics/dashboard"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/logistics/dashboard")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <LayoutDashboard size={18} />
+                <span>Overview</span>
+              </Link>
+
+              <Link
+                href="/logistics/orders"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/logistics/orders")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <Truck size={18} />
+                <span>Transport Orders</span>
+              </Link>
+
+              <Link
+                href="/logistics/contracts"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/logistics/contracts")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <Route size={18} />
+                <span>Contracts</span>
+              </Link>
+
+              <Link
+                href="/logistics/transporters"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/logistics/transporters")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <Database size={18} />
+                <span>Transporters</span>
+              </Link>
+
+              <Link
+                href="/logistics/bills"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/logistics/bills")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <FileCheck size={18} />
+                <span>Freight Bills</span>
+              </Link>
+
+              <Link
+                href="/logistics/payments"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/logistics/payments")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <Banknote size={18} />
+                <span>Freight Payments</span>
+              </Link>
+            </div>
+          </div>
+        )}
 
         {/* Integration Category */}
         {can(user, "erp.config") && (
@@ -585,6 +661,20 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
                 <Database size={18} />
                 <span>Members & Roles</span>
               </Link>
+
+              {(can(user, "po.approve") || can(user, "company.settings.edit") || ["ADMIN", "OWNER", "PURCHASE_MANAGER", "APPROVER"].includes(role)) && (
+                <Link
+                  href="/purchase/po/settings"
+                  className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                    isActive("/purchase/po/settings")
+                      ? "bg-saffron text-onyx font-semibold shadow-md"
+                      : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                  }`}
+                >
+                  <Settings size={18} />
+                  <span>PO Terms Settings</span>
+                </Link>
+              )}
             </div>
           </div>
         )}

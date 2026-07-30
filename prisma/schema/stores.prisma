@@ -334,6 +334,7 @@ model Grn {
   lines           GrnLine[]
   inspections     Inspection[]
   paymentRequests PaymentRequest[]
+  transportOrders TransportOrder[]
 
   @@unique([companyId, number])
   @@index([companyId, status])

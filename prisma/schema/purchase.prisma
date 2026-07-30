@@ -120,6 +120,8 @@ model Vendor {
   pos             PurchaseOrder[]
   quotations      Quotation[]
   paymentRequests PaymentRequest[]
+  transportOrders TransportOrder[]
+  transportRates  TransportRate[]
 
   @@unique([companyId, code])
   @@index([companyId, status])
@@ -258,6 +260,7 @@ model PurchaseOrder {
   lines              PoLine[]
   amendments         PoAmendment[]
   paymentRequests    PaymentRequest[]
+  transportOrders    TransportOrder[]
 
   @@unique([companyId, number])
   @@index([companyId, status])
@@ -710,3 +713,111 @@ model PaymentRequest {
   @@index([companyId, status])
   @@schema("purchase")
 }
+
+enum TransportOrderStatus {
+  DRAFT
+  PLACED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+
+  @@schema("purchase")
+}
+
+enum TransportBillPaymentStatus {
+  PENDING
+  PAID
+  PARTIALLY_PAID
+
+  @@schema("purchase")
+}
+
+model TransportRate {
+  id               String    @id @default(cuid())
+  companyId        String
+  transporterId    String
+  fromLocation     String
+  toLocation       String
+  vehicleCapacity  String
+  rate             Float
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  deletedAt        DateTime?
+
+  transporter      Vendor    @relation(fields: [transporterId], references: [id])
+
+  @@unique([companyId, transporterId, fromLocation, toLocation, vehicleCapacity])
+  @@schema("purchase")
+}
+
+model TransportOrder {
+  id               String               @id @default(cuid())
+  companyId        String
+  number           String // TO-XXXXX
+  transporterId    String
+  vehicleCapacity  String
+  fromLocation     String
+  toLocation       String
+  vehicleNo        String?
+  driverName       String?
+  driverPhone      String?
+  loadingPoint     String?
+  unloadingPoint   String?
+  freightAmount    Float
+  otherCharges     Float                @default(0)
+  taxRate          Float                @default(0) // GST %
+  totalAmount      Float
+  status           TransportOrderStatus @default(DRAFT)
+  poId             String?
+  grnId            String?
+  createdAt        DateTime             @default(now())
+  updatedAt        DateTime             @updatedAt
+  deletedAt        DateTime?
+
+  transporter      Vendor               @relation(fields: [transporterId], references: [id])
+  po               PurchaseOrder?       @relation(fields: [poId], references: [id])
+  grn              Grn?                 @relation(fields: [grnId], references: [id])
+  bills            TransportBill[]
+
+  @@unique([companyId, number])
+  @@schema("purchase")
+}
+
+model TransportBill {
+  id               String                     @id @default(cuid())
+  companyId        String
+  billNo           String
+  billDate         DateTime
+  amount           Float
+  dueDate          DateTime?
+  paymentStatus    TransportBillPaymentStatus @default(PENDING)
+  transportOrderId String
+  createdAt        DateTime                   @default(now())
+  updatedAt        DateTime                   @updatedAt
+  deletedAt        DateTime?
+
+  transportOrder   TransportOrder             @relation(fields: [transportOrderId], references: [id])
+  payments         TransportPayment[]
+
+  @@unique([companyId, transportOrderId, billNo])
+  @@schema("purchase")
+}
+
+model TransportPayment {
+  id               String         @id @default(cuid())
+  companyId        String
+  paymentNo        String // TP-XXXXX
+  amount           Float
+  paymentDate      DateTime
+  paymentMethod    String
+  referenceNo      String?
+  transportBillId  String
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+
+  transportBill    TransportBill  @relation(fields: [transportBillId], references: [id])
+
+  @@unique([companyId, paymentNo])
+  @@schema("purchase")
+}
+
