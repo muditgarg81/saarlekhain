@@ -15,6 +15,8 @@ export async function getNextSequence(
     // Sales & Dispatch (order-to-cash): Sales Order, Delivery Challan/Dispatch,
     // Sales Invoice, Receipt Voucher, Sales Credit/Debit Note.
     | "SO" | "DC" | "SI" | "RV" | "SCN" | "SDN"
+    // Logistics: Transport Order, Transport Payment
+    | "TO" | "TP"
 ): Promise<string> {
   return await db.$transaction(async (tx) => {
     const sequence = await tx.docSequence.upsert({

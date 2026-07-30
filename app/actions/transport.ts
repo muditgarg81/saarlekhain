@@ -333,7 +333,7 @@ export async function recordTransportPayment(data: {
 
       const totalPaid = bill.payments.reduce((sum: number, pay: any) => sum + pay.amount, 0) + data.amount;
 
-      let nextStatus = TransportBillPaymentStatus.PARTIALLY_PAID;
+      let nextStatus: TransportBillPaymentStatus = TransportBillPaymentStatus.PARTIALLY_PAID;
       if (totalPaid >= bill.amount) {
         nextStatus = TransportBillPaymentStatus.PAID;
       }
