@@ -1111,19 +1111,6 @@ export default function TransportManagementClient({
                   </select>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-onyx/60">Linked Stores GRN</label>
-                  <select
-                    value={newOrder.grnId}
-                    onChange={(e) => setNewOrder((p) => ({ ...p, grnId: e.target.value }))}
-                    className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none"
-                  >
-                    <option value="">None</option>
-                    {grns.map((g) => (
-                      <option key={g.id} value={g.id}>{g.number}</option>
-                    ))}
-                  </select>
-                </div>
               </div>
 
               {/* Pricing section */}
