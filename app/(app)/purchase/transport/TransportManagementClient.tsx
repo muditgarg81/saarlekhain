@@ -71,6 +71,7 @@ interface Order {
   otherCharges: number;
   taxRate: number;
   totalAmount: number;
+  tripDescription: string | null;
   status: string;
   poId: string | null;
   poNumber: string | null;
@@ -163,6 +164,7 @@ export default function TransportManagementClient({
     driverPhone: "",
     loadingPoint: "",
     unloadingPoint: "",
+    tripDescription: "",
     freightAmount: 0,
     otherCharges: 0,
     taxRate: 5, // default 5% GST on transport
@@ -284,6 +286,7 @@ export default function TransportManagementClient({
         driverPhone: "",
         loadingPoint: "",
         unloadingPoint: "",
+        tripDescription: "",
         freightAmount: 0,
         otherCharges: 0,
         taxRate: 5,
@@ -735,6 +738,11 @@ export default function TransportManagementClient({
                       <div className="text-[10px] text-onyx/50 mt-0.5">
                         {o.driverName ? `${o.driverName} (${o.driverPhone || ""})` : "-"}
                       </div>
+                      {o.tripDescription && (
+                        <div className="text-[10px] text-onyx/40 mt-1 italic max-w-[160px] truncate" title={o.tripDescription}>
+                          {o.tripDescription}
+                        </div>
+                      )}
                     </td>
                     <td className="p-3 text-right font-mono">
                       <div className="font-bold">₹{o.totalAmount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</div>
@@ -1177,6 +1185,18 @@ export default function TransportManagementClient({
                   </select>
                 </div>
 
+              </div>
+
+              {/* Trip Description */}
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold uppercase text-onyx/60">Trip Description / Remarks</label>
+                <textarea
+                  rows={2}
+                  placeholder="e.g. Material: Steel pipes, 800 kgs. Trip from plant to site. Return empty."
+                  value={newOrder.tripDescription}
+                  onChange={(e) => setNewOrder((p) => ({ ...p, tripDescription: e.target.value }))}
+                  className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron resize-none"
+                />
               </div>
 
               {/* Pricing section */}

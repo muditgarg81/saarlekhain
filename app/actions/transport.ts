@@ -118,6 +118,7 @@ export async function createTransportOrder(data: {
   taxRate?: number;
   poId?: string | null;
   grnId?: string | null;
+  tripDescription?: string;
   status?: TransportOrderStatus;
 }) {
   const session = await auth();
@@ -148,6 +149,7 @@ export async function createTransportOrder(data: {
         otherCharges: other,
         taxRate: tax,
         totalAmount,
+        tripDescription: data.tripDescription || null,
         status: data.status || TransportOrderStatus.DRAFT,
         poId: data.poId || null,
         grnId: data.grnId || null,

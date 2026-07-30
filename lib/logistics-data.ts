@@ -87,6 +87,7 @@ export async function getLogisticsData(companyId: string) {
       otherCharges: o.otherCharges,
       taxRate: o.taxRate,
       totalAmount: o.totalAmount,
+      tripDescription: o.tripDescription,
       status: o.status,
       poId: o.poId,
       poNumber: o.po?.number || null,

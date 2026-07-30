@@ -769,6 +769,7 @@ model TransportOrder {
   otherCharges     Float                @default(0)
   taxRate          Float                @default(0) // GST %
   totalAmount      Float
+  tripDescription  String?
   status           TransportOrderStatus @default(DRAFT)
   poId             String?
   grnId            String?
