@@ -137,6 +137,14 @@ const CAPABILITIES: CapabilityNode[] = [
   { key: "payment.record", label: "Record Supplier Payments", category: "Finance & Accounts" },
   { key: "ledger.view", label: "View Account Ledgers", category: "Finance & Accounts" },
   { key: "erp.writeback.approve", label: "Approve ERP Writebacks", category: "Finance & Accounts" },
+  // Logistics
+  { key: "logistics.view", label: "View Logistics Dashboard & Orders", category: "Logistics Management" },
+  { key: "logistics.order.create", label: "Create Transport Orders", category: "Logistics Management" },
+  { key: "logistics.order.edit", label: "Edit & Update Transport Orders", category: "Logistics Management" },
+  { key: "logistics.contracts.manage", label: "Manage Contracts & Rate Schedules", category: "Logistics Management" },
+  { key: "logistics.transporters.manage", label: "Manage Transporters", category: "Logistics Management" },
+  { key: "logistics.bills.manage", label: "Process Freight Bills", category: "Logistics Management" },
+  { key: "logistics.payments.record", label: "Record Freight Payments", category: "Logistics Management" },
   // Reports
   { key: "reports.view", label: "View Audit & Reports", category: "Reports" }
 ];
