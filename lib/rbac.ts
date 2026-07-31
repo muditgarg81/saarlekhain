@@ -46,6 +46,13 @@ export const ROLE_PERMISSIONS: Record<Role, string[]> = {
     "debtor.view",
     "erp.config",
     "erp.writeback.approve",
+    "logistics.view",
+    "logistics.order.create",
+    "logistics.order.edit",
+    "logistics.contracts.manage",
+    "logistics.transporters.manage",
+    "logistics.bills.manage",
+    "logistics.payments.record",
     "reports.view",
   ],
   ADMIN: [
