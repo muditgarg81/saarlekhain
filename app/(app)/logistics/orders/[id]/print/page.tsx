@@ -5,12 +5,13 @@ import { getFreshUser } from "@/app/actions/auth";
 import { db } from "@/lib/db";
 import PrintActions from "./PrintActions";
 
-export default async function TransportOrderPrintPage({ params }: { params: { id: string } }) {
+export default async function TransportOrderPrintPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
   const user = await getFreshUser();
   if (!user) redirect("/auth/signin");
 
   const order = await db.transportOrder.findFirst({
-    where: { id: params.id, companyId: user.companyId, deletedAt: null },
+    where: { id, companyId: user.companyId, deletedAt: null },
     include: {
       transporter: true,
       po: true,

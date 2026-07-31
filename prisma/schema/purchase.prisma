@@ -781,8 +781,28 @@ model TransportOrder {
   po               PurchaseOrder?       @relation(fields: [poId], references: [id])
   grn              Grn?                 @relation(fields: [grnId], references: [id])
   bills            TransportBill[]
+  trips            TransportOrderTrip[]
 
   @@unique([companyId, number])
+  @@schema("purchase")
+}
+
+model TransportOrderTrip {
+  id               String         @id @default(cuid())
+  transportOrderId String
+  tripNo           Int
+  vehicleNo        String?
+  driverName       String?
+  driverPhone      String?
+  loadingPoint     String?
+  unloadingPoint   String?
+  tripDescription  String?
+  freightAmount    Float          @default(0)
+  otherCharges     Float          @default(0)
+  createdAt        DateTime       @default(now())
+
+  transportOrder   TransportOrder @relation(fields: [transportOrderId], references: [id])
+
   @@schema("purchase")
 }
 

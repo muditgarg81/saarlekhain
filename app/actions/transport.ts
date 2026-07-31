@@ -51,6 +51,10 @@ export async function createTransportRate(data: {
 export async function updateTransportRate(
   id: string,
   data: {
+    transporterId?: string;
+    fromLocation?: string;
+    toLocation?: string;
+    vehicleCapacity?: string;
     rate: number;
   }
 ) {
@@ -61,7 +65,13 @@ export async function updateTransportRate(
   try {
     const rate = await db.transportRate.updateMany({
       where: { id, companyId },
-      data: { rate: data.rate },
+      data: {
+        rate: data.rate,
+        ...(data.transporterId && { transporterId: data.transporterId }),
+        ...(data.fromLocation && { fromLocation: data.fromLocation.trim() }),
+        ...(data.toLocation && { toLocation: data.toLocation.trim() }),
+        ...(data.vehicleCapacity && { vehicleCapacity: data.vehicleCapacity }),
+      },
     });
 
     revalidatePath("/purchase/transport");
@@ -120,6 +130,17 @@ export async function createTransportOrder(data: {
   grnId?: string | null;
   tripDescription?: string;
   status?: TransportOrderStatus;
+  trips?: Array<{
+    tripNo: number;
+    vehicleNo?: string;
+    driverName?: string;
+    driverPhone?: string;
+    loadingPoint?: string;
+    unloadingPoint?: string;
+    tripDescription?: string;
+    freightAmount: number;
+    otherCharges?: number;
+  }>;
 }) {
   const session = await auth();
   if (!session || !session.user) return { success: false, error: "Unauthorized" };
@@ -127,9 +148,16 @@ export async function createTransportOrder(data: {
 
   try {
     const number = await getNextSequence(companyId, "TO");
-    const freight = data.freightAmount;
-    const other = data.otherCharges || 0;
     const tax = data.taxRate || 0;
+
+    // If multi-trip: sum trips for total; else use header fields
+    const hasTrips = data.trips && data.trips.length > 0;
+    const freight = hasTrips
+      ? data.trips!.reduce((s, t) => s + t.freightAmount, 0)
+      : data.freightAmount;
+    const other = hasTrips
+      ? data.trips!.reduce((s, t) => s + (t.otherCharges || 0), 0)
+      : (data.otherCharges || 0);
     const totalAmount = (freight + other) * (1 + tax / 100);
 
     const order = await db.transportOrder.create({
@@ -140,19 +168,34 @@ export async function createTransportOrder(data: {
         vehicleCapacity: data.vehicleCapacity,
         fromLocation: data.fromLocation,
         toLocation: data.toLocation,
-        vehicleNo: data.vehicleNo || null,
-        driverName: data.driverName || null,
-        driverPhone: data.driverPhone || null,
-        loadingPoint: data.loadingPoint || null,
-        unloadingPoint: data.unloadingPoint || null,
+        vehicleNo: hasTrips ? null : (data.vehicleNo || null),
+        driverName: hasTrips ? null : (data.driverName || null),
+        driverPhone: hasTrips ? null : (data.driverPhone || null),
+        loadingPoint: hasTrips ? null : (data.loadingPoint || null),
+        unloadingPoint: hasTrips ? null : (data.unloadingPoint || null),
         freightAmount: freight,
         otherCharges: other,
         taxRate: tax,
         totalAmount,
-        tripDescription: data.tripDescription || null,
+        tripDescription: hasTrips ? null : (data.tripDescription || null),
         status: data.status || TransportOrderStatus.DRAFT,
         poId: data.poId || null,
         grnId: data.grnId || null,
+        ...(hasTrips && {
+          trips: {
+            create: data.trips!.map((t) => ({
+              tripNo: t.tripNo,
+              vehicleNo: t.vehicleNo || null,
+              driverName: t.driverName || null,
+              driverPhone: t.driverPhone || null,
+              loadingPoint: t.loadingPoint || null,
+              unloadingPoint: t.unloadingPoint || null,
+              tripDescription: t.tripDescription || null,
+              freightAmount: t.freightAmount,
+              otherCharges: t.otherCharges || 0,
+            })),
+          },
+        }),
       },
     });
 

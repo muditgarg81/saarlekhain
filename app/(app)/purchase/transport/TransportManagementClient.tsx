@@ -82,6 +82,7 @@ interface Order {
   createdAt: string;
   totalBilled: number;
   totalPaid: number;
+  trips: Array<{ id: string; tripNo: number; vehicleNo: string | null; driverName: string | null; driverPhone: string | null; loadingPoint: string | null; unloadingPoint: string | null; tripDescription: string | null; freightAmount: number; otherCharges: number }>;
 }
 
 interface Payment {
@@ -152,6 +153,14 @@ export default function TransportManagementClient({
     loadingPoint: "", unloadingPoint: "", tripDescription: "",
     freightAmount: 0, otherCharges: 0, taxRate: 5, poId: "",
   });
+  const [editingRate, setEditingRate] = useState<Rate | null>(null);
+  const [editRateForm, setEditRateForm] = useState({
+    transporterId: "", fromLocation: "", toLocation: "", vehicleCapacity: "1000 kgs", rate: 0,
+  });
+  // Multi-trip state for create order modal
+  type TripRow = { tripNo: number; vehicleNo: string; driverName: string; driverPhone: string; loadingPoint: string; unloadingPoint: string; tripDescription: string; freightAmount: number; otherCharges: number };
+  const [multiTrip, setMultiTrip] = useState(false);
+  const [trips, setTrips] = useState<TripRow[]>([{ tripNo: 1, vehicleNo: "", driverName: "", driverPhone: "", loadingPoint: "", unloadingPoint: "", tripDescription: "", freightAmount: 0, otherCharges: 0 }]);
 
   // Modals state
   const [showOrderModal, setShowOrderModal] = useState(false);
@@ -277,13 +286,16 @@ export default function TransportManagementClient({
 
     const res = await createTransportOrder({
       ...newOrder,
-      status: "PLACED", // Auto-place
+      status: "PLACED",
+      ...(multiTrip && trips.length > 0 && { trips }),
     });
 
     if (res.success) {
       setShowOrderModal(false);
       setFreightRateLocked(false);
       setSelectedContractId("");
+      setMultiTrip(false);
+      setTrips([{ tripNo: 1, vehicleNo: "", driverName: "", driverPhone: "", loadingPoint: "", unloadingPoint: "", tripDescription: "", freightAmount: 0, otherCharges: 0 }]);
       setNewOrder({
         transporterId: "",
         vehicleCapacity: "1000 kgs",
@@ -429,6 +441,19 @@ export default function TransportManagementClient({
       taxRate: o.taxRate,
       poId: o.poId || "",
     });
+  };
+
+  const handleOpenEditRate = (r: Rate) => {
+    setEditingRate(r);
+    setEditRateForm({ transporterId: r.transporterId, fromLocation: r.fromLocation, toLocation: r.toLocation, vehicleCapacity: r.vehicleCapacity, rate: r.rate });
+  };
+
+  const handleEditRateSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRate) return;
+    const res = await updateTransportRate(editingRate.id, editRateForm);
+    if (res.success) setEditingRate(null);
+    else alert(res.error);
   };
 
   const handleEditSubmit = async (e: React.FormEvent) => {
@@ -892,12 +917,21 @@ export default function TransportManagementClient({
                       ₹{r.rate.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                     </td>
                     <td className="p-3 text-center">
+                      <div className="flex items-center justify-center gap-1">
+                      <button
+                        onClick={() => handleOpenEditRate(r)}
+                        className="text-saffron hover:text-saffron/70 p-1 cursor-pointer"
+                        title="Edit Contract"
+                      >
+                        <Pencil size={14} />
+                      </button>
                       <button
                         onClick={() => handleDeleteRate(r.id)}
                         className="text-red-500 hover:text-red-700 p-1 cursor-pointer"
                       >
                         <Trash2 size={14} />
                       </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1173,64 +1207,6 @@ export default function TransportManagementClient({
                   />
                 </div>
 
-                {/* Vehicle No */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-onyx/60">Vehicle Number</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. DL-01-A-1234"
-                    value={newOrder.vehicleNo}
-                    onChange={(e) => setNewOrder((p) => ({ ...p, vehicleNo: e.target.value }))}
-                    className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
-                  />
-                </div>
-
-                {/* Driver Details */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-onyx/60">Driver Name</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Rajesh Kumar"
-                    value={newOrder.driverName}
-                    onChange={(e) => setNewOrder((p) => ({ ...p, driverName: e.target.value }))}
-                    className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-onyx/60">Driver Phone</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. 9876543210"
-                    value={newOrder.driverPhone}
-                    onChange={(e) => setNewOrder((p) => ({ ...p, driverPhone: e.target.value }))}
-                    className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
-                  />
-                </div>
-
-                {/* Points */}
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-onyx/60">Loading Address / Point</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Gate No. 2"
-                    value={newOrder.loadingPoint}
-                    onChange={(e) => setNewOrder((p) => ({ ...p, loadingPoint: e.target.value }))}
-                    className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
-                  />
-                </div>
-
-                <div className="space-y-1">
-                  <label className="text-[10px] font-bold uppercase text-onyx/60">Unloading Address / Point</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Store Room B"
-                    value={newOrder.unloadingPoint}
-                    onChange={(e) => setNewOrder((p) => ({ ...p, unloadingPoint: e.target.value }))}
-                    className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
-                  />
-                </div>
-
                 {/* References */}
                 <div className="space-y-1">
                   <label className="text-[10px] font-bold uppercase text-onyx/60">Linked Purchase Order (PO)</label>
@@ -1248,77 +1224,87 @@ export default function TransportManagementClient({
 
               </div>
 
-              {/* Trip Description */}
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold uppercase text-onyx/60">Trip Description / Remarks</label>
-                <textarea
-                  rows={2}
-                  placeholder="e.g. Material: Steel pipes, 800 kgs. Trip from plant to site. Return empty."
-                  value={newOrder.tripDescription}
-                  onChange={(e) => setNewOrder((p) => ({ ...p, tripDescription: e.target.value }))}
-                  className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron resize-none"
-                />
+              {/* Multi-trip toggle */}
+              <div className="flex items-center gap-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                <input type="checkbox" id="multiTripToggle" checked={multiTrip} onChange={e => { setMultiTrip(e.target.checked); if (!e.target.checked) setTrips([{ tripNo: 1, vehicleNo: "", driverName: "", driverPhone: "", loadingPoint: "", unloadingPoint: "", tripDescription: "", freightAmount: 0, otherCharges: 0 }]); }} className="accent-saffron w-4 h-4 cursor-pointer" />
+                <label htmlFor="multiTripToggle" className="text-xs font-bold text-blue-800 cursor-pointer select-none">Multiple Trips — add individual trip details with separate freight per trip</label>
               </div>
 
-              {/* Pricing section */}
-              <div className="border-t border-onyx/5 pt-4 bg-cream-dark/5 p-4 rounded-xl space-y-4">
-                <h4 className="text-xs font-bold text-onyx uppercase tracking-wider flex items-center">
-                  <DollarSign size={14} className="text-saffron mr-1" />
-                  Freight Cost Details
-                </h4>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {!multiTrip ? (
+                <>
+                  {/* Trip Description (single trip) */}
                   <div className="space-y-1">
-                    <div className="flex items-center justify-between">
-                      <label className="text-[10px] font-bold uppercase text-onyx/60">Base Freight Rate *</label>
-                      {freightRateLocked && (
-                        <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">
-                          From Contract
-                        </span>
-                      )}
+                    <label className="text-[10px] font-bold uppercase text-onyx/60">Trip Description / Remarks</label>
+                    <textarea
+                      rows={2}
+                      placeholder="e.g. Material: Steel pipes, 800 kgs. Trip from plant to site. Return empty."
+                      value={newOrder.tripDescription}
+                      onChange={(e) => setNewOrder((p) => ({ ...p, tripDescription: e.target.value }))}
+                      className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron resize-none"
+                    />
+                  </div>
+                  {/* Vehicle / Driver (single trip) */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-onyx/60">Vehicle No.</label><input className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron" placeholder="MH49AT1466" value={newOrder.vehicleNo} onChange={e => setNewOrder(p => ({ ...p, vehicleNo: e.target.value }))} /></div>
+                    <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-onyx/60">Driver Name</label><input className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron" value={newOrder.driverName} onChange={e => setNewOrder(p => ({ ...p, driverName: e.target.value }))} /></div>
+                    <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-onyx/60">Driver Phone</label><input className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron" value={newOrder.driverPhone} onChange={e => setNewOrder(p => ({ ...p, driverPhone: e.target.value }))} /></div>
+                    <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-onyx/60">Loading Point</label><input className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron" value={newOrder.loadingPoint} onChange={e => setNewOrder(p => ({ ...p, loadingPoint: e.target.value }))} /></div>
+                  </div>
+
+                  {/* Pricing (single trip) */}
+                  <div className="border-t border-onyx/5 pt-4 bg-cream-dark/5 p-4 rounded-xl space-y-4">
+                    <h4 className="text-xs font-bold text-onyx uppercase tracking-wider flex items-center"><DollarSign size={14} className="text-saffron mr-1" />Freight Cost Details</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[10px] font-bold uppercase text-onyx/60">Base Freight Rate *</label>
+                          {freightRateLocked && <span className="text-[9px] font-bold uppercase px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700">From Contract</span>}
+                        </div>
+                        <input type="number" required readOnly={freightRateLocked} value={newOrder.freightAmount} onChange={(e) => !freightRateLocked && setNewOrder((p) => ({ ...p, freightAmount: parseFloat(e.target.value) || 0 }))} className={`w-full text-xs p-2 border rounded-lg font-mono focus:outline-none transition-colors ${freightRateLocked ? "bg-emerald-50 border-emerald-200 text-emerald-800 cursor-not-allowed" : "border-onyx/10 focus:border-saffron"}`} />
+                      </div>
+                      <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-onyx/60">Other / Toll Charges</label><input type="number" value={newOrder.otherCharges} onChange={(e) => setNewOrder((p) => ({ ...p, otherCharges: parseFloat(e.target.value) || 0 }))} className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono" /></div>
+                      <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-onyx/60">GST Tax Rate (%)</label><input type="number" value={newOrder.taxRate} onChange={(e) => setNewOrder((p) => ({ ...p, taxRate: parseFloat(e.target.value) || 0 }))} className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono" /></div>
                     </div>
-                    <input
-                      type="number"
-                      required
-                      readOnly={freightRateLocked}
-                      value={newOrder.freightAmount}
-                      onChange={(e) => !freightRateLocked && setNewOrder((p) => ({ ...p, freightAmount: parseFloat(e.target.value) || 0 }))}
-                      className={`w-full text-xs p-2 border rounded-lg font-mono focus:outline-none transition-colors ${
-                        freightRateLocked
-                          ? "bg-emerald-50 border-emerald-200 text-emerald-800 cursor-not-allowed"
-                          : "border-onyx/10 focus:border-saffron"
-                      }`}
-                    />
+                    <div className="flex items-center justify-between text-xs font-bold border-t border-onyx/10 pt-3">
+                      <span className="text-onyx/60 uppercase">Calculated Total Transport Cost:</span>
+                      <span className="text-sm font-mono text-onyx">₹{selectedOrderTotalCost.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                    </div>
                   </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-onyx/60">Other / Toll Charges</label>
-                    <input
-                      type="number"
-                      value={newOrder.otherCharges}
-                      onChange={(e) => setNewOrder((p) => ({ ...p, otherCharges: parseFloat(e.target.value) || 0 }))}
-                      className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono"
-                    />
+                </>
+              ) : (
+                /* Multi-trip mode */
+                <div className="space-y-3">
+                  {trips.map((trip, idx) => (
+                    <div key={trip.tripNo} className="border border-onyx/10 rounded-xl p-3 space-y-2 bg-cream-dark/5">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] font-bold uppercase text-onyx/50 tracking-wider">Trip {trip.tripNo}</span>
+                        {trips.length > 1 && (
+                          <button type="button" onClick={() => setTrips(ts => ts.filter((_, i) => i !== idx).map((t, i) => ({ ...t, tripNo: i + 1 })))} className="text-red-400 hover:text-red-600 text-[10px] font-bold cursor-pointer">✕ Remove</button>
+                        )}
+                      </div>
+                      <div className="grid grid-cols-3 gap-2">
+                        <div><label className="text-[10px] font-bold uppercase text-onyx/50">Vehicle No</label><input className="w-full text-xs p-1.5 border border-onyx/10 rounded-lg mt-0.5" placeholder="MH49AT1466" value={trip.vehicleNo} onChange={e => setTrips(ts => ts.map((t, i) => i === idx ? { ...t, vehicleNo: e.target.value } : t))} /></div>
+                        <div><label className="text-[10px] font-bold uppercase text-onyx/50">Driver Name</label><input className="w-full text-xs p-1.5 border border-onyx/10 rounded-lg mt-0.5" value={trip.driverName} onChange={e => setTrips(ts => ts.map((t, i) => i === idx ? { ...t, driverName: e.target.value } : t))} /></div>
+                        <div><label className="text-[10px] font-bold uppercase text-onyx/50">Driver Phone</label><input className="w-full text-xs p-1.5 border border-onyx/10 rounded-lg mt-0.5" value={trip.driverPhone} onChange={e => setTrips(ts => ts.map((t, i) => i === idx ? { ...t, driverPhone: e.target.value } : t))} /></div>
+                        <div><label className="text-[10px] font-bold uppercase text-onyx/50">Loading Point</label><input className="w-full text-xs p-1.5 border border-onyx/10 rounded-lg mt-0.5" value={trip.loadingPoint} onChange={e => setTrips(ts => ts.map((t, i) => i === idx ? { ...t, loadingPoint: e.target.value } : t))} /></div>
+                        <div><label className="text-[10px] font-bold uppercase text-onyx/50">Unloading Point</label><input className="w-full text-xs p-1.5 border border-onyx/10 rounded-lg mt-0.5" value={trip.unloadingPoint} onChange={e => setTrips(ts => ts.map((t, i) => i === idx ? { ...t, unloadingPoint: e.target.value } : t))} /></div>
+                        <div><label className="text-[10px] font-bold uppercase text-onyx/50">Freight (₹) *</label><input type="number" required className="w-full text-xs p-1.5 border border-onyx/10 rounded-lg mt-0.5 font-mono" value={trip.freightAmount} onChange={e => setTrips(ts => ts.map((t, i) => i === idx ? { ...t, freightAmount: parseFloat(e.target.value) || 0 } : t))} /></div>
+                        <div><label className="text-[10px] font-bold uppercase text-onyx/50">Other Charges (₹)</label><input type="number" className="w-full text-xs p-1.5 border border-onyx/10 rounded-lg mt-0.5 font-mono" value={trip.otherCharges} onChange={e => setTrips(ts => ts.map((t, i) => i === idx ? { ...t, otherCharges: parseFloat(e.target.value) || 0 } : t))} /></div>
+                        <div className="col-span-2"><label className="text-[10px] font-bold uppercase text-onyx/50">Trip Remarks</label><input className="w-full text-xs p-1.5 border border-onyx/10 rounded-lg mt-0.5" placeholder="Goods, instructions..." value={trip.tripDescription} onChange={e => setTrips(ts => ts.map((t, i) => i === idx ? { ...t, tripDescription: e.target.value } : t))} /></div>
+                      </div>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => setTrips(ts => [...ts, { tripNo: ts.length + 1, vehicleNo: "", driverName: "", driverPhone: "", loadingPoint: "", unloadingPoint: "", tripDescription: "", freightAmount: 0, otherCharges: 0 }])} className="w-full border-2 border-dashed border-saffron/40 rounded-lg py-2 text-xs font-bold text-saffron hover:border-saffron hover:bg-saffron/5 transition cursor-pointer">+ Add Another Trip</button>
+                  <div className="flex items-center justify-between text-xs font-bold border-t border-onyx/10 pt-3">
+                    <span className="text-onyx/60 uppercase">GST {newOrder.taxRate}% on Total</span>
+                    <div className="text-right">
+                      <span className="block text-[10px] text-onyx/40">Sub: ₹{trips.reduce((s, t) => s + t.freightAmount + t.otherCharges, 0).toLocaleString("en-IN")}</span>
+                      <span className="text-sm font-mono text-onyx">Total: ₹{(trips.reduce((s, t) => s + t.freightAmount + t.otherCharges, 0) * (1 + newOrder.taxRate / 100)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                    </div>
                   </div>
-
-                  <div className="space-y-1">
-                    <label className="text-[10px] font-bold uppercase text-onyx/60">GST Tax Rate (%)</label>
-                    <input
-                      type="number"
-                      value={newOrder.taxRate}
-                      onChange={(e) => setNewOrder((p) => ({ ...p, taxRate: parseFloat(e.target.value) || 0 }))}
-                      className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono"
-                    />
-                  </div>
+                  <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-onyx/60">GST Tax Rate (%)</label><input type="number" value={newOrder.taxRate} onChange={(e) => setNewOrder((p) => ({ ...p, taxRate: parseFloat(e.target.value) || 0 }))} className="w-32 text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono" /></div>
                 </div>
-
-                <div className="flex items-center justify-between text-xs font-bold border-t border-onyx/10 pt-3">
-                  <span className="text-onyx/60 uppercase">Calculated Total Transport Cost:</span>
-                  <span className="text-sm font-mono text-onyx">
-                    ₹{selectedOrderTotalCost.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </div>
-              </div>
+              )}
             </div>
 
             <div className="p-4 border-t border-onyx/5 flex items-center justify-end space-x-3">
@@ -1428,6 +1414,59 @@ export default function TransportManagementClient({
             <div className="p-4 border-t border-onyx/5 flex items-center justify-end space-x-3">
               <button type="button" onClick={() => setEditingOrder(null)} className="px-4 py-2 border border-onyx/10 rounded-lg text-xs font-semibold hover:bg-cream-dark/10 transition cursor-pointer">Cancel</button>
               <button type="submit" className="px-4 py-2 bg-saffron hover:bg-saffron-dark text-onyx rounded-lg text-xs font-bold shadow transition cursor-pointer">Save Changes</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* MODAL: EDIT CONTRACT */}
+      {editingRate && (
+        <div className="fixed inset-0 bg-onyx-dark/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <form onSubmit={handleEditRateSubmit} className="bg-white rounded-xl shadow-xl w-full max-w-md border border-onyx/10">
+            <div className="p-4 border-b border-onyx/5 bg-cream-dark/15 flex items-center justify-between">
+              <h3 className="font-bold text-onyx flex items-center text-sm uppercase">
+                <Pencil className="mr-2 text-saffron" size={16} />
+                Edit Contract — <span className="font-mono ml-1">{editingRate.contractNo || "—"}</span>
+              </h3>
+              <button type="button" onClick={() => setEditingRate(null)} className="text-onyx/40 hover:text-onyx cursor-pointer">✕</button>
+            </div>
+            <div className="p-5 space-y-3 text-xs">
+              <div>
+                <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">Transporter</label>
+                <select required className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron"
+                  value={editRateForm.transporterId} onChange={e => setEditRateForm(f => ({ ...f, transporterId: e.target.value }))}>
+                  <option value="">— Select —</option>
+                  {transporters.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">From Location</label>
+                  <input required className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron"
+                    value={editRateForm.fromLocation} onChange={e => setEditRateForm(f => ({ ...f, fromLocation: e.target.value }))} />
+                </div>
+                <div>
+                  <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">To Location</label>
+                  <input required className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron"
+                    value={editRateForm.toLocation} onChange={e => setEditRateForm(f => ({ ...f, toLocation: e.target.value }))} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">Vehicle Capacity</label>
+                  <input required className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron"
+                    value={editRateForm.vehicleCapacity} onChange={e => setEditRateForm(f => ({ ...f, vehicleCapacity: e.target.value }))} placeholder="1000 kgs" />
+                </div>
+                <div>
+                  <label className="block font-semibold text-onyx/60 mb-1 uppercase tracking-wide">Rate (₹)</label>
+                  <input type="number" required min="0" step="0.01" className="w-full border border-onyx/10 rounded-lg px-3 py-2 text-xs bg-cream-dark/10 focus:outline-none focus:ring-1 focus:ring-saffron font-mono"
+                    value={editRateForm.rate} onChange={e => setEditRateForm(f => ({ ...f, rate: parseFloat(e.target.value) || 0 }))} />
+                </div>
+              </div>
+            </div>
+            <div className="p-4 border-t border-onyx/5 flex justify-end gap-3">
+              <button type="button" onClick={() => setEditingRate(null)} className="px-4 py-2 border border-onyx/10 rounded-lg text-xs font-semibold hover:bg-cream-dark/10 cursor-pointer">Cancel</button>
+              <button type="submit" className="px-4 py-2 bg-saffron hover:bg-saffron-dark text-onyx rounded-lg text-xs font-bold shadow cursor-pointer">Save Changes</button>
             </div>
           </form>
         </div>

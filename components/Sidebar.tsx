@@ -593,6 +593,18 @@ export default function Sidebar({ user, isOpen, onClose }: SidebarProps) {
                 <Banknote size={18} />
                 <span>Freight Payments</span>
               </Link>
+
+              <Link
+                href="/logistics/reports"
+                className={`flex items-center space-x-3 px-3 py-2 rounded-lg text-sm transition-all duration-200 ${
+                  isActive("/logistics/reports")
+                    ? "bg-saffron text-onyx font-semibold shadow-md"
+                    : "hover:bg-onyx-light text-cream-light/80 hover:text-cream-light"
+                }`}
+              >
+                <BarChart2 size={18} />
+                <span>Logistics Reports</span>
+              </Link>
             </div>
           </div>
         )}
