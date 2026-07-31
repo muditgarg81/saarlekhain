@@ -44,6 +44,8 @@ const DOC_TYPES = [
   { type: "DN", name: "Debit Note" },
   { type: "CN", name: "Credit Note" },
   { type: "PAY", name: "Payment Voucher" },
+  { type: "TO", name: "Transport Order" },
+  { type: "TRC", name: "Transport Contract" },
 ];
 
 export default function DocSettingsForm({
