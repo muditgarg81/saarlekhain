@@ -250,6 +250,10 @@ export default function TransportManagementClient({
         toLocation: contract.toLocation,
         freightAmount: contract.rate,
       }));
+      // In multi-trip mode, seed the first trip's freight from the contract rate
+      setTrips((prev) =>
+        prev.map((t, i) => (i === 0 ? { ...t, freightAmount: contract.rate } : t))
+      );
       setFreightRateLocked(true);
     }
   };
