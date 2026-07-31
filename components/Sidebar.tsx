@@ -30,6 +30,7 @@ import {
   Route,
   FileCheck,
   Banknote,
+  BarChart2,
 } from "lucide-react";
 import { signOut, useSession } from "next-auth/react";
 import { can, SessionUser } from "@/lib/rbac";
