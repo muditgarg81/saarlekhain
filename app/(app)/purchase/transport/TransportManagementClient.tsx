@@ -811,14 +811,24 @@ export default function TransportManagementClient({
                       <div className="text-[10px] text-onyx/60 font-mono mt-0.5">Cap: {o.vehicleCapacity}</div>
                     </td>
                     <td className="p-3">
-                      <div className="font-mono text-onyx">{o.vehicleNo || "N/A"}</div>
+                      <div className="font-mono text-onyx">{o.vehicleNo || "—"}</div>
                       <div className="text-[10px] text-onyx/50 mt-0.5">
-                        {o.driverName ? `${o.driverName} (${o.driverPhone || ""})` : "-"}
+                        {o.driverName ? `${o.driverName} (${o.driverPhone || ""})` : ""}
                       </div>
+                      {(o.loadingPoint || o.unloadingPoint) && (
+                        <div className="text-[10px] text-onyx/50 mt-0.5">
+                          {o.loadingPoint && <span>↑ {o.loadingPoint}</span>}
+                          {o.loadingPoint && o.unloadingPoint && <span className="mx-1">·</span>}
+                          {o.unloadingPoint && <span>↓ {o.unloadingPoint}</span>}
+                        </div>
+                      )}
                       {o.tripDescription && (
-                        <div className="text-[10px] text-onyx/40 mt-1 italic max-w-[160px] truncate" title={o.tripDescription}>
+                        <div className="text-[10px] text-onyx/40 mt-0.5 italic max-w-[180px] truncate" title={o.tripDescription}>
                           {o.tripDescription}
                         </div>
+                      )}
+                      {o.trips.length > 0 && (
+                        <div className="text-[10px] text-blue-500 mt-0.5 font-semibold">{o.trips.length} trip{o.trips.length > 1 ? "s" : ""}</div>
                       )}
                     </td>
                     <td className="p-3 text-right font-mono">
