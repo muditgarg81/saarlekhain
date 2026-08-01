@@ -1268,7 +1268,7 @@ export default function TransportManagementClient({
                         <input type="number" required readOnly={freightRateLocked} value={newOrder.freightAmount} onChange={(e) => !freightRateLocked && setNewOrder((p) => ({ ...p, freightAmount: parseFloat(e.target.value) || 0 }))} className={`w-full text-xs p-2 border rounded-lg font-mono focus:outline-none transition-colors ${freightRateLocked ? "bg-emerald-50 border-emerald-200 text-emerald-800 cursor-not-allowed" : "border-onyx/10 focus:border-saffron"}`} />
                       </div>
                       <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-onyx/60">Other / Toll Charges</label><input type="number" value={newOrder.otherCharges} onChange={(e) => setNewOrder((p) => ({ ...p, otherCharges: parseFloat(e.target.value) || 0 }))} className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono" /></div>
-                      <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-onyx/60">GST Tax Rate (%)</label><input type="number" value={newOrder.taxRate} onChange={(e) => setNewOrder((p) => ({ ...p, taxRate: parseFloat(e.target.value) || 0 }))} className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono" /></div>
+                      <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-onyx/60">GST Rate</label><select value={newOrder.taxRate} onChange={(e) => setNewOrder((p) => ({ ...p, taxRate: parseFloat(e.target.value) }))} className="w-full text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron bg-white"><option value={0}>0% (Exempt / RCM)</option><option value={5}>5% (GTA with ITC)</option><option value={12}>12% (GTA without ITC)</option><option value={18}>18%</option></select></div>
                     </div>
                     <div className="flex items-center justify-between text-xs font-bold border-t border-onyx/10 pt-3">
                       <span className="text-onyx/60 uppercase">Calculated Total Transport Cost:</span>
@@ -1307,7 +1307,7 @@ export default function TransportManagementClient({
                       <span className="text-sm font-mono text-onyx">Total: ₹{(trips.reduce((s, t) => s + t.freightAmount + t.otherCharges, 0) * (1 + newOrder.taxRate / 100)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
                     </div>
                   </div>
-                  <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-onyx/60">GST Tax Rate (%)</label><input type="number" value={newOrder.taxRate} onChange={(e) => setNewOrder((p) => ({ ...p, taxRate: parseFloat(e.target.value) || 0 }))} className="w-32 text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono" /></div>
+                  <div className="space-y-1"><label className="text-[10px] font-bold uppercase text-onyx/60">GST Rate</label><select value={newOrder.taxRate} onChange={(e) => setNewOrder((p) => ({ ...p, taxRate: parseFloat(e.target.value) }))} className="w-40 text-xs p-2 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron bg-white"><option value={0}>0% (Exempt / RCM)</option><option value={5}>5% (GTA with ITC)</option><option value={12}>12% (GTA without ITC)</option><option value={18}>18%</option></select></div>
                 </div>
               )}
             </div>
