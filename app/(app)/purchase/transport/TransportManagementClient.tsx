@@ -148,6 +148,8 @@ export default function TransportManagementClient({
 
   const [freightRateLocked, setFreightRateLocked] = useState(false);
   const [selectedContractId, setSelectedContractId] = useState("");
+  const [contractSearch, setContractSearch] = useState("");
+  const [contractDropdownOpen, setContractDropdownOpen] = useState(false);
   const [editingOrder, setEditingOrder] = useState<Order | null>(null);
   const [editForm, setEditForm] = useState({
     vehicleNo: "", driverName: "", driverPhone: "",
@@ -434,6 +436,8 @@ export default function TransportManagementClient({
   // Edit order
   const handleOpenEdit = (o: Order) => {
     setEditingOrder(o);
+    const validRates = [0, 5, 12, 18];
+    const taxRate = validRates.includes(o.taxRate) ? o.taxRate : 0;
     setEditForm({
       vehicleNo: o.vehicleNo || "",
       driverName: o.driverName || "",
@@ -443,7 +447,7 @@ export default function TransportManagementClient({
       tripDescription: o.tripDescription || "",
       freightAmount: o.freightAmount,
       otherCharges: o.otherCharges,
-      taxRate: o.taxRate,
+      taxRate,
       poId: o.poId || "",
     });
   };
@@ -1140,23 +1144,50 @@ export default function TransportManagementClient({
                     <Route size={11} className="text-saffron" />
                     Select Contract to Auto-Fill
                   </label>
-                  <select
-                    value={selectedContractId}
-                    onChange={(e) => handleContractSelect(e.target.value)}
-                    className="w-full text-xs p-2 bg-white border border-saffron/30 rounded-lg focus:outline-none focus:border-saffron"
-                  >
-                    <option value="">— Pick a contract (optional) —</option>
-                    {rates.map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.contractNo ? `[${r.contractNo}] ` : ""}{r.transporterName} · {r.fromLocation} → {r.toLocation} · {r.vehicleCapacity} · ₹{r.rate.toLocaleString("en-IN")}
-                      </option>
-                    ))}
-                  </select>
+                  <div className="relative">
+                    <div className="flex items-center border border-saffron/30 rounded-lg bg-white focus-within:border-saffron overflow-hidden">
+                      <input
+                        type="text"
+                        className="flex-1 text-xs p-2 outline-none bg-transparent"
+                        placeholder="Search by route, transporter, contract no..."
+                        value={contractSearch}
+                        onChange={(e) => { setContractSearch(e.target.value); setContractDropdownOpen(true); }}
+                        onFocus={() => setContractDropdownOpen(true)}
+                        onBlur={() => setTimeout(() => setContractDropdownOpen(false), 150)}
+                      />
+                      {selectedContractId && (
+                        <button type="button" onClick={() => { handleContractSelect(""); setContractSearch(""); }} className="px-2 text-onyx/40 hover:text-red-500 text-xs cursor-pointer">✕</button>
+                      )}
+                    </div>
+                    {selectedContractId && !contractDropdownOpen && (
+                      <div className="text-[10px] text-emerald-700 font-semibold mt-0.5">
+                        {(() => { const c = rates.find(r => r.id === selectedContractId); return c ? `${c.contractNo ? `[${c.contractNo}] ` : ""}${c.transporterName} · ${c.fromLocation} → ${c.toLocation} · ${c.vehicleCapacity} · ₹${c.rate.toLocaleString("en-IN")}` : ""; })()}
+                      </div>
+                    )}
+                    {contractDropdownOpen && (
+                      <div className="absolute z-50 w-full mt-1 bg-white border border-onyx/10 rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                        <div onMouseDown={() => { handleContractSelect(""); setContractSearch(""); setContractDropdownOpen(false); }} className="px-3 py-2 text-xs text-onyx/40 hover:bg-cream-dark/10 cursor-pointer">— None (clear contract) —</div>
+                        {rates.filter(r => {
+                          const q = contractSearch.toLowerCase();
+                          return !q || (r.contractNo || "").toLowerCase().includes(q) || r.transporterName.toLowerCase().includes(q) || r.fromLocation.toLowerCase().includes(q) || r.toLocation.toLowerCase().includes(q) || String(r.rate).includes(q);
+                        }).map(r => (
+                          <div key={r.id} onMouseDown={() => { handleContractSelect(r.id); setContractSearch(""); setContractDropdownOpen(false); }} className={`px-3 py-2 text-xs cursor-pointer hover:bg-saffron/10 ${selectedContractId === r.id ? "bg-saffron/10 font-semibold" : ""}`}>
+                            {r.contractNo && <span className="font-mono text-saffron mr-1">[{r.contractNo}]</span>}
+                            {r.transporterName} · <span className="font-semibold">{r.fromLocation} → {r.toLocation}</span> · {r.vehicleCapacity} · <span className="font-mono">₹{r.rate.toLocaleString("en-IN")}</span>
+                          </div>
+                        ))}
+                        {rates.filter(r => { const q = contractSearch.toLowerCase(); return !q || (r.contractNo || "").toLowerCase().includes(q) || r.transporterName.toLowerCase().includes(q) || r.fromLocation.toLowerCase().includes(q) || r.toLocation.toLowerCase().includes(q) || String(r.rate).includes(q); }).length === 0 && (
+                          <div className="px-3 py-2 text-xs text-onyx/40">No contracts match</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                   {selectedContractId && (
                     <p className="text-[10px] text-emerald-700 font-semibold mt-1">
                       ✓ Contract applied — transporter, route, capacity and rate are pre-filled and locked.
                     </p>
                   )}
+
                 </div>
               )}
 
