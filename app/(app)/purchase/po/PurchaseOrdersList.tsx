@@ -673,6 +673,14 @@ export default function PurchaseOrdersList({
         6: { halign: "right" },
         7: { halign: "right" },
         8: { halign: "right" }
+      },
+      didParseCell: (data: any) => {
+        if (data.section === "head" && [3, 5, 6, 7, 8].includes(data.column.index)) {
+          data.cell.styles.halign = "right";
+        }
+        if (data.section === "head" && data.column.index === 4) {
+          data.cell.styles.halign = "center";
+        }
       }
     });
 
