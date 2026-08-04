@@ -41,6 +41,7 @@ interface LineItem {
   itemName: string;
   itemCode: string;
   qty: number;
+  baseUom: string;
   rate: number;
   discount: number;
   gstRate: number;

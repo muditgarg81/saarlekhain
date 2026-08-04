@@ -369,6 +369,7 @@ export default async function PurchaseOrdersPage() {
           itemName: item?.name || "Unknown Item",
           itemCode: item?.code || "N/A",
           qty: line.qty,
+          baseUom: item?.baseUom || "",
           rate: line.rate,
           discount: line.discount,
           gstRate: line.gstRate,
