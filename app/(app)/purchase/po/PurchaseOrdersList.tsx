@@ -668,10 +668,8 @@ export default function PurchaseOrdersList({
       styles: { fontSize: 8.5, font: "helvetica" },
       didParseCell: (data: any) => {
         const col = data.column.index;
-        if (col === 4) {
+        if ([3, 4, 5, 6, 7, 8].includes(col)) {
           data.cell.styles.halign = "center";
-        } else if ([3, 5, 6, 7, 8].includes(col)) {
-          data.cell.styles.halign = "right";
         }
       }
     });
