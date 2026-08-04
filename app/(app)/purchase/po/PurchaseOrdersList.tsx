@@ -622,7 +622,7 @@ export default function PurchaseOrdersList({
 
     // 3. Table of items
     const tableHeaders = [
-      ["S.No", "Code", "Item Description", "Qty", "Basic Rate (Rs.)", "Disc %", "GST %", "Landed Cost (Rs.)"]
+      ["S.No", "Code", "Item Description", "Qty", "UOM", "Basic Rate (Rs.)", "Disc %", "GST %", "Landed Cost (Rs.)"]
     ];
 
     const totalTaxable = po.lines.reduce((sum, line) => {
@@ -650,6 +650,7 @@ export default function PurchaseOrdersList({
         line.itemCode,
         desc,
         line.qty,
+        line.baseUom || "",
         line.rate.toFixed(2),
         line.discount + "%",
         line.gstRate + "%",
@@ -666,10 +667,11 @@ export default function PurchaseOrdersList({
       styles: { fontSize: 8.5, font: "helvetica" },
       columnStyles: {
         3: { halign: "right" },
-        4: { halign: "right" },
+        4: { halign: "center" },
         5: { halign: "right" },
         6: { halign: "right" },
-        7: { halign: "right" }
+        7: { halign: "right" },
+        8: { halign: "right" }
       }
     });
 
