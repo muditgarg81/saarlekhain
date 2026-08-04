@@ -666,20 +666,12 @@ export default function PurchaseOrdersList({
       theme: "striped",
       headStyles: { fillColor: [224, 130, 4] }, // Saffron colored header
       styles: { fontSize: 8.5, font: "helvetica" },
-      columnStyles: {
-        3: { halign: "right" },
-        4: { halign: "center" },
-        5: { halign: "right" },
-        6: { halign: "right" },
-        7: { halign: "right" },
-        8: { halign: "right" }
-      },
       didParseCell: (data: any) => {
-        if (data.section === "head" && [3, 5, 6, 7, 8].includes(data.column.index)) {
-          data.cell.styles.halign = "right";
-        }
-        if (data.section === "head" && data.column.index === 4) {
+        const col = data.column.index;
+        if (col === 4) {
           data.cell.styles.halign = "center";
+        } else if ([3, 5, 6, 7, 8].includes(col)) {
+          data.cell.styles.halign = "right";
         }
       }
     });
