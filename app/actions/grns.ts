@@ -36,27 +36,28 @@ export async function createGrn(data: {
   const actorId = (session.user as any).id;
 
   try {
-    if (!data.lines || data.lines.length === 0) {
-      return { success: false, error: "GRN must have at least one line item" };
+    const validLines = (data.lines || []).filter(l => l.receivedQty > 0);
+    if (validLines.length === 0) {
+      return { success: false, error: "GRN must have at least one line item with received quantity > 0" };
     }
 
     const number = await getNextSequence(companyId, "GRN");
 
     // Check if any items require QC
-    const itemIds = data.lines.map(l => l.itemId);
+    const itemIds = validLines.map(l => l.itemId);
     const qcItems = await db.item.findMany({
       where: { id: { in: itemIds }, companyId },
       select: { id: true, qcRequired: true }
     });
     const qcRequiredMap = new Map(qcItems.map(i => [i.id, i.qcRequired]));
-    const anyQcRequired = data.lines.some(l => qcRequiredMap.get(l.itemId) === true);
+    const anyQcRequired = validLines.some(l => qcRequiredMap.get(l.itemId) === true);
 
     const initialStatus = anyQcRequired ? GrnStatus.QC_PENDING : GrnStatus.DRAFT;
 
     const result = await db.$transaction(async (tx) => {
       // 1. Create batches if lot numbers are supplied
       const lineCreates = [];
-      for (const line of data.lines) {
+      for (const line of validLines) {
         let batchId = null;
         if (line.batchLotNo) {
           const mfg = line.batchMfgDate ? new Date(line.batchMfgDate) : null;
@@ -325,14 +326,20 @@ export async function updateGrn(
   const actorId = (session.user as any).id;
 
   try {
+    // Filter out 0-quantity lines
+    const validLines = (data.lines || []).filter(l => l.receivedQty > 0);
+    if (validLines.length === 0) {
+      return { success: false, error: "GRN must have at least one line item with received quantity > 0" };
+    }
+
     // Get item QC requirements
-    const itemIds = data.lines.map(l => l.itemId);
+    const itemIds = validLines.map(l => l.itemId);
     const qcItems = await db.item.findMany({
       where: { id: { in: itemIds }, companyId },
       select: { id: true, qcRequired: true }
     });
     const qcRequiredMap = new Map(qcItems.map(i => [i.id, i.qcRequired]));
-    const anyQcRequired = data.lines.some(l => qcRequiredMap.get(l.itemId) === true);
+    const anyQcRequired = validLines.some(l => qcRequiredMap.get(l.itemId) === true);
 
     const result = await db.$transaction(async (tx) => {
       // 1. Lock the GRN row and retrieve the original state atomically using update
@@ -392,7 +399,7 @@ export async function updateGrn(
 
       // 5. Create new lines (and upsert batches)
       const lineCreates = [];
-      for (const line of data.lines) {
+      for (const line of validLines) {
         let batchId = null;
         if (line.batchLotNo) {
           const mfg = line.batchMfgDate ? new Date(line.batchMfgDate) : null;

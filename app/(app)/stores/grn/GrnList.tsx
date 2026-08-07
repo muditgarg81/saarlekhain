@@ -168,6 +168,7 @@ export default function GrnList({
   const [dcDate, setDcDate] = useState("");
   const [invoiceNo, setInvoiceNo] = useState("");
   const [manualSelectedItemId, setManualSelectedItemId] = useState("");
+  const [editSelectedItemId, setEditSelectedItemId] = useState("");
 
   const [formLines, setFormLines] = useState<Array<{
     itemId: string;
@@ -207,8 +208,12 @@ export default function GrnList({
     const po = purchaseOrders.find(p => p.id === poId);
     if (po) {
       setSelectedVendorId(po.vendorId);
-      // Auto pre-populate form lines from PO line items
-      const lines = po.lines.map(l => ({
+      // Auto pre-populate form lines from PO line items that still have pending quantity to receive
+      let targetLines = po.lines.filter(l => l.qty > l.receivedQty);
+      if (targetLines.length === 0) {
+        targetLines = po.lines;
+      }
+      const lines = targetLines.map(l => ({
         itemId: l.itemId,
         poLineId: l.id,
         receivedQty: Math.max(0, l.qty - l.receivedQty),
@@ -300,8 +305,9 @@ export default function GrnList({
 
   const handleCreateGrn = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (formLines.length === 0) {
-      alert("No line items configured");
+    const validLines = formLines.filter(l => l.receivedQty > 0);
+    if (validLines.length === 0) {
+      alert("No line items with received quantity > 0 configured. Please add or set received quantity > 0 for items received.");
       return;
     }
 
@@ -314,7 +320,7 @@ export default function GrnList({
       dcNo: dcNo || null,
       dcDate: dcDate || null,
       invoiceNo: invoiceNo || null,
-      lines: formLines,
+      lines: validLines,
     });
     setActionLoading(false);
 
@@ -559,8 +565,9 @@ export default function GrnList({
   const handleUpdateGrn = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editGrnForm) return;
-    if (editGrnForm.lines.length === 0) {
-      alert("GRN must contain at least one line item");
+    const validLines = editGrnForm.lines.filter(l => l.receivedQty > 0);
+    if (validLines.length === 0) {
+      alert("GRN must contain at least one line item with received quantity > 0");
       return;
     }
 
@@ -576,7 +583,7 @@ export default function GrnList({
       dcNo: editGrnForm.dcNo || null,
       dcDate: editGrnForm.dcDate || null,
       invoiceNo: editGrnForm.invoiceNo || null,
-      lines: editGrnForm.lines.map(l => ({
+      lines: validLines.map(l => ({
         itemId: l.itemId,
         poLineId: l.poLineId || null,
         receivedQty: l.receivedQty,
@@ -1108,57 +1115,57 @@ export default function GrnList({
                   </label>
                 </div>
 
-                {sourceType !== "AGAINST_PO" && (
-                  <div className="flex items-end gap-3 p-3 bg-cream-dark/15 rounded-lg border border-onyx/5">
-                    <div className="flex-1">
-                      <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
-                        Select Item to Add *
-                      </label>
-                      <SearchableItemSelect
-                        items={items}
-                        value={manualSelectedItemId}
-                        onChange={(val) => setManualSelectedItemId(val)}
-                        placeholder="Search and select item..."
-                      />
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (!manualSelectedItemId) return;
-                        const item = items.find(i => i.id === manualSelectedItemId);
-                        if (!item) return;
-                        if (formLines.some(l => l.itemId === item.id)) {
-                          alert("Item already added to receipt lines.");
-                          return;
-                        }
-                        const firstBin = stores.find(s => s.id === selectedStoreId)?.bins[0]?.id || null;
-                        setFormLines(prev => [
-                          ...prev,
-                          {
-                            itemId: item.id,
-                            poLineId: null,
-                            receivedQty: 1,
-                            binId: firstBin,
-                            batchLotNo: "",
-                            batchMfgDate: "",
-                            batchExpiryDate: "",
-                            itemName: item.name,
-                            itemCode: item.code,
-                          }
-                        ]);
-                        setManualSelectedItemId("");
-                      }}
-                      className="px-4 py-2 bg-onyx text-cream-light hover:bg-onyx-light rounded-lg text-xs font-bold shadow-md cursor-pointer transition-colors duration-150 shrink-0 h-[34px] flex items-center justify-center"
-                    >
-                      Add Item
-                    </button>
+                <div className="flex items-end gap-3 p-3 bg-cream-dark/15 rounded-lg border border-onyx/5">
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                      {sourceType === "AGAINST_PO" ? "Add Item (From PO / Item Catalog) *" : "Select Item to Add *"}
+                    </label>
+                    <SearchableItemSelect
+                      items={items}
+                      value={manualSelectedItemId}
+                      onChange={(val) => setManualSelectedItemId(val)}
+                      placeholder="Search and select item to add..."
+                    />
                   </div>
-                )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!manualSelectedItemId) return;
+                      const item = items.find(i => i.id === manualSelectedItemId);
+                      if (!item) return;
+                      if (formLines.some(l => l.itemId === item.id)) {
+                        alert("Item already added to receipt lines.");
+                        return;
+                      }
+                      const po = sourceType === "AGAINST_PO" ? purchaseOrders.find(p => p.id === selectedPoId) : null;
+                      const poLine = po?.lines.find(l => l.itemId === item.id);
+                      const firstBin = stores.find(s => s.id === selectedStoreId)?.bins[0]?.id || null;
+                      setFormLines(prev => [
+                        ...prev,
+                        {
+                          itemId: item.id,
+                          poLineId: poLine?.id || null,
+                          receivedQty: poLine ? Math.max(1, poLine.qty - poLine.receivedQty) : 1,
+                          binId: firstBin,
+                          batchLotNo: "",
+                          batchMfgDate: "",
+                          batchExpiryDate: "",
+                          itemName: item.name,
+                          itemCode: item.code,
+                        }
+                      ]);
+                      setManualSelectedItemId("");
+                    }}
+                    className="px-4 py-2 bg-onyx text-cream-light hover:bg-onyx-light rounded-lg text-xs font-bold shadow-md cursor-pointer transition-colors duration-150 shrink-0 h-[34px] flex items-center justify-center"
+                  >
+                    Add Item
+                  </button>
+                </div>
 
                 {formLines.length === 0 ? (
                   <p className="text-center py-6 bg-white border border-dashed border-onyx/10 text-xs text-onyx/40 font-medium rounded-lg">
                     {sourceType === "AGAINST_PO" 
-                      ? "Select a purchase order to populate lines." 
+                      ? "Select a purchase order to populate lines, or add items using the selector above." 
                       : "Add items manually using the selector above."}
                   </p>
                 ) : (
@@ -1172,7 +1179,7 @@ export default function GrnList({
                           <th className="p-2.5 font-bold w-32">Lot Number</th>
                           <th className="p-2.5 font-bold w-32">Mfg Date</th>
                           <th className="p-2.5 font-bold w-32">Expiry Date</th>
-                          {sourceType !== "AGAINST_PO" && <th className="p-2.5 font-bold w-12 text-center"></th>}
+                          <th className="p-2.5 font-bold w-12 text-center"></th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1240,19 +1247,18 @@ export default function GrnList({
                                 className="w-full text-[11px] p-1 border border-onyx/15 rounded"
                               />
                             </td>
-                            {sourceType !== "AGAINST_PO" && (
-                              <td className="p-2.5 text-center">
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setFormLines(prev => prev.filter((_, i) => i !== idx));
-                                  }}
-                                  className="text-red-500 hover:text-red-700 cursor-pointer p-1 rounded hover:bg-red-50 border border-transparent hover:border-red-200"
-                                >
-                                  <Trash2 size={13} />
-                                </button>
-                              </td>
-                            )}
+                            <td className="p-2.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFormLines(prev => prev.filter((_, i) => i !== idx));
+                                }}
+                                className="text-red-500 hover:text-red-700 cursor-pointer p-1 rounded hover:bg-red-50 border border-transparent hover:border-red-200"
+                                title="Remove line item from receipt"
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1508,10 +1514,69 @@ export default function GrnList({
               </div>
 
               {/* GRN Line Items */}
-              <div className="space-y-2">
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70">
-                  Receipt Line Items
-                </label>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70">
+                    Receipt Line Items
+                  </label>
+                  {editGrnForm.lines.length > 0 && (
+                    <span className="text-[10px] text-onyx/50 font-medium">
+                      {editGrnForm.lines.filter(l => l.receivedQty > 0).length} of {editGrnForm.lines.length} item(s) to post
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-end gap-3 p-3 bg-cream-dark/15 rounded-lg border border-onyx/5">
+                  <div className="flex-1">
+                    <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                      Add Item to Receipt
+                    </label>
+                    <SearchableItemSelect
+                      items={items}
+                      value={editSelectedItemId}
+                      onChange={(val) => setEditSelectedItemId(val)}
+                      placeholder="Search and select item to add..."
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!editSelectedItemId || !editGrnForm) return;
+                      const item = items.find(i => i.id === editSelectedItemId);
+                      if (!item) return;
+                      if (editGrnForm.lines.some(l => l.itemId === item.id)) {
+                        alert("Item already added to receipt lines.");
+                        return;
+                      }
+                      const po = editGrnForm.poId ? purchaseOrders.find(p => p.id === editGrnForm.poId) : null;
+                      const poLine = po?.lines.find(l => l.itemId === item.id);
+                      const firstBin = stores.find(s => s.id === editGrnForm.storeId)?.bins[0]?.id || null;
+                      
+                      setEditGrnForm({
+                        ...editGrnForm,
+                        lines: [
+                          ...editGrnForm.lines,
+                          {
+                            id: "",
+                            itemId: item.id,
+                            itemCode: item.code,
+                            itemName: item.name,
+                            poLineId: poLine?.id || null,
+                            receivedQty: poLine ? Math.max(1, poLine.qty - poLine.receivedQty) : 1,
+                            binId: firstBin,
+                            batchLotNo: "",
+                            batchMfgDate: "",
+                            batchExpiryDate: "",
+                          }
+                        ]
+                      });
+                      setEditSelectedItemId("");
+                    }}
+                    className="px-4 py-2 bg-onyx text-cream-light hover:bg-onyx-light rounded-lg text-xs font-bold shadow-md cursor-pointer transition-colors duration-150 shrink-0 h-[34px] flex items-center justify-center"
+                  >
+                    Add Item
+                  </button>
+                </div>
 
                 <div className="border border-onyx/5 rounded-lg overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse bg-white min-w-[700px]">
@@ -1523,6 +1588,7 @@ export default function GrnList({
                         <th className="p-2.5 w-32">Lot Number</th>
                         <th className="p-2.5 w-32">Mfg Date</th>
                         <th className="p-2.5 w-32">Expiry Date</th>
+                        <th className="p-2.5 font-bold w-12 text-center"></th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1616,6 +1682,21 @@ export default function GrnList({
                                 }}
                                 className="w-full text-[11px] p-1 border border-onyx/15 rounded focus:outline-none focus:border-saffron"
                               />
+                            </td>
+                            <td className="p-2.5 text-center">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditGrnForm(prev => prev ? {
+                                    ...prev,
+                                    lines: prev.lines.filter((_, i) => i !== idx)
+                                  } : null);
+                                }}
+                                className="text-red-500 hover:text-red-700 cursor-pointer p-1 rounded hover:bg-red-50 border border-transparent hover:border-red-200"
+                                title="Remove line item from receipt"
+                              >
+                                <Trash2 size={13} />
+                              </button>
                             </td>
                           </tr>
                         );
