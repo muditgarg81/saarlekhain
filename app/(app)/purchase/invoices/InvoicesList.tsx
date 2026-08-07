@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { 
   createSupplierInvoice, 
-  updateInvoiceMatchStatus 
+  updateInvoiceMatchStatus,
+  recalculateAllInvoicesMatchStatus
 } from "@/app/actions/invoices";
 import { can } from "@/lib/rbac";
 import { limitYearTo4Digits } from "@/lib/date";
@@ -113,6 +114,17 @@ export default function InvoicesList({
   const [actionLoading, setActionLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [overrideReason, setOverrideReason] = useState("");
+
+  const handleRecalculateAll = async () => {
+    setActionLoading(true);
+    const res = await recalculateAllInvoicesMatchStatus();
+    setActionLoading(false);
+    if (res.success) {
+      window.location.reload();
+    } else {
+      alert("Failed to run 3-way match audit: " + res.error);
+    }
+  };
 
   const isAccounts = can(user, "invoice.match") || ["ACCOUNTS", "ADMIN", "OWNER"].includes(user.role);
 
@@ -271,6 +283,16 @@ export default function InvoicesList({
           <p className="text-xs text-onyx/50 mt-1">Audit inbound vendor invoices against approved Purchase Orders and accepted GRN warehouse quantities.</p>
         </div>
         <div className="flex items-center space-x-3">
+          <button
+            type="button"
+            disabled={actionLoading}
+            onClick={handleRecalculateAll}
+            className="flex items-center space-x-2 px-3.5 py-2 bg-cream-dark/50 hover:bg-cream-dark border border-onyx/10 rounded-lg text-xs font-bold text-onyx shadow-xs transition-all duration-150 cursor-pointer disabled:opacity-50"
+            title="Re-run 3-way match calculation against linked POs and accepted GRN quantities for all invoices"
+          >
+            <RefreshCw size={14} className={actionLoading ? "animate-spin" : ""} />
+            <span>Run 3-Way Audit</span>
+          </button>
           <button
             onClick={() => {
               setErrorMsg(null);

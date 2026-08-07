@@ -6,7 +6,7 @@ import { getNextSequence } from "@/lib/sequences";
 import { postLedgerEntry } from "@/lib/stock";
 import { revalidatePath } from "next/cache";
 import { GrnStatus, LedgerTxnType, PoStatus, GrnSource, InvoiceMatchStatus } from "@prisma/client";
-import { recalculateInvoiceMatchStatus } from "./invoices";
+import { recalculateInvoiceMatchStatus, computeInvoiceMatchStatus } from "./invoices";
 
 interface GrnLineInput {
   itemId: string;
@@ -801,7 +801,22 @@ async function autoCreateDraftInvoice(
   const dueDateObj = new Date(invoiceDateObj);
   dueDateObj.setDate(dueDateObj.getDate() + creditDays);
 
-  // 7. Create SupplierInvoice
+  // 7. Compute 3-Way Match status if linked to a PO
+  let initialMatchStatus: InvoiceMatchStatus = InvoiceMatchStatus.PENDING;
+  let discrepancies: string[] = [];
+
+  if (grn.poId) {
+    const matchResult = await computeInvoiceMatchStatus(
+      tx,
+      companyId,
+      grn.poId,
+      invoiceLinesData
+    );
+    initialMatchStatus = matchResult.matchStatus;
+    discrepancies = matchResult.discrepancies;
+  }
+
+  // Create SupplierInvoice
   await tx.supplierInvoice.create({
     data: {
       companyId,
@@ -811,7 +826,8 @@ async function autoCreateDraftInvoice(
       invoiceDate: invoiceDateObj,
       amount: totalAmount,
       dueDate: dueDateObj,
-      matchStatus: InvoiceMatchStatus.PENDING,
+      matchStatus: initialMatchStatus,
+      ocrDraft: (discrepancies.length > 0 ? { discrepancies } : null) as any,
       lines: {
         create: invoiceLinesData
       }

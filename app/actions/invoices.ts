@@ -303,3 +303,44 @@ export async function updateInvoiceMatchStatus(
     return { success: false, error: err.message || "Failed to update match status" };
   }
 }
+
+export async function recalculateAllInvoicesMatchStatus() {
+  const session = await auth();
+  if (!session || !session.user) return { success: false, error: "Unauthorized" };
+
+  const companyId = (session.user as any).companyId;
+
+  try {
+    const invoices = await db.supplierInvoice.findMany({
+      where: { companyId, deletedAt: null },
+      include: { lines: true }
+    });
+
+    await db.$transaction(async (tx) => {
+      for (const inv of invoices) {
+        if (inv.poId) {
+          const { matchStatus, discrepancies } = await computeInvoiceMatchStatus(
+            tx,
+            companyId,
+            inv.poId,
+            inv.lines
+          );
+          await tx.supplierInvoice.update({
+            where: { id: inv.id },
+            data: {
+              matchStatus,
+              ocrDraft: (discrepancies.length > 0 ? { discrepancies } : null) as any
+            }
+          });
+        }
+      }
+    });
+
+    revalidatePath("/purchase/invoices");
+    return { success: true };
+  } catch (err: any) {
+    console.error("Error recalculating invoice match status:", err);
+    return { success: false, error: err.message || "Failed to recalculate 3-way match status" };
+  }
+}
+
