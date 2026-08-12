@@ -230,6 +230,7 @@ export async function confirmPendingPayment(
     paidOn: string;
     mode: string;
     reference: string;
+    amount?: number;
   }
 ) {
   const session = await auth();
@@ -248,6 +249,7 @@ export async function confirmPendingPayment(
       return { success: false, error: "Only pending advance payment vouchers can be confirmed" };
     }
 
+    const payAmount = (data.amount && data.amount > 0) ? data.amount : original.amount;
     const poMatch = original.reference.match(/\(PO:\s*([^\)]+)\)/i);
     const suffix = poMatch ? ` (PO: ${poMatch[1]})` : "";
     const updatedReference = `${data.reference}${suffix}`;
@@ -256,6 +258,7 @@ export async function confirmPendingPayment(
       const pay = await tx.paymentVoucher.update({
         where: { id },
         data: {
+          amount: payAmount,
           paidOn: new Date(data.paidOn),
           mode: data.mode,
           reference: updatedReference,

@@ -196,7 +196,8 @@ export default function PaymentsList({
   const [confirmForm, setConfirmForm] = useState({
     paidOn: new Date().toISOString().split("T")[0],
     mode: "NEFT",
-    reference: ""
+    reference: "",
+    amount: 0,
   });
 
   // Edit Request Status states
@@ -574,7 +575,8 @@ export default function PaymentsList({
     setConfirmForm({
       paidOn: new Date().toISOString().split("T")[0],
       mode: "NEFT",
-      reference: ""
+      reference: "",
+      amount: target.amount,
     });
     setIsConfirmOpen(true);
   };
@@ -586,12 +588,26 @@ export default function PaymentsList({
       alert("Please enter a transaction/cheque reference");
       return;
     }
+    const payAmt = confirmForm.amount > 0 ? confirmForm.amount : confirmTarget.amount;
+    if (payAmt <= 0) {
+      alert("Payment amount must be greater than 0");
+      return;
+    }
+    if (payAmt > confirmTarget.amount + 0.01) {
+      alert(`Payment amount cannot exceed total target amount of ₹${confirmTarget.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`);
+      return;
+    }
     setActionLoading(true);
     setErrorMsg(null);
 
     let res;
     if (confirmTarget.type === "REQUEST") {
-      res = await confirmPaymentRequest(confirmTarget.id, confirmForm);
+      res = await confirmPaymentRequest(confirmTarget.id, {
+        paidOn: confirmForm.paidOn,
+        mode: confirmForm.mode,
+        reference: confirmForm.reference,
+        amount: payAmt,
+      });
     } else if (confirmTarget.type === "GRN_DIRECT") {
       const grn = pendingGrns.find(g => g.id === confirmTarget.id);
       if (!grn) {
@@ -602,13 +618,18 @@ export default function PaymentsList({
       res = await recordPayment({
         vendorId: grn.vendorId,
         invoiceId: null,
-        amount: confirmTarget.amount,
+        amount: payAmt,
         paidOn: confirmForm.paidOn,
         mode: confirmForm.mode,
         reference: `${confirmForm.reference} (GRN: ${grn.number})`,
       });
     } else {
-      res = await confirmPendingPayment(confirmTarget.id, confirmForm);
+      res = await confirmPendingPayment(confirmTarget.id, {
+        paidOn: confirmForm.paidOn,
+        mode: confirmForm.mode,
+        reference: confirmForm.reference,
+        amount: payAmt,
+      });
     }
 
     setActionLoading(false);
@@ -3344,15 +3365,15 @@ export default function PaymentsList({
                 </div>
               )}
 
-              {/* Readonly details */}
+              {/* Target details */}
               <div className="bg-cream-dark/20 p-3 rounded-lg space-y-1.5 font-semibold text-onyx/80">
                 <div className="flex justify-between">
                   <span>Vendor/Supplier:</span>
                   <span className="font-bold text-onyx">{confirmTarget.vendorName}</span>
                 </div>
                 <div className="flex justify-between border-t border-onyx/5 pt-1.5">
-                  <span>Payment Amount:</span>
-                  <span className="font-mono font-bold text-saffron-dark">
+                  <span>Total Amount:</span>
+                  <span className="font-mono font-bold text-onyx">
                     ₹{confirmTarget.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
                   </span>
                 </div>
@@ -3362,6 +3383,39 @@ export default function PaymentsList({
                     {confirmTarget.type === "REQUEST" ? "Approved Request" : "Pending Advance Voucher"}
                   </span>
                 </div>
+              </div>
+
+              {/* Payment Amount Input for Part Payment */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70">
+                    Payment Amount (₹) *
+                  </label>
+                  {confirmForm.amount > 0 && confirmForm.amount < confirmTarget.amount - 0.01 && (
+                    <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                      Part Payment
+                    </span>
+                  )}
+                </div>
+                <input
+                  type="number"
+                  step="any"
+                  min="0.01"
+                  max={confirmTarget.amount}
+                  value={confirmForm.amount || ""}
+                  onChange={(e) => {
+                    const val = parseFloat(e.target.value) || 0;
+                    setConfirmForm(prev => ({ ...prev, amount: val }));
+                  }}
+                  className="w-full p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono font-bold text-sm text-onyx"
+                  placeholder="Enter payment amount..."
+                  required
+                />
+                {confirmForm.amount > 0 && confirmForm.amount < confirmTarget.amount - 0.01 && (
+                  <p className="text-[11px] text-amber-800 mt-1.5 bg-amber-50/80 p-2 rounded border border-amber-200/60 font-medium">
+                    Paying ₹{confirmForm.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })} of ₹{confirmTarget.amount.toLocaleString("en-IN", { minimumFractionDigits: 2 })}. Remaining balance of <strong>₹{(confirmTarget.amount - confirmForm.amount).toLocaleString("en-IN", { minimumFractionDigits: 2 })}</strong> will stay active for future part payments.
+                  </p>
+                )}
               </div>
 
               {/* Paid On */}
@@ -3420,7 +3474,7 @@ export default function PaymentsList({
                   disabled={actionLoading}
                   className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white text-xs font-bold rounded-lg shadow-sm transition disabled:opacity-50 cursor-pointer"
                 >
-                  Confirm Payment
+                  {confirmForm.amount > 0 && confirmForm.amount < confirmTarget.amount - 0.01 ? "Confirm Part Payment" : "Confirm Payment"}
                 </button>
               </div>
             </form>

@@ -223,6 +223,7 @@ export async function confirmPaymentRequest(
     paidOn: string;
     mode: string;
     reference: string;
+    amount?: number;
   }
 ) {
   const session = await auth();
@@ -242,17 +243,27 @@ export async function confirmPaymentRequest(
       return { success: false, error: "Only approved payment requests can be paid" };
     }
 
+    const payAmount = (data.amount && data.amount > 0 && data.amount <= original.amount)
+      ? data.amount
+      : original.amount;
+
+    const isPartPayment = payAmount < original.amount - 0.01;
+    const remainingAmount = Math.max(0, original.amount - payAmount);
+
     const number = await getNextSequence(companyId, "PAY");
 
     const result = await db.$transaction(async (tx) => {
       // 1. Create Payment Voucher
       let referenceText = data.reference;
+      if (isPartPayment) {
+        referenceText = `${data.reference} (Part payment of ₹${original.amount.toLocaleString("en-IN")})`;
+      }
       if (original.po && original.grn) {
-        referenceText = `${data.reference} (PO: ${original.po.number}) (GRN: ${original.grn.number})`;
+        referenceText = `${referenceText} (PO: ${original.po.number}) (GRN: ${original.grn.number})`;
       } else if (original.po) {
-        referenceText = `${data.reference} (PO: ${original.po.number})`;
+        referenceText = `${referenceText} (PO: ${original.po.number})`;
       } else if (original.grn) {
-        referenceText = `${data.reference} (GRN: ${original.grn.number})`;
+        referenceText = `${referenceText} (GRN: ${original.grn.number})`;
       }
 
       const pay = await tx.paymentVoucher.create({
@@ -261,7 +272,7 @@ export async function confirmPaymentRequest(
           number,
           vendorId: original.vendorId,
           invoiceId: null,
-          amount: original.amount,
+          amount: payAmount,
           paidOn: new Date(data.paidOn),
           mode: data.mode,
           reference: referenceText,
@@ -270,16 +281,21 @@ export async function confirmPaymentRequest(
       });
 
       // 2. Update Payment Request
+      // If it's a part payment, update the remaining amount so it stays APPROVED for the balance
       const prq = await tx.paymentRequest.update({
         where: { id },
         data: {
-          status: PaymentRequestStatus.PAID,
-          paymentVoucherId: pay.id,
+          amount: isPartPayment ? remainingAmount : original.amount,
+          status: isPartPayment ? PaymentRequestStatus.APPROVED : PaymentRequestStatus.PAID,
+          paymentVoucherId: isPartPayment ? null : pay.id,
+          remarks: isPartPayment
+            ? `${original.remarks || ""}\n[Part payment ₹${payAmount.toLocaleString("en-IN")} paid on ${data.paidOn}. Remaining: ₹${remainingAmount.toLocaleString("en-IN")}]`.trim()
+            : original.remarks,
         }
       });
 
       // Audit logs
-      await logAudit(tx, companyId, actorId, "CONFIRM_PAYMENT_REQUEST", "PaymentRequest", prq.id, original, prq);
+      await logAudit(tx, companyId, actorId, isPartPayment ? "PART_PAYMENT_REQUEST" : "CONFIRM_PAYMENT_REQUEST", "PaymentRequest", prq.id, original, prq);
       await logAudit(tx, companyId, actorId, "RECORD_PAYMENT", "PaymentVoucher", pay.id, null, pay);
 
       return { prq, pay };
