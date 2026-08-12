@@ -57,31 +57,44 @@ export async function getItemValuation(
     const entryRate = entry.rate || currentAvgRate;
 
     if (qty > 0) {
-      // Stock receipt / addition: update balance and recalculate weighted average rate
-      const addedValue = qty * entryRate;
-      balanceQty += qty;
-      balanceValue += addedValue;
-      if (balanceQty > 0) {
-        currentAvgRate = balanceValue / balanceQty;
+      // Stock receipt / addition
+      if (balanceQty < 0) {
+        const newQty = balanceQty + qty;
+        if (newQty > 0) {
+          balanceQty = newQty;
+          balanceValue = newQty * entryRate;
+          currentAvgRate = entryRate;
+        } else {
+          balanceQty = newQty;
+          balanceValue = 0;
+        }
+      } else {
+        const addedValue = qty * entryRate;
+        balanceQty += qty;
+        balanceValue += addedValue;
+        if (balanceQty > 0) {
+          currentAvgRate = balanceValue / balanceQty;
+        }
       }
     } else if (qty < 0) {
-      // Stock issue / reduction: consumes stock at the current average rate
+      // Stock issue / reduction: consumes stock at current average rate
+      if (currentAvgRate === 0 && entryRate > 0) {
+        currentAvgRate = entryRate;
+      }
       balanceQty += qty; // qty is negative
-      if (balanceQty < 0) {
-        // Handle negative stock scenario gracefully
-        balanceQty = 0;
-        balanceValue = 0;
-      } else {
+      if (balanceQty > 0) {
         balanceValue = balanceQty * currentAvgRate;
+      } else {
+        balanceValue = 0;
       }
     }
   }
 
   return {
     itemId,
-    qty: balanceQty,
+    qty: Math.max(0, balanceQty),
     valuationRate: currentAvgRate,
-    totalValue: balanceValue,
+    totalValue: Math.max(0, balanceValue),
   };
 }
 
