@@ -90,11 +90,12 @@ export async function getItemValuation(
     }
   }
 
+  const finalQty = Math.max(0, balanceQty);
   return {
     itemId,
-    qty: Math.max(0, balanceQty),
-    valuationRate: currentAvgRate,
-    totalValue: Math.max(0, balanceValue),
+    qty: finalQty,
+    valuationRate: finalQty > 0 ? currentAvgRate : 0,
+    totalValue: finalQty > 0 ? Math.max(0, balanceValue) : 0,
   };
 }
 
