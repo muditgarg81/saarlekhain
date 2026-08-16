@@ -10,7 +10,9 @@ import { can } from "@/lib/rbac";
 
 const prSchema = z.object({
   lines: z.array(z.object({
-    itemId: z.string(),
+    itemId: z.string().optional().nullable(),
+    serviceDescription: z.string().optional().nullable(),
+    serviceUom: z.string().optional().nullable(),
     qty: z.number().nonnegative(),
     requiredBy: z.string().optional().nullable(),
   })).min(1, "PR must contain at least one line"),
@@ -19,7 +21,9 @@ const prSchema = z.object({
 const rfqSchema = z.object({
   prId: z.string().optional().nullable(),
   lines: z.array(z.object({
-    itemId: z.string(),
+    itemId: z.string().optional().nullable(),
+    serviceDescription: z.string().optional().nullable(),
+    serviceUom: z.string().optional().nullable(),
     qty: z.number().nonnegative(),
   })).min(1, "RFQ must contain at least one line"),
 });
@@ -34,7 +38,9 @@ const quotationSchema = z.object({
   packingCharges: z.number().nonnegative().default(0),
   lines: z.array(z.object({
     rfqLineId: z.string().optional().nullable(),
-    itemId: z.string(),
+    itemId: z.string().optional().nullable(),
+    serviceDescription: z.string().optional().nullable(),
+    serviceUom: z.string().optional().nullable(),
     rate: z.number().nonnegative(),
     discount: z.number().nonnegative().default(0),
     gstRate: z.number().nonnegative().default(0),
@@ -42,7 +48,7 @@ const quotationSchema = z.object({
     quotedQty: z.number().nonnegative().optional().nullable(),
     leadDays: z.number().int().nonnegative().optional().nullable(),
     brand: z.string().optional().nullable(),
-  })),
+  })).min(1, "Quotation must contain at least one line"),
 });
 
 async function logAudit(
@@ -87,7 +93,9 @@ export async function createPR(data: z.infer<typeof prSchema>) {
           status: PrStatus.DRAFT,
           lines: {
             create: validated.lines.map((l) => ({
-              itemId: l.itemId,
+              itemId: l.itemId || null,
+              serviceDescription: l.serviceDescription || null,
+              serviceUom: l.serviceUom || null,
               qty: l.qty,
               requiredBy: l.requiredBy ? new Date(l.requiredBy) : null,
             })),
@@ -199,7 +207,9 @@ export async function createRFQ(data: z.infer<typeof rfqSchema>) {
           status: RfqStatus.DRAFT,
           lines: {
             create: validated.lines.map((l) => ({
-              itemId: l.itemId,
+              itemId: l.itemId || null,
+              serviceDescription: l.serviceDescription || null,
+              serviceUom: l.serviceUom || null,
               qty: l.qty,
             })),
           },

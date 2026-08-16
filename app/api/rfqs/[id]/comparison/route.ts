@@ -35,7 +35,7 @@ export async function GET(
     }
 
     // Resolve items details
-    const itemIds = rfq.lines.map((l) => l.itemId);
+    const itemIds = rfq.lines.map((l) => l.itemId).filter(Boolean) as string[];
     const items = await db.item.findMany({
       where: { id: { in: itemIds }, companyId },
     });

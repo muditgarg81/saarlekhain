@@ -7,7 +7,8 @@ import { z } from "zod";
 import { InvoiceMatchStatus } from "@prisma/client";
 
 const invoiceLineSchema = z.object({
-  itemId: z.string(),
+  itemId: z.string().optional().nullable(),
+  serviceDescription: z.string().optional().nullable(),
   qty: z.number().nonnegative(),
   rate: z.number().nonnegative(),
 });
@@ -48,7 +49,7 @@ export async function computeInvoiceMatchStatus(
   tx: any,
   companyId: string,
   poId: string,
-  lines: { itemId: string; qty: number; rate: number; }[]
+  lines: { itemId?: string | null; serviceDescription?: string | null; qty: number; rate: number; }[]
 ): Promise<{ matchStatus: InvoiceMatchStatus; discrepancies: string[] }> {
   let matchStatus: InvoiceMatchStatus = InvoiceMatchStatus.MATCHED;
   const discrepancies: string[] = [];
@@ -236,7 +237,8 @@ export async function createSupplierInvoice(data: z.infer<typeof invoiceSchema>)
           ocrDraft: (discrepancies.length > 0 ? { discrepancies } : null) as any,
           lines: {
             create: validated.lines.map((l) => ({
-              itemId: l.itemId,
+              itemId: l.itemId || null,
+              serviceDescription: l.serviceDescription || null,
               qty: l.qty,
               rate: l.rate,
             })),

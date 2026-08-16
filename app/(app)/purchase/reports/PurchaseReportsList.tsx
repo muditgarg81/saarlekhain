@@ -43,7 +43,7 @@ interface PoRow {
   termsConditions: string | null;
   lines: Array<{
     id: string;
-    itemId: string;
+    itemId?: string | null;
     itemName: string;
     itemCode: string;
     qty: number;

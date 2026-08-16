@@ -9,7 +9,9 @@ import { GrnStatus, LedgerTxnType, PoStatus, GrnSource, InvoiceMatchStatus } fro
 import { recalculateInvoiceMatchStatus, computeInvoiceMatchStatus } from "./invoices";
 
 interface GrnLineInput {
-  itemId: string;
+  itemId?: string | null;
+  serviceDescription?: string | null;
+  serviceUom?: string | null;
   poLineId?: string | null;
   receivedQty: number;
   binId?: string | null;
@@ -44,13 +46,13 @@ export async function createGrn(data: {
     const number = await getNextSequence(companyId, "GRN");
 
     // Check if any items require QC
-    const itemIds = validLines.map(l => l.itemId);
+    const itemIds = validLines.map(l => l.itemId).filter(Boolean) as string[];
     const qcItems = await db.item.findMany({
       where: { id: { in: itemIds }, companyId },
       select: { id: true, qcRequired: true }
     });
     const qcRequiredMap = new Map(qcItems.map(i => [i.id, i.qcRequired]));
-    const anyQcRequired = validLines.some(l => qcRequiredMap.get(l.itemId) === true);
+    const anyQcRequired = validLines.some(l => l.itemId && qcRequiredMap.get(l.itemId) === true);
 
     const initialStatus = anyQcRequired ? GrnStatus.QC_PENDING : GrnStatus.DRAFT;
 
@@ -59,7 +61,7 @@ export async function createGrn(data: {
       const lineCreates = [];
       for (const line of validLines) {
         let batchId = null;
-        if (line.batchLotNo) {
+        if (line.itemId && line.batchLotNo) {
           const mfg = line.batchMfgDate ? new Date(line.batchMfgDate) : null;
           const exp = line.batchExpiryDate ? new Date(line.batchExpiryDate) : null;
           
@@ -87,11 +89,13 @@ export async function createGrn(data: {
         }
 
         // For non-QC items, acceptedQty defaults to receivedQty
-        const qcReq = qcRequiredMap.get(line.itemId) === true;
+        const qcReq = line.itemId ? qcRequiredMap.get(line.itemId) === true : false;
         const acceptedQty = qcReq ? 0 : line.receivedQty;
 
         lineCreates.push({
-          itemId: line.itemId,
+          itemId: line.itemId || null,
+          serviceDescription: line.serviceDescription || null,
+          serviceUom: line.serviceUom || null,
           poLineId: line.poLineId || null,
           receivedQty: line.receivedQty,
           acceptedQty,
@@ -127,8 +131,8 @@ export async function createGrn(data: {
       // 3. If any item requires QC, create the Inspection records
       if (anyQcRequired) {
         for (const line of grn.lines) {
-          const qcReq = qcRequiredMap.get(line.itemId) === true;
-          if (qcReq) {
+          const qcReq = line.itemId ? qcRequiredMap.get(line.itemId) === true : false;
+          if (line.itemId && qcReq) {
             const inspPlan = await tx.inspectionPlan.findUnique({
               where: { itemId: line.itemId },
               include: { params: true }
@@ -238,19 +242,21 @@ export async function postGrn(id: string) {
         }
 
         // Post stock ledger entry (+receipt)
-        await postLedgerEntry(tx, {
-          companyId,
-          itemId: line.itemId,
-          storeId: grn.storeId,
-          binId: line.binId,
-          batchId: line.batchId,
-          txnType: LedgerTxnType.GRN_RECEIPT,
-          qty: line.acceptedQty,
-          rate: poRate || null, // Will use average fallback if no PO
-          refType: "GRN",
-          refId: grn.id,
-          createdById: actorId,
-        });
+        if (line.itemId) {
+          await postLedgerEntry(tx, {
+            companyId,
+            itemId: line.itemId,
+            storeId: grn.storeId,
+            binId: line.binId,
+            batchId: line.batchId,
+            txnType: LedgerTxnType.GRN_RECEIPT,
+            qty: line.acceptedQty,
+            rate: poRate || null, // Will use average fallback if no PO
+            refType: "GRN",
+            refId: grn.id,
+            createdById: actorId,
+          });
+        }
       }
 
       // 4. If this is linked to a PO, verify if the PO is now fully received
@@ -316,7 +322,7 @@ export async function updateGrn(
     dcNo?: string | null;
     dcDate?: string | null;
     invoiceNo?: string | null;
-    lines: { id?: string; itemId: string; poLineId?: string | null; receivedQty: number; binId?: string | null; batchLotNo?: string | null; batchMfgDate?: string | null; batchExpiryDate?: string | null }[];
+    lines: { id?: string; itemId?: string | null; serviceDescription?: string | null; serviceUom?: string | null; poLineId?: string | null; receivedQty: number; binId?: string | null; batchLotNo?: string | null; batchMfgDate?: string | null; batchExpiryDate?: string | null }[];
   }
 ) {
   const session = await auth();
@@ -333,13 +339,13 @@ export async function updateGrn(
     }
 
     // Get item QC requirements
-    const itemIds = validLines.map(l => l.itemId);
+    const itemIds = validLines.map(l => l.itemId).filter(Boolean) as string[];
     const qcItems = await db.item.findMany({
       where: { id: { in: itemIds }, companyId },
       select: { id: true, qcRequired: true }
     });
     const qcRequiredMap = new Map(qcItems.map(i => [i.id, i.qcRequired]));
-    const anyQcRequired = validLines.some(l => qcRequiredMap.get(l.itemId) === true);
+    const anyQcRequired = validLines.some(l => l.itemId && qcRequiredMap.get(l.itemId) === true);
 
     const result = await db.$transaction(async (tx) => {
       // 1. Lock the GRN row and retrieve the original state atomically using update
@@ -401,7 +407,7 @@ export async function updateGrn(
       const lineCreates = [];
       for (const line of validLines) {
         let batchId = null;
-        if (line.batchLotNo) {
+        if (line.itemId && line.batchLotNo) {
           const mfg = line.batchMfgDate ? new Date(line.batchMfgDate) : null;
           const exp = line.batchExpiryDate ? new Date(line.batchExpiryDate) : null;
           
@@ -429,13 +435,15 @@ export async function updateGrn(
         }
 
         // For non-QC items, acceptedQty defaults to receivedQty
-        const qcReq = qcRequiredMap.get(line.itemId) === true;
+        const qcReq = line.itemId ? qcRequiredMap.get(line.itemId) === true : false;
         const acceptedQty = (original.status === GrnStatus.POSTED) 
           ? line.receivedQty 
           : (qcReq ? 0 : line.receivedQty);
 
         lineCreates.push({
-          itemId: line.itemId,
+          itemId: line.itemId || null,
+          serviceDescription: line.serviceDescription || null,
+          serviceUom: line.serviceUom || null,
           poLineId: line.poLineId || null,
           receivedQty: line.receivedQty,
           acceptedQty,
@@ -467,8 +475,8 @@ export async function updateGrn(
       // 7. If QC items exist, create inspections
       if (nextStatus === GrnStatus.QC_PENDING) {
         for (const line of updatedGrn.lines) {
-          const qcReq = qcRequiredMap.get(line.itemId) === true;
-          if (qcReq) {
+          const qcReq = line.itemId ? qcRequiredMap.get(line.itemId) === true : false;
+          if (line.itemId && qcReq) {
             const inspPlan = await tx.inspectionPlan.findUnique({
               where: { itemId: line.itemId },
               include: { params: true }
@@ -515,19 +523,21 @@ export async function updateGrn(
             }
           }
 
-          await postLedgerEntry(tx, {
-            companyId,
-            itemId: line.itemId,
-            storeId: updatedGrn.storeId,
-            binId: line.binId,
-            batchId: line.batchId,
-            txnType: LedgerTxnType.GRN_RECEIPT,
-            qty: line.acceptedQty,
-            rate: poRate || null,
-            refType: "GRN",
-            refId: updatedGrn.id,
-            createdById: actorId,
-          });
+          if (line.itemId) {
+            await postLedgerEntry(tx, {
+              companyId,
+              itemId: line.itemId,
+              storeId: updatedGrn.storeId,
+              binId: line.binId,
+              batchId: line.batchId,
+              txnType: LedgerTxnType.GRN_RECEIPT,
+              qty: line.acceptedQty,
+              rate: poRate || null,
+              refType: "GRN",
+              refId: updatedGrn.id,
+              createdById: actorId,
+            });
+          }
         }
 
         // Recalculate parent PO status
@@ -771,7 +781,7 @@ async function autoCreateDraftInvoice(
         // Apply PO line discount
         rate = poLine.rate * (1 - poLine.discount / 100);
       }
-    } else {
+    } else if (line.itemId) {
       // Fallback: search for last PO line rate or invoice line rate for this item
       const lastPoLine = await tx.poLine.findFirst({
         where: { itemId: line.itemId },
@@ -782,7 +792,9 @@ async function autoCreateDraftInvoice(
     }
 
     invoiceLinesData.push({
-      itemId: line.itemId,
+      itemId: line.itemId || null,
+      serviceDescription: line.serviceDescription || null,
+      serviceUom: line.serviceUom || null,
       qty: line.acceptedQty,
       rate: rate
     });

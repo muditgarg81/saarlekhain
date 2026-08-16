@@ -241,7 +241,7 @@ export default async function PurchaseReportsPage(props: { searchParams: PagePro
   // Scan PO lines to calculate item stats
   purchaseOrders.forEach(po => {
     po.lines.forEach(line => {
-      if (itemAnalysisMap[line.itemId]) {
+      if (line.itemId && itemAnalysisMap[line.itemId]) {
         const itemStats = itemAnalysisMap[line.itemId];
         const lineNet = line.qty * line.rate * (1 - line.discount / 100);
         itemStats.totalQtyOrdered += line.qty;

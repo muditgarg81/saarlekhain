@@ -137,6 +137,7 @@ export async function runReplenishmentScan(storeId?: string | null) {
       });
       const poMap = new Map<string, number>();
       for (const line of openPoLines) {
+        if (!line.itemId) continue;
         const current = poMap.get(line.itemId) || 0;
         poMap.set(line.itemId, current + Math.max(0, line.qty - line.receivedQty));
       }
@@ -171,6 +172,7 @@ export async function runReplenishmentScan(storeId?: string | null) {
       });
       const prMap = new Map<string, number>();
       for (const line of openPrLines) {
+        if (!line.itemId) continue;
         const current = prMap.get(line.itemId) || 0;
         prMap.set(line.itemId, current + line.qty);
       }
@@ -187,6 +189,7 @@ export async function runReplenishmentScan(storeId?: string | null) {
       });
       const rfqMap = new Map<string, number>();
       for (const line of openRfqLines) {
+        if (!line.itemId) continue;
         if (!line.prLine || !line.prLine.poRaised) {
           const current = rfqMap.get(line.itemId) || 0;
           rfqMap.set(line.itemId, current + line.qty);
@@ -213,6 +216,7 @@ export async function runReplenishmentScan(storeId?: string | null) {
       });
       const lastPriceMap = new Map<string, { rate: number; orderDate: Date }>();
       for (const line of latestPoLines) {
+        if (!line.itemId) continue;
         const orderDate = line.po.orderDate;
         const existing = lastPriceMap.get(line.itemId);
         if (!existing || orderDate > existing.orderDate) {
@@ -534,6 +538,7 @@ export async function approveAndConvertSuggestions(suggestionIds: string[], club
       });
       const poMap = new Map<string, number>();
       for (const line of openPoLines) {
+        if (!line.itemId) continue;
         const current = poMap.get(line.itemId) || 0;
         poMap.set(line.itemId, current + Math.max(0, line.qty - line.receivedQty));
       }

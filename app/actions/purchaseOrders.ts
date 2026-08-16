@@ -9,7 +9,9 @@ import { PoType, PoStatus, PrStatus, IndentStatus, LineStatus, RfqLineStatus, Rf
 import { resolvePoTerms } from "@/lib/termsResolver";
 
 const poLineSchema = z.object({
-  itemId: z.string(),
+  itemId: z.string().optional().nullable(),
+  serviceDescription: z.string().optional().nullable(),
+  serviceUom: z.string().optional().nullable(),
   qty: z.number().nonnegative(),
   rate: z.number().nonnegative(),
   discount: z.number().nonnegative().default(0),
@@ -188,7 +190,9 @@ export async function createPO(data: z.infer<typeof poSchema>) {
           version: 1,
           lines: {
             create: validated.lines.map((l) => ({
-              itemId: l.itemId,
+              itemId: l.itemId || null,
+              serviceDescription: l.serviceDescription || null,
+              serviceUom: l.serviceUom || null,
               qty: l.qty,
               rate: l.rate,
               discount: l.discount,
@@ -390,7 +394,7 @@ export async function amendPO(
     termsConditions?: string | null;
     termsPresetId?: string | null;
     otherCharges?: number;
-    lines: { itemId: string; qty: number; rate: number; discount: number; gstRate: number; brand?: string | null; specification?: string | null }[];
+    lines: { itemId?: string | null; serviceDescription?: string | null; serviceUom?: string | null; qty: number; rate: number; discount: number; gstRate: number; brand?: string | null; specification?: string | null }[];
   }
 ) {
   const session = await auth();
@@ -458,7 +462,9 @@ export async function amendPO(
           termsVersion: null,
           lines: {
             create: data.lines.map((l) => ({
-              itemId: l.itemId,
+              itemId: l.itemId || null,
+              serviceDescription: l.serviceDescription || null,
+              serviceUom: l.serviceUom || null,
               qty: l.qty,
               rate: l.rate,
               discount: l.discount,

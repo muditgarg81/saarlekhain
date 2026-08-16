@@ -467,15 +467,21 @@ export async function convertShortageToPr(indentId: string) {
     if (!validStatus) return { success: false, error: "Only approved or partially issued indents can be converted to PR" };
 
     // Find line items to convert
-    const prLinesToCreate: { itemId: string; qty: number }[] = [];
+    const prLinesToCreate: {
+      itemId?: string | null;
+      serviceDescription?: string | null;
+      serviceUom?: string | null;
+      qty: number;
+    }[] = [];
 
     for (const line of indent.lines) {
-      if (!line.itemId) continue;
       const remainingQty = line.qty - line.issuedQty;
       if (remainingQty <= 0) continue;
 
       prLinesToCreate.push({
-        itemId: line.itemId,
+        itemId: line.itemId || null,
+        serviceDescription: line.serviceDescription || null,
+        serviceUom: line.serviceUom || null,
         qty: remainingQty
       });
     }
@@ -496,7 +502,9 @@ export async function convertShortageToPr(indentId: string) {
           status: PrStatus.SUBMITTED, // auto submit since it is derived from approved indents
           lines: {
             create: prLinesToCreate.map(l => ({
-              itemId: l.itemId,
+              itemId: l.itemId || null,
+              serviceDescription: l.serviceDescription || null,
+              serviceUom: l.serviceUom || null,
               qty: l.qty,
               requiredBy: new Date()
             }))
@@ -569,7 +577,10 @@ export async function convertMultipleIndentsToPR(indentIds: string[]) {
 
     // Map to keep track of item quantities and which IndentLine records contribute to them
     const itemRequirements: {
-      [itemId: string]: {
+      [key: string]: {
+        itemId?: string | null;
+        serviceDescription?: string | null;
+        serviceUom?: string | null;
         qtyNeeded: number;
         lines: { id: string; requiredBy: Date | null }[];
       }
@@ -577,15 +588,21 @@ export async function convertMultipleIndentsToPR(indentIds: string[]) {
 
     for (const indent of indents) {
       for (const line of indent.lines) {
-        if (!line.itemId) continue;
         const remainingQty = line.qty - line.issuedQty;
         if (remainingQty <= 0) continue;
 
-        if (!itemRequirements[line.itemId]) {
-          itemRequirements[line.itemId] = { qtyNeeded: 0, lines: [] };
+        const key = line.itemId ? `item:${line.itemId}` : `service:${line.serviceDescription || "work"}`;
+        if (!itemRequirements[key]) {
+          itemRequirements[key] = {
+            itemId: line.itemId || null,
+            serviceDescription: line.serviceDescription || null,
+            serviceUom: line.serviceUom || null,
+            qtyNeeded: 0,
+            lines: []
+          };
         }
-        itemRequirements[line.itemId].qtyNeeded += remainingQty;
-        itemRequirements[line.itemId].lines.push({
+        itemRequirements[key].qtyNeeded += remainingQty;
+        itemRequirements[key].lines.push({
           id: line.id,
           requiredBy: line.requiredBy
         });
@@ -593,13 +610,15 @@ export async function convertMultipleIndentsToPR(indentIds: string[]) {
     }
 
     const prLinesToCreate: {
-      itemId: string;
+      itemId?: string | null;
+      serviceDescription?: string | null;
+      serviceUom?: string | null;
       qty: number;
       requiredBy: Date | null;
       originatingLineIds: string[];
     }[] = [];
 
-    for (const [itemId, req] of Object.entries(itemRequirements)) {
+    for (const [_, req] of Object.entries(itemRequirements)) {
       // Find earliest requiredBy date among the contributing lines
       let earliestRequiredBy: Date | null = null;
       for (const line of req.lines) {
@@ -611,7 +630,9 @@ export async function convertMultipleIndentsToPR(indentIds: string[]) {
       }
 
       prLinesToCreate.push({
-        itemId,
+        itemId: req.itemId || null,
+        serviceDescription: req.serviceDescription || null,
+        serviceUom: req.serviceUom || null,
         qty: req.qtyNeeded,
         requiredBy: earliestRequiredBy || new Date(),
         originatingLineIds: req.lines.map(l => l.id)
@@ -636,9 +657,11 @@ export async function convertMultipleIndentsToPR(indentIds: string[]) {
           status: PrStatus.SUBMITTED, // auto-submitted since it is derived from approved indents
           lines: {
             create: prLinesToCreate.map(l => ({
-              itemId: l.itemId,
+              itemId: l.itemId || null,
+              serviceDescription: l.serviceDescription || null,
+              serviceUom: l.serviceUom || null,
               qty: l.qty,
-              requiredBy: l.requiredBy
+              requiredBy: l.requiredBy || new Date()
             }))
           }
         },
@@ -648,7 +671,10 @@ export async function convertMultipleIndentsToPR(indentIds: string[]) {
       // 2. Link each original IndentLine to the newly created PrLine and set purchaseQty
       for (const prLineToCreate of prLinesToCreate) {
         // Find the created PR line ID
-        const createdPrLine = pr.lines.find(pl => pl.itemId === prLineToCreate.itemId);
+        const createdPrLine = pr.lines.find(pl => 
+          (prLineToCreate.itemId && pl.itemId === prLineToCreate.itemId) ||
+          (prLineToCreate.serviceDescription && pl.serviceDescription === prLineToCreate.serviceDescription)
+        );
         if (createdPrLine) {
           // Iterate and update each originating indent line individually to record its specific remaining qty as purchaseQty
           for (const lineId of prLineToCreate.originatingLineIds) {
@@ -890,7 +916,7 @@ export async function updateIssue(
   id: string,
   data: {
     storeId: string;
-    lines: { itemId: string; qty: number }[];
+    lines: { itemId?: string | null; serviceDescription?: string | null; serviceUom?: string | null; qty: number }[];
     deptId?: string | null;
     issuedTo?: string | null;
   }
@@ -942,25 +968,30 @@ export async function updateIssue(
       for (const iss of data.lines) {
         if (iss.qty <= 0) continue;
 
-        // Check stock availability in the store
-        const stockSum = await tx.stockLedger.aggregate({
-          where: { companyId, itemId: iss.itemId, storeId: data.storeId },
-          _sum: { qty: true }
-        });
-        const currentStock = stockSum._sum.qty || 0;
+        if (iss.itemId) {
+          // Check stock availability in the store
+          const stockSum = await tx.stockLedger.aggregate({
+            where: { companyId, itemId: iss.itemId, storeId: data.storeId },
+            _sum: { qty: true }
+          });
+          const currentStock = stockSum._sum.qty || 0;
 
-        if (currentStock < iss.qty) {
-          throw new Error(`Insufficient stock for item in selected store. Available: ${currentStock}, Requested: ${iss.qty}`);
+          if (currentStock < iss.qty) {
+            throw new Error(`Insufficient stock for item in selected store. Available: ${currentStock}, Requested: ${iss.qty}`);
+          }
         }
 
         // Verify against indent line limits if linked to an indent
         if (indent) {
-          const indentLine = indent.lines.find(l => l.itemId === iss.itemId);
-          if (!indentLine) throw new Error("Item not found on original indent");
+          const indentLine = indent.lines.find(l => 
+            (iss.itemId && l.itemId === iss.itemId) ||
+            (iss.serviceDescription && l.serviceDescription === iss.serviceDescription)
+          );
+          if (!indentLine) throw new Error("Item/Service not found on original indent");
 
           const newIssuedQty = indentLine.issuedQty + iss.qty;
           if (newIssuedQty > indentLine.qty) {
-            throw new Error(`Cannot issue more than the requested quantity of ${indentLine.qty} for item`);
+            throw new Error(`Cannot issue more than the requested quantity of ${indentLine.qty} for item/service`);
           }
 
           // Update indent line issuedQty
@@ -970,17 +1001,19 @@ export async function updateIssue(
           });
         }
 
-        // Post stock ledger entry (negative)
-        await postLedgerEntry(tx, {
-          companyId,
-          itemId: iss.itemId,
-          storeId: data.storeId,
-          txnType: LedgerTxnType.ISSUE,
-          qty: -iss.qty,
-          refType: "ISSUE",
-          refId: id,
-          createdById: actorId,
-        });
+        if (iss.itemId) {
+          // Post stock ledger entry (negative)
+          await postLedgerEntry(tx, {
+            companyId,
+            itemId: iss.itemId,
+            storeId: data.storeId,
+            txnType: LedgerTxnType.ISSUE,
+            qty: -iss.qty,
+            refType: "ISSUE",
+            refId: id,
+            createdById: actorId,
+          });
+        }
       }
 
       // 4. Delete old issue lines and create new ones
@@ -996,7 +1029,9 @@ export async function updateIssue(
           issuedTo: data.issuedTo,
           lines: {
             create: data.lines.map(l => ({
-              itemId: l.itemId,
+              itemId: l.itemId || null,
+              serviceDescription: l.serviceDescription || null,
+              serviceUom: l.serviceUom || null,
               qty: l.qty
             }))
           }
@@ -1057,7 +1092,7 @@ export async function createDirectIssue(data: {
   storeId: string;
   deptId?: string | null;
   issuedTo?: string | null;
-  lines: Array<{ itemId: string; qty: number }>;
+  lines: Array<{ itemId?: string | null; serviceDescription?: string | null; serviceUom?: string | null; qty: number }>;
 }) {
   const session = await auth();
   if (!session || !session.user) return { success: false, error: "Unauthorized" };
@@ -1090,41 +1125,47 @@ export async function createDirectIssue(data: {
       for (const line of lines) {
         if (line.qty <= 0) continue;
 
-        // Check stock
-        const stockSum = await tx.stockLedger.aggregate({
-          where: { companyId, itemId: line.itemId, storeId },
-          _sum: { qty: true }
-        });
-        const currentStock = stockSum._sum.qty || 0;
-
-        if (currentStock < line.qty) {
-          const item = await tx.item.findUnique({
-            where: { id: line.itemId },
-            select: { name: true }
+        if (line.itemId) {
+          // Check stock for item
+          const stockSum = await tx.stockLedger.aggregate({
+            where: { companyId, itemId: line.itemId, storeId },
+            _sum: { qty: true }
           });
-          throw new Error(`Insufficient stock for item "${item?.name || 'Unknown'}". Available: ${currentStock}, Requested: ${line.qty}`);
+          const currentStock = stockSum._sum.qty || 0;
+
+          if (currentStock < line.qty) {
+            const item = await tx.item.findUnique({
+              where: { id: line.itemId },
+              select: { name: true }
+            });
+            throw new Error(`Insufficient stock for item "${item?.name || 'Unknown'}". Available: ${currentStock}, Requested: ${line.qty}`);
+          }
         }
 
         // Create issue line
         await tx.issueLine.create({
           data: {
             issueId: newIssue.id,
-            itemId: line.itemId,
+            itemId: line.itemId || null,
+            serviceDescription: line.serviceDescription || null,
+            serviceUom: line.serviceUom || null,
             qty: line.qty,
           }
         });
 
-        // Post stock ledger entry (negative)
-        await postLedgerEntry(tx, {
-          companyId,
-          itemId: line.itemId,
-          storeId,
-          txnType: LedgerTxnType.ISSUE,
-          qty: -line.qty,
-          refType: "ISSUE",
-          refId: newIssue.id,
-          createdById: actorId,
-        });
+        if (line.itemId) {
+          // Post stock ledger entry (negative)
+          await postLedgerEntry(tx, {
+            companyId,
+            itemId: line.itemId,
+            storeId,
+            txnType: LedgerTxnType.ISSUE,
+            qty: -line.qty,
+            refType: "ISSUE",
+            refId: newIssue.id,
+            createdById: actorId,
+          });
+        }
       }
 
       // Log audit entry

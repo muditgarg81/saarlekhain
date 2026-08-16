@@ -147,18 +147,20 @@ model PurchaseRequisition {
 }
 
 model PrLine {
-  id             String              @id @default(cuid())
-  prId           String
-  itemId         String
-  qty            Float
-  requiredBy     DateTime?
-  orderedQty     Float               @default(0)
-  shortClosedQty Float               @default(0)
-  status         LineStatus          @default(OPEN)
-  indentLines    IndentLine[]
-  rfqLines       RfqLine[]
-  poRaised       Boolean             @default(false)
-  pr             PurchaseRequisition @relation(fields: [prId], references: [id])
+  id                 String              @id @default(cuid())
+  prId               String
+  itemId             String?
+  serviceDescription String?
+  serviceUom         String?
+  qty                Float
+  requiredBy         DateTime?
+  orderedQty         Float               @default(0)
+  shortClosedQty     Float               @default(0)
+  status             LineStatus          @default(OPEN)
+  indentLines        IndentLine[]
+  rfqLines           RfqLine[]
+  poRaised           Boolean             @default(false)
+  pr                 PurchaseRequisition @relation(fields: [prId], references: [id])
 
   @@schema("purchase")
 }
@@ -178,16 +180,18 @@ model Rfq {
 }
 
 model RfqLine {
-  id             String          @id @default(cuid())
-  rfqId          String
-  itemId         String
-  qty            Float
-  prLineId       String?
-  prLine         PrLine?         @relation(fields: [prLineId], references: [id])
-  quotationLines QuotationLine[]
-  awardedQty     Float           @default(0)
-  status         RfqLineStatus   @default(OPEN)
-  rfq            Rfq             @relation(fields: [rfqId], references: [id])
+  id                 String          @id @default(cuid())
+  rfqId              String
+  itemId             String?
+  serviceDescription String?
+  serviceUom         String?
+  qty                Float
+  prLineId           String?
+  prLine             PrLine?         @relation(fields: [prLineId], references: [id])
+  quotationLines     QuotationLine[]
+  awardedQty         Float           @default(0)
+  status             RfqLineStatus   @default(OPEN)
+  rfq                Rfq             @relation(fields: [rfqId], references: [id])
 
   @@schema("purchase")
 }
@@ -211,16 +215,18 @@ model Quotation {
 }
 
 model QuotationLine {
-  id          String    @id @default(cuid())
-  quotationId String
-  itemId      String
-  rate        Float
-  discount    Float     @default(0)
-  gstRate     Float     @default(0)
-  rfqLineId   String?
-  rfqLine     RfqLine?  @relation(fields: [rfqLineId], references: [id])
-  poLines     PoLine[]
-  quotation   Quotation @relation(fields: [quotationId], references: [id])
+  id                 String    @id @default(cuid())
+  quotationId        String
+  itemId             String?
+  serviceDescription String?
+  serviceUom         String?
+  rate               Float
+  discount           Float     @default(0)
+  gstRate            Float     @default(0)
+  rfqLineId          String?
+  rfqLine            RfqLine?  @relation(fields: [rfqLineId], references: [id])
+  poLines            PoLine[]
+  quotation          Quotation @relation(fields: [quotationId], references: [id])
 
   canSupply  Boolean @default(true)
   quotedQty  Float?
@@ -269,22 +275,24 @@ model PurchaseOrder {
 }
 
 model PoLine {
-  id              String         @id @default(cuid())
-  poId            String
-  itemId          String
-  qty             Float
-  receivedQty     Float          @default(0)
-  rate            Float
-  discount        Float          @default(0)
-  gstRate         Float          @default(0)
-  requiredBy      DateTime?
-  quotationLineId String?
-  quotationLine   QuotationLine? @relation(fields: [quotationLineId], references: [id])
-  rfqLineId       String? // denormalized for fast trace
-  prLineId        String? // denormalized for fast trace
-  po              PurchaseOrder  @relation(fields: [poId], references: [id])
-  brand           String?
-  specification   String?
+  id                 String         @id @default(cuid())
+  poId               String
+  itemId             String?
+  serviceDescription String?
+  serviceUom         String?
+  qty                Float
+  receivedQty        Float          @default(0)
+  rate               Float
+  discount           Float          @default(0)
+  gstRate            Float          @default(0)
+  requiredBy         DateTime?
+  quotationLineId    String?
+  quotationLine      QuotationLine? @relation(fields: [quotationLineId], references: [id])
+  rfqLineId          String? // denormalized for fast trace
+  prLineId           String? // denormalized for fast trace
+  po                 PurchaseOrder  @relation(fields: [poId], references: [id])
+  brand              String?
+  specification      String?
 
   @@schema("purchase")
 }
@@ -324,12 +332,14 @@ model SupplierInvoice {
 }
 
 model SupplierInvoiceLine {
-  id        String          @id @default(cuid())
-  invoiceId String
-  itemId    String
-  qty       Float
-  rate      Float
-  invoice   SupplierInvoice @relation(fields: [invoiceId], references: [id])
+  id                 String          @id @default(cuid())
+  invoiceId          String
+  itemId             String?
+  serviceDescription String?
+  serviceUom         String?
+  qty                Float
+  rate               Float
+  invoice            SupplierInvoice @relation(fields: [invoiceId], references: [id])
 
   @@schema("purchase")
 }

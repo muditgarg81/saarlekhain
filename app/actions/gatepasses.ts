@@ -7,7 +7,9 @@ import { revalidatePath } from "next/cache";
 import { GatePassType, GatePassStatus } from "@prisma/client";
 
 interface GatePassLineInput {
-  itemId: string;
+  itemId?: string | null;
+  serviceDescription?: string | null;
+  serviceUom?: string | null;
   qty: number;
 }
 
@@ -44,7 +46,9 @@ export async function createGatePass(data: {
           createdById: actorId,
           lines: {
             create: data.lines.map((l) => ({
-              itemId: l.itemId,
+              itemId: l.itemId || null,
+              serviceDescription: l.serviceDescription || null,
+              serviceUom: l.serviceUom || null,
               qty: l.qty,
               returnedQty: 0,
             })),
@@ -208,7 +212,9 @@ export async function updateGatePass(
           dueBack: data.dueBack ? new Date(data.dueBack) : null,
           lines: {
             create: data.lines.map((l) => ({
-              itemId: l.itemId,
+              itemId: l.itemId || null,
+              serviceDescription: l.serviceDescription || null,
+              serviceUom: l.serviceUom || null,
               qty: l.qty,
               returnedQty: 0,
             })),

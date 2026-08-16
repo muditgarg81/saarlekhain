@@ -32,7 +32,7 @@ import {
 
 interface GrnLine {
   id: string;
-  itemId: string;
+  itemId?: string | null;
   itemCode: string;
   itemName: string;
   receivedQty: number;
@@ -75,7 +75,7 @@ interface POItem {
   status: string;
   lines: Array<{
     id: string;
-    itemId: string;
+    itemId?: string | null;
     itemCode: string;
     itemName: string;
     qty: number;
@@ -147,7 +147,7 @@ export default function GrnList({
     status: string;
     lines: Array<{
       id?: string;
-      itemId: string;
+      itemId?: string | null;
       itemCode: string;
       itemName: string;
       poLineId?: string | null;
@@ -171,7 +171,7 @@ export default function GrnList({
   const [editSelectedItemId, setEditSelectedItemId] = useState("");
 
   const [formLines, setFormLines] = useState<Array<{
-    itemId: string;
+    itemId?: string | null;
     poLineId?: string | null;
     receivedQty: number;
     binId?: string | null;

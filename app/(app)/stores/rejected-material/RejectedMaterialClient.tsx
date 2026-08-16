@@ -42,7 +42,7 @@ interface SerializedNonQcLine {
   grnNumber: string;
   itemCode: string;
   itemName: string;
-  itemId: string;
+  itemId?: string | null;
   receivedQty: number;
   acceptedQty: number;
   rejectedQty: number;

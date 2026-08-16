@@ -354,16 +354,18 @@ model Grn {
 }
 
 model GrnLine {
-  id          String  @id @default(cuid())
-  grnId       String
-  itemId      String
-  poLineId    String?
-  receivedQty Float
-  acceptedQty Float   @default(0)
-  rejectedQty Float   @default(0)
-  batchId     String?
-  binId       String?
-  grn         Grn     @relation(fields: [grnId], references: [id])
+  id                 String  @id @default(cuid())
+  grnId              String
+  itemId             String?
+  serviceDescription String?
+  serviceUom         String?
+  poLineId           String?
+  receivedQty        Float
+  acceptedQty        Float   @default(0)
+  rejectedQty        Float   @default(0)
+  batchId            String?
+  binId              String?
+  grn                Grn     @relation(fields: [grnId], references: [id])
 
   @@schema("stores")
 }
@@ -422,12 +424,14 @@ model Issue {
 }
 
 model IssueLine {
-  id      String  @id @default(cuid())
-  issueId String
-  itemId  String
-  qty     Float
-  batchId String?
-  issue   Issue   @relation(fields: [issueId], references: [id])
+  id                 String  @id @default(cuid())
+  issueId            String
+  itemId             String?
+  serviceDescription String?
+  serviceUom         String?
+  qty                Float
+  batchId            String?
+  issue              Issue   @relation(fields: [issueId], references: [id])
 
   @@schema("stores")
 }
@@ -476,12 +480,14 @@ model GatePass {
 }
 
 model GatePassLine {
-  id          String   @id @default(cuid())
-  gatePassId  String
-  itemId      String
-  qty         Float
-  returnedQty Float    @default(0)
-  gatePass    GatePass @relation(fields: [gatePassId], references: [id])
+  id                 String   @id @default(cuid())
+  gatePassId         String
+  itemId             String?
+  serviceDescription String?
+  serviceUom         String?
+  qty                Float
+  returnedQty        Float    @default(0)
+  gatePass           GatePass @relation(fields: [gatePassId], references: [id])
 
   @@schema("stores")
 }

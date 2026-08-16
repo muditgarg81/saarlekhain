@@ -39,7 +39,7 @@ import { useRouter } from "next/navigation";
 
 interface PRLine {
   id: string;
-  itemId: string;
+  itemId?: string | null;
   itemName: string;
   itemCode: string;
   qty: number;
@@ -63,7 +63,7 @@ interface PRRecord {
 
 interface RFQLine {
   id: string;
-  itemId: string;
+  itemId?: string | null;
   itemName: string;
   itemCode: string;
   qty: number;
@@ -74,7 +74,7 @@ interface RFQLine {
 
 interface QuotationLine {
   id: string;
-  itemId: string;
+  itemId?: string | null;
   rate: number;
   discount: number;
   gstRate: number;
@@ -202,13 +202,13 @@ export default function RequisitionsList({
 
   // Form states
   const [newPr, setNewPr] = useState({
-    lines: [] as { itemId: string; qty: number; requiredBy: string }[]
+    lines: [] as { itemId?: string | null; qty: number; requiredBy: string }[]
   });
-  const [newPrLine, setNewPrLine] = useState({ itemId: "", qty: 1, requiredBy: "" });
+  const [newPrLine, setNewPrLine] = useState<{ itemId?: string | null; qty: number; requiredBy: string }>({ itemId: "", qty: 1, requiredBy: "" });
 
   const [newRfq, setNewRfq] = useState({
     prId: "",
-    lines: [] as { itemId: string; qty: number }[]
+    lines: [] as { itemId?: string | null; qty: number }[]
   });
 
   const [newQuote, setNewQuote] = useState({
@@ -221,7 +221,7 @@ export default function RequisitionsList({
     lines: [] as {
       id?: string;
       rfqLineId?: string | null;
-      itemId: string;
+      itemId?: string | null;
       rate: number;
       discount: number;
       gstRate: number;
@@ -1182,7 +1182,7 @@ export default function RequisitionsList({
                     <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
                     <SearchableItemSelect
                       items={items}
-                      value={newPrLine.itemId}
+                      value={newPrLine.itemId || ""}
                       onChange={(val) => setNewPrLine(prev => ({ ...prev, itemId: val }))}
                       placeholder="Select Item"
                     />

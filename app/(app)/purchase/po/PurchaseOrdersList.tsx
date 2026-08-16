@@ -37,7 +37,7 @@ import {
 
 interface LineItem {
   id: string;
-  itemId: string;
+  itemId?: string | null;
   itemName: string;
   itemCode: string;
   qty: number;
@@ -218,7 +218,7 @@ export default function PurchaseOrdersList({
     termsConditions: string;
     termsPresetId: string;
     otherCharges: number;
-    lines: { itemId: string; qty: number; rate: number; discount: number; gstRate: number; brand: string; specification?: string }[];
+    lines: { itemId?: string | null; qty: number; rate: number; discount: number; gstRate: number; brand: string; specification?: string }[];
     rfqId?: string | null;
   }>({
     vendorId: "",
@@ -232,7 +232,7 @@ export default function PurchaseOrdersList({
     otherCharges: 0,
     lines: []
   });
-  const [newPoLine, setNewPoLine] = useState({ itemId: "", qty: 1, rate: 0, discount: 0, gstRate: 18, brand: "", specification: "" });
+  const [newPoLine, setNewPoLine] = useState<{ itemId?: string | null; qty: number; rate: number; discount: number; gstRate: number; brand: string; specification: string }>({ itemId: "", qty: 1, rate: 0, discount: 0, gstRate: 18, brand: "", specification: "" });
 
   // Amend Form State
   const [amendForm, setAmendForm] = useState({
@@ -244,7 +244,7 @@ export default function PurchaseOrdersList({
     termsConditions: "",
     termsPresetId: "",
     otherCharges: 0,
-    lines: [] as { itemId: string; qty: number; rate: number; discount: number; gstRate: number; brand?: string | null; specification?: string | null }[]
+    lines: [] as { itemId?: string | null; qty: number; rate: number; discount: number; gstRate: number; brand?: string | null; specification?: string | null }[]
   });
 
   const [actionLoading, setActionLoading] = useState(false);
@@ -1667,7 +1667,7 @@ export default function PurchaseOrdersList({
                     <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
                     <SearchableItemSelect
                       items={items}
-                      value={newPoLine.itemId}
+                      value={newPoLine.itemId || ""}
                       onChange={(val) => {
                         const item = items.find(i => i.id === val) as any;
                         setNewPoLine(prev => ({

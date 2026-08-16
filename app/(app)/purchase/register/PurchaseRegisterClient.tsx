@@ -17,7 +17,7 @@ import {
 
 interface InvoiceLine {
   id: string;
-  itemId: string;
+  itemId?: string | null;
   qty: number;
   rate: number;
 }
@@ -34,7 +34,7 @@ interface InvoiceRecord {
 
 interface GrnLine {
   id: string;
-  itemId: string;
+  itemId?: string | null;
   poLineId: string | null;
   receivedQty: number;
   acceptedQty: number;
@@ -54,7 +54,7 @@ interface GrnRecord {
 
 interface PoLine {
   id: string;
-  itemId: string;
+  itemId?: string | null;
   qty: number;
   rate: number;
   discount: number;
@@ -191,8 +191,8 @@ export default function PurchaseRegisterClient({
     // We group by a unique key:
     // - For PO transactions: `po_[poId]_[itemId]`
     // - For Direct transactions: `direct_[vendorId]_[invoiceNo]_[itemId]`
-    const grnGroups: Record<string, { qty: number; grns: GrnRecord[]; itemId: string; vendorId: string; poId: string | null; invoiceNo: string | null }> = {};
-    const invoiceGroups: Record<string, { qty: number; invoices: InvoiceRecord[]; itemId: string; vendorId: string; poId: string | null; invoiceNo: string | null }> = {};
+    const grnGroups: Record<string, { qty: number; grns: GrnRecord[]; itemId: string | null; vendorId: string; poId: string | null; invoiceNo: string | null }> = {};
+    const invoiceGroups: Record<string, { qty: number; invoices: InvoiceRecord[]; itemId: string | null; vendorId: string; poId: string | null; invoiceNo: string | null }> = {};
 
     // Process all posted GRNs in the selected FY
     grns.forEach(grn => {
@@ -203,16 +203,16 @@ export default function PurchaseRegisterClient({
       grn.lines.forEach(line => {
         let key = "";
         if (grn.poId) {
-          key = `po_${grn.poId}_${line.itemId}`;
+          key = `po_${grn.poId}_${line.itemId || "work"}`;
         } else {
-          key = `direct_${vId}_${grn.invoiceNo || "no_invoice"}_${line.itemId}`;
+          key = `direct_${vId}_${grn.invoiceNo || "no_invoice"}_${line.itemId || "work"}`;
         }
 
         if (!grnGroups[key]) {
           grnGroups[key] = {
             qty: 0,
             grns: [],
-            itemId: line.itemId,
+            itemId: line.itemId || null,
             vendorId: vId,
             poId: grn.poId,
             invoiceNo: grn.invoiceNo
@@ -233,16 +233,16 @@ export default function PurchaseRegisterClient({
       inv.lines.forEach(line => {
         let key = "";
         if (inv.poId) {
-          key = `po_${inv.poId}_${line.itemId}`;
+          key = `po_${inv.poId}_${line.itemId || "work"}`;
         } else {
-          key = `direct_${inv.vendorId}_${inv.invoiceNo}_${line.itemId}`;
+          key = `direct_${inv.vendorId}_${inv.invoiceNo}_${line.itemId || "work"}`;
         }
 
         if (!invoiceGroups[key]) {
           invoiceGroups[key] = {
             qty: 0,
             invoices: [],
-            itemId: line.itemId,
+            itemId: line.itemId || null,
             vendorId: inv.vendorId,
             poId: inv.poId,
             invoiceNo: inv.invoiceNo
@@ -272,7 +272,7 @@ export default function PurchaseRegisterClient({
       const grnQty = grnData?.qty || 0;
       const invQty = invData?.qty || 0;
 
-      const item = itemMap.get(itemId);
+      const item = itemId ? itemMap.get(itemId) : null;
       const vendor = vendorMap.get(vendorId);
       const po = poId ? poMap.get(poId) : null;
 
@@ -284,7 +284,7 @@ export default function PurchaseRegisterClient({
       } else if (invData?.invoices[0]) {
         const invLine = invData.invoices[0].lines.find(l => l.itemId === itemId);
         if (invLine) rate = invLine.rate;
-      } else {
+      } else if (itemId) {
         rate = getFallbackItemRate(itemId);
       }
 
@@ -387,7 +387,7 @@ export default function PurchaseRegisterClient({
             const po = poMap.get(grn.poId);
             const poLine = po?.lines.find(l => l.itemId === line.itemId);
             if (poLine) rate = poLine.rate * (1 - poLine.discount / 100);
-          } else {
+          } else if (line.itemId) {
             rate = getFallbackItemRate(line.itemId);
           }
           grnVal += line.acceptedQty * rate;

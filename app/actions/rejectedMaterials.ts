@@ -54,7 +54,9 @@ export async function updateRejectedMaterialStatus(
               lines: {
                 create: [
                   {
-                    itemId: grnLine.itemId,
+                    itemId: grnLine.itemId || null,
+                    serviceDescription: grnLine.serviceDescription || null,
+                    serviceUom: grnLine.serviceUom || null,
                     qty: original.rejectedQty,
                     returnedQty: 0
                   }
@@ -239,6 +241,8 @@ export async function rejectMaterialDirectly(data: {
 
       if (!grnLine) throw new Error("GRN line not found");
       if (grnLine.grn.status !== GrnStatus.POSTED) throw new Error("GRN must be POSTED to perform rejection");
+
+      if (!grnLine.itemId) throw new Error("Service lines cannot be rejected directly");
 
       // Resolve item in transaction
       const item = await tx.item.findFirst({

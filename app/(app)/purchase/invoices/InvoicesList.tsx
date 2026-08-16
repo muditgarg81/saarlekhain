@@ -32,7 +32,7 @@ import {
 
 interface InvoiceLine {
   id: string;
-  itemId: string;
+  itemId?: string | null;
   itemName: string;
   itemCode: string;
   qty: number;
@@ -70,7 +70,7 @@ interface PurchaseOrder {
   id: string;
   number: string;
   lines: {
-    itemId: string;
+    itemId?: string | null;
     qty: number;
     rate: number;
   }[];
@@ -106,9 +106,9 @@ export default function InvoicesList({
     invoiceNo: "",
     invoiceDate: "",
     amount: 0,
-    lines: [] as { itemId: string; qty: number; rate: number }[]
+    lines: [] as { itemId?: string | null; qty: number; rate: number }[]
   });
-  const [newInvLine, setNewInvLine] = useState({ itemId: "", qty: 1, rate: 0 });
+  const [newInvLine, setNewInvLine] = useState<{ itemId?: string | null; qty: number; rate: number }>({ itemId: "", qty: 1, rate: 0 });
 
   const [ocrLoading, setOcrLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
@@ -601,7 +601,7 @@ export default function InvoicesList({
                       <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
                       <SearchableItemSelect
                         items={items}
-                        value={newInvLine.itemId}
+                        value={newInvLine.itemId || ""}
                         onChange={(val) => setNewInvLine(prev => ({ ...prev, itemId: val }))}
                         placeholder="Select Item"
                       />

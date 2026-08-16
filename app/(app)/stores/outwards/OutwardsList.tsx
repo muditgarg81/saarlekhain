@@ -38,7 +38,7 @@ import {
 
 interface LineItem {
   id: string;
-  itemId: string;
+  itemId?: string | null;
   itemName: string;
   itemCode: string;
   qty: number;
@@ -132,9 +132,9 @@ export default function OutwardsList({
     storeId: "",
     deptId: "",
     issuedTo: "",
-    lines: [] as { itemId: string; qty: number }[]
+    lines: [] as { itemId?: string | null; qty: number }[]
   });
-  const [newIssueLine, setNewIssueLine] = useState({ itemId: "", qty: 1 });
+  const [newIssueLine, setNewIssueLine] = useState<{ itemId?: string | null; qty: number }>({ itemId: "", qty: 1 });
 
   // Edit States
   const [isEditIssueOpen, setIsEditIssueOpen] = useState(false);
@@ -147,7 +147,7 @@ export default function OutwardsList({
     storeId: string;
     deptId: string;
     issuedTo: string;
-    lines: { id: string; itemId: string; itemName: string; itemCode: string; qty: number }[];
+    lines: { id: string; itemId?: string | null; itemName: string; itemCode: string; qty: number }[];
   } | null>(null);
 
   const [editGpForm, setEditGpForm] = useState<{
@@ -157,10 +157,10 @@ export default function OutwardsList({
     vendorId: string;
     purpose: string;
     dueBack: string;
-    lines: { itemId: string; qty: number }[];
+    lines: { itemId?: string | null; qty: number }[];
   } | null>(null);
 
-  const [editGpNewLine, setEditGpNewLine] = useState({ itemId: "", qty: 1 });
+  const [editGpNewLine, setEditGpNewLine] = useState<{ itemId?: string | null; qty: number }>({ itemId: "", qty: 1 });
 
   // Toggle selection
   const handleToggleSelect = (id: string) => {
@@ -1328,7 +1328,7 @@ export default function OutwardsList({
                     <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
                     <SearchableItemSelect
                       items={items}
-                      value={newIssueLine.itemId}
+                      value={newIssueLine.itemId || ""}
                       onChange={(val) => setNewIssueLine(prev => ({ ...prev, itemId: val }))}
                       placeholder="Select Item"
                     />
@@ -1931,7 +1931,7 @@ export default function OutwardsList({
                     <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
                     <SearchableItemSelect
                       items={items}
-                      value={editGpNewLine.itemId}
+                      value={editGpNewLine.itemId || ""}
                       onChange={(val) => setEditGpNewLine(prev => ({ ...prev, itemId: val }))}
                       placeholder="Select Item"
                     />
