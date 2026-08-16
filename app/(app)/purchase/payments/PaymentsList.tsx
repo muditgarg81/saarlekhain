@@ -872,7 +872,9 @@ export default function PaymentsList({
     (pay.reference?.toLowerCase() || "").includes(search.toLowerCase())
   );
 
-  const filteredRequests = paymentRequests.filter(req => {
+  const activeRequestsList = paymentRequests.filter(req => req.status !== "PAID");
+
+  const filteredRequests = activeRequestsList.filter(req => {
     const matchesSearch = 
       req.number.toLowerCase().includes(search.toLowerCase()) ||
       req.vendorName.toLowerCase().includes(search.toLowerCase()) ||
@@ -885,9 +887,7 @@ export default function PaymentsList({
     return matchesSearch && matchesStatus;
   });
 
-  const pendingRequestsCount = paymentRequests.filter(
-    (req) => req.status === "PENDING" || req.status === "APPROVED"
-  ).length;
+  const pendingRequestsCount = activeRequestsList.length;
 
   const filteredGrns = pendingGrns.filter(grn => {
     const matchesSearch = 
@@ -1126,7 +1126,6 @@ export default function PaymentsList({
                 <option value="PENDING">Pending</option>
                 <option value="APPROVED">Approved</option>
                 <option value="REJECTED">Rejected</option>
-                <option value="PAID">Paid / Disbursed</option>
               </select>
             </div>
           )}
