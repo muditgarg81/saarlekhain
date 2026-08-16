@@ -214,8 +214,26 @@ export default function RequisitionsList({
 
   const [newRfq, setNewRfq] = useState({
     prId: "",
-    lines: [] as { itemId?: string | null; qty: number }[]
+    lines: [] as { itemId?: string | null; serviceDescription?: string | null; serviceUom?: string | null; qty: number }[]
   });
+
+  const handleOpenRfq = (pr: PRRecord) => {
+    setSelectedPr(pr);
+    const eligibleLines = pr.lines.filter(l => {
+      const openQty = l.qty - (l.orderedQty || 0) - (l.shortClosedQty || 0);
+      return openQty > 0;
+    });
+    setNewRfq({
+      prId: pr.id,
+      lines: eligibleLines.map(l => ({
+        itemId: l.itemId || null,
+        serviceDescription: l.serviceDescription || null,
+        serviceUom: l.serviceUom || null,
+        qty: l.qty - (l.orderedQty || 0) - (l.shortClosedQty || 0)
+      }))
+    });
+    setIsRfqOpen(true);
+  };
 
   const [newQuote, setNewQuote] = useState({
     vendorId: "",
@@ -367,22 +385,6 @@ export default function RequisitionsList({
     } else {
       setErrorMsg(res.error || "Failed to reject PR");
     }
-  };
-
-  const handleOpenRfq = (pr: PRRecord) => {
-    setSelectedPr(pr);
-    const eligibleLines = pr.lines.filter(l => {
-      const openQty = l.qty - (l.orderedQty || 0) - (l.shortClosedQty || 0);
-      return openQty > 0;
-    });
-    setNewRfq({
-      prId: pr.id,
-      lines: eligibleLines.map(l => ({
-        itemId: l.itemId,
-        qty: l.qty - (l.orderedQty || 0) - (l.shortClosedQty || 0)
-      }))
-    });
-    setIsRfqOpen(true);
   };
 
   const handleCreateRfq = async (e: React.FormEvent) => {
@@ -1321,7 +1323,21 @@ export default function RequisitionsList({
                   <tbody>
                     {selectedPr.lines.map((line) => (
                       <tr key={line.id} className="border-t border-onyx/5">
-                        <td className="p-2.5">[{line.itemCode}] {line.itemName}</td>
+                        <td className="p-2.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {line.itemCode && line.itemCode !== "N/A" && (
+                              <span className={`font-mono text-[9px] font-bold px-1.5 py-0.5 rounded ${line.itemCode === "SERVICE" ? "bg-purple-100 text-purple-800" : "bg-onyx/5 text-onyx/70"}`}>
+                                {line.itemCode}
+                              </span>
+                            )}
+                            <span className="font-bold text-onyx">{line.itemName}</span>
+                            {line.serviceUom && (
+                              <span className="text-[9px] font-bold text-purple-700 bg-purple-50 px-1 py-0.5 rounded border border-purple-200">
+                                {line.serviceUom}
+                              </span>
+                            )}
+                          </div>
+                        </td>
                         <td className="p-2.5 text-right font-mono font-bold">{line.qty}</td>
                       </tr>
                     ))}
