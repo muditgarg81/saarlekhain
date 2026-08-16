@@ -1998,7 +1998,7 @@ export default function RequisitionsList({
       {/* Detail Drawer */}
       {isDetailOpen && (selectedPr || selectedRfq) && (
         <div className="fixed inset-0 bg-black/45 backdrop-blur-xs flex justify-end z-50">
-          <div className="w-full max-w-lg bg-cream h-full border-l border-onyx/10 flex flex-col shadow-2xl p-6 relative animate-in slide-in-from-right duration-200">
+          <div className="w-full max-w-2xl bg-cream h-full border-l border-onyx/10 flex flex-col shadow-2xl p-6 relative animate-in slide-in-from-right duration-200">
             <button onClick={() => setIsDetailOpen(false)} className="absolute top-6 right-6 text-onyx/40 hover:text-onyx cursor-pointer">
               <X size={20} />
             </button>
@@ -2060,7 +2060,19 @@ export default function RequisitionsList({
                         return (
                           <tr key={line.id} className="border-t border-onyx/5 text-[11px]">
                             <td className="p-2.5">
-                              <p className="font-bold text-onyx">[{line.itemCode}] {line.itemName}</p>
+                              <div className="flex items-center gap-1.5 flex-wrap">
+                                {line.itemCode && line.itemCode !== "N/A" && (
+                                  <span className={`font-mono text-[9px] font-bold px-1.5 py-0.5 rounded ${line.itemCode === "SERVICE" ? "bg-purple-100 text-purple-800" : "bg-onyx/5 text-onyx/70"}`}>
+                                    {line.itemCode}
+                                  </span>
+                                )}
+                                <span className="font-bold text-onyx">{line.itemName}</span>
+                                {line.serviceUom && (
+                                  <span className="text-[9px] font-bold text-purple-700 bg-purple-50 px-1 py-0.5 rounded border border-purple-200">
+                                    {line.serviceUom}
+                                  </span>
+                                )}
+                              </div>
                             </td>
                             <td className="p-2.5 text-right font-mono">{line.qty}</td>
                             <td className="p-2.5 text-right font-mono text-green-700 font-semibold">{line.orderedQty || 0}</td>
@@ -2105,14 +2117,26 @@ export default function RequisitionsList({
                         );
                       })
                     ) : (
-                      selectedRfq!.lines.map((line) => {
-                        return (
-                          <tr key={line.id} className="border-t border-onyx/5 text-[11px]">
-                            <td className="p-2.5">[{line.itemCode}] {line.itemName}</td>
-                            <td className="p-2.5 text-right font-mono font-bold">{line.qty}</td>
-                          </tr>
-                        );
-                      })
+                      selectedRfq!.lines.map((line) => (
+                        <tr key={line.id} className="border-t border-onyx/5 text-[11px]">
+                          <td className="p-2.5">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              {line.itemCode && line.itemCode !== "N/A" && (
+                                <span className={`font-mono text-[9px] font-bold px-1.5 py-0.5 rounded ${line.itemCode === "SERVICE" ? "bg-purple-100 text-purple-800" : "bg-onyx/5 text-onyx/70"}`}>
+                                  {line.itemCode}
+                                </span>
+                              )}
+                              <span className="font-bold text-onyx">{line.itemName}</span>
+                              {line.serviceUom && (
+                                <span className="text-[9px] font-bold text-purple-700 bg-purple-50 px-1 py-0.5 rounded border border-purple-200">
+                                  {line.serviceUom}
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                          <td className="p-2.5 text-right font-mono font-bold">{line.qty}</td>
+                        </tr>
+                      ))
                     )}
                   </tbody>
                 </table>

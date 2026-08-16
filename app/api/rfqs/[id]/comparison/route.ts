@@ -55,8 +55,8 @@ export async function GET(
       const item = items.find((i) => i.id === l.itemId);
       return {
         ...l,
-        itemCode: item?.code || "UNKNOWN",
-        itemName: item?.name || "Unknown Item",
+        itemCode: item?.code || (l.serviceDescription ? "SERVICE" : "UNKNOWN"),
+        itemName: item?.name || l.serviceDescription || "Service Item",
         moq: item?.moq || 1,
       };
     });

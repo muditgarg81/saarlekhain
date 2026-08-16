@@ -324,8 +324,10 @@ export default async function GrnPage() {
       return {
         id: l.id,
         itemId: l.itemId,
-        itemCode: item?.code || "N/A",
-        itemName: item?.name || "Unknown Item",
+        serviceDescription: l.serviceDescription,
+        serviceUom: l.serviceUom,
+        itemCode: item?.code || (l.serviceDescription ? "SERVICE" : "N/A"),
+        itemName: item?.name || l.serviceDescription || "Service Item",
         qty: l.qty,
         receivedQty: l.receivedQty,
         rate: l.rate

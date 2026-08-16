@@ -76,8 +76,10 @@ export default async function InvoicesPage() {
         return {
           id: line.id,
           itemId: line.itemId,
-          itemName: item?.name || "Unknown Item",
-          itemCode: item?.code || "N/A",
+          serviceDescription: line.serviceDescription,
+          serviceUom: line.serviceUom,
+          itemName: item?.name || line.serviceDescription || "Service Item",
+          itemCode: item?.code || (line.serviceDescription ? "SERVICE" : "N/A"),
           qty: line.qty,
           rate: line.rate,
         };
