@@ -39,6 +39,8 @@ export default async function IndentsPage() {
         code: true,
         name: true,
         baseUom: true,
+        type: true,
+        categoryId: true,
       },
       orderBy: {
         code: "asc",
@@ -88,6 +90,7 @@ export default async function IndentsPage() {
     return {
       id: ind.id,
       number: ind.number,
+      type: (ind.type || "MATERIAL") as "MATERIAL" | "SERVICE",
       priority: ind.priority,
       purpose: ind.purpose,
       status: ind.status,

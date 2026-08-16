@@ -27,7 +27,9 @@ import {
   Eye,
   Building2,
   AlertTriangle,
-  Edit3
+  Edit3,
+  Wrench,
+  Sparkles
 } from "lucide-react";
 
 interface IndentLine {
@@ -45,6 +47,7 @@ interface IndentLine {
 interface Indent {
   id: string;
   number: string;
+  type?: "MATERIAL" | "SERVICE";
   priority: string;
   purpose: string | null;
   status: string;
@@ -60,6 +63,8 @@ interface Item {
   code: string;
   name: string;
   baseUom: string;
+  type?: string;
+  categoryId?: string | null;
 }
 
 interface Store {
@@ -85,6 +90,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
   const [indents, setIndents] = useState<Indent[]>(initialIndents);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [selectedIndentIds, setSelectedIndentIds] = useState<string[]>([]);
   const [isBulkAddOpen, setIsBulkAddOpen] = useState(false);
   const [bulkSearch, setBulkSearch] = useState("");
@@ -99,6 +105,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
 
   // New Indent Form State
   const [newIndent, setNewIndent] = useState({
+    type: "MATERIAL" as "MATERIAL" | "SERVICE",
     priority: "NORMAL",
     purpose: "",
     deptId: "",
@@ -109,6 +116,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
     setErrorMsg(null);
     setEditingIndentId(indent.id);
     setNewIndent({
+      type: (indent.type || "MATERIAL") as "MATERIAL" | "SERVICE",
       priority: indent.priority,
       purpose: indent.purpose || "",
       deptId: indent.deptId || "",
@@ -126,6 +134,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
     setErrorMsg(null);
     setEditingIndentId(null);
     setNewIndent({
+      type: "MATERIAL",
       priority: "NORMAL",
       purpose: "",
       deptId: "",
@@ -139,6 +148,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
     setIsCreateOpen(false);
     setEditingIndentId(null);
     setNewIndent({
+      type: "MATERIAL",
       priority: "NORMAL",
       purpose: "",
       deptId: "",
@@ -168,7 +178,8 @@ export default function IndentsList({ initialIndents, items, stores, departments
                           (ind.purpose?.toLowerCase() || "").includes(search.toLowerCase()) ||
                           ind.requestedBy.toLowerCase().includes(search.toLowerCase());
     const matchesStatus = statusFilter === "all" || ind.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesType = typeFilter === "all" || (ind.type || "MATERIAL") === typeFilter;
+    return matchesSearch && matchesStatus && matchesType;
   });
 
   // New Indent Handlers
@@ -292,6 +303,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
     let res;
     if (editingIndentId) {
       res = await updateIndent(editingIndentId, {
+        type: newIndent.type,
         priority: newIndent.priority,
         purpose: newIndent.purpose,
         deptId: newIndent.deptId,
@@ -299,6 +311,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
       });
     } else {
       res = await createIndent({
+        type: newIndent.type,
         priority: newIndent.priority,
         purpose: newIndent.purpose,
         deptId: newIndent.deptId,
@@ -407,7 +420,17 @@ export default function IndentsList({ initialIndents, items, stores, departments
           />
         </div>
 
-        {/* Status filters */}
+        {/* Type & Status filters */}
+        <select
+          value={typeFilter}
+          onChange={(e) => setTypeFilter(e.target.value)}
+          className="text-xs bg-cream-dark/45 border border-onyx/10 rounded-lg px-3 py-2 focus:outline-none focus:border-saffron font-bold text-onyx"
+        >
+          <option value="all">All Types (Goods & Services)</option>
+          <option value="MATERIAL">📦 Material Indents</option>
+          <option value="SERVICE">🛠️ Service Indents</option>
+        </select>
+
         <select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
@@ -486,7 +509,20 @@ export default function IndentsList({ initialIndents, items, stores, departments
                           <div className="w-4 h-4 mx-auto border border-dashed border-onyx/10 rounded-sm bg-onyx/5" title="Only Approved or Partially Issued indents can be converted" />
                         )}
                       </td>
-                      <td className="font-mono font-bold text-xs text-onyx/85">{ind.number}</td>
+                      <td className="font-mono font-bold text-xs text-onyx/85">
+                        <div className="flex items-center space-x-1.5">
+                          <span>{ind.number}</span>
+                          {ind.type === "SERVICE" ? (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider bg-purple-100 text-purple-800 border border-purple-200">
+                              SERVICE
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold uppercase tracking-wider bg-blue-50 text-blue-700 border border-blue-200/60">
+                              MATERIAL
+                            </span>
+                          )}
+                        </div>
+                      </td>
                       <td className="font-semibold">{ind.requestedBy}</td>
                       <td>{ind.department || "N/A"}</td>
                       <td>
@@ -765,16 +801,50 @@ export default function IndentsList({ initialIndents, items, stores, departments
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
           <div className="bg-cream max-w-2xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
             <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
-              <h3 className="font-heading text-lg font-bold">{editingIndentId ? "Edit Material Requisition Indent" : "Raise Material Requisition Indent"}</h3>
+              <div className="flex items-center space-x-2">
+                {newIndent.type === "SERVICE" ? (
+                  <Wrench size={20} className="text-purple-400" />
+                ) : (
+                  <ClipboardList size={20} className="text-saffron" />
+                )}
+                <h3 className="font-heading text-lg font-bold">
+                  {editingIndentId
+                    ? (newIndent.type === "SERVICE" ? "Edit Service Requisition Indent" : "Edit Material Requisition Indent")
+                    : (newIndent.type === "SERVICE" ? "Raise Service Requisition Indent" : "Raise Material Requisition Indent")}
+                </h3>
+              </div>
               <button onClick={handleCloseCreate} className="hover:text-saffron transition-colors cursor-pointer">
                 <X size={20} />
               </button>
             </div>
 
             <form onSubmit={handleCreateIndent} className="flex-1 overflow-y-auto p-6 space-y-6">
+              {/* Service Info Banner */}
+              {newIndent.type === "SERVICE" && (
+                <div className="bg-purple-50/90 border-l-4 border-purple-600 p-3 rounded-lg flex items-center justify-between text-xs text-purple-900 font-medium">
+                  <div className="flex items-center space-x-2">
+                    <Wrench size={16} className="text-purple-600 shrink-0" />
+                    <span><strong>Service Indent:</strong> Requisition for equipment repairs, job work, AMC/maintenance, consulting, logistics, or external services.</span>
+                  </div>
+                </div>
+              )}
+
               {/* Header Details */}
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
                 <div className="sm:col-span-3">
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                    Indent Type *
+                  </label>
+                  <select
+                    value={newIndent.type}
+                    onChange={(e) => setNewIndent(prev => ({ ...prev, type: e.target.value as "MATERIAL" | "SERVICE" }))}
+                    className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none font-bold text-onyx"
+                  >
+                    <option value="MATERIAL">📦 Material Indent</option>
+                    <option value="SERVICE">🛠️ Service Indent</option>
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                     Indent Priority
                   </label>
@@ -788,7 +858,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
                     <option value="URGENT">Urgent</option>
                   </select>
                 </div>
-                <div className="sm:col-span-4">
+                <div className="sm:col-span-3">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                     Department
                   </label>
@@ -805,16 +875,16 @@ export default function IndentsList({ initialIndents, items, stores, departments
                     ))}
                   </select>
                 </div>
-                <div className="sm:col-span-5">
+                <div className="sm:col-span-4">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
-                    Requisition Purpose / Remarks
+                    {newIndent.type === "SERVICE" ? "Service Purpose / Project *" : "Requisition Purpose / Remarks"}
                   </label>
                   <input
                     type="text"
                     value={newIndent.purpose}
                     onChange={(e) => setNewIndent(prev => ({ ...prev, purpose: e.target.value }))}
-                    placeholder="e.g. Monthly maintenance setup, production batch 42"
-                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
+                    placeholder={newIndent.type === "SERVICE" ? "e.g. Annual HVAC AMC, Job Work Batch 5" : "e.g. Monthly maintenance setup, production batch 42"}
+                    className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
                   />
                 </div>
               </div>

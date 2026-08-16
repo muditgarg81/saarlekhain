@@ -8,6 +8,14 @@ enum ItemType {
   PACKING
   SEMI_FINISHED
   FINISHED_GOOD
+  SERVICE
+
+  @@schema("stores")
+}
+
+enum IndentType {
+  MATERIAL
+  SERVICE
 
   @@schema("stores")
 }
@@ -278,6 +286,7 @@ model Indent {
   number        String // IND-XXXXX
   deptId        String?
   requestedById String
+  type          IndentType   @default(MATERIAL)
   priority      String       @default("NORMAL")
   purpose       String?
   status        IndentStatus @default(DRAFT)

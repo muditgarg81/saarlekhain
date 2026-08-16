@@ -16,6 +16,7 @@ interface IndentLineInput {
 }
 
 export async function createIndent(data: {
+  type?: "MATERIAL" | "SERVICE";
   priority: string;
   purpose?: string | null;
   deptId?: string | null;
@@ -40,6 +41,7 @@ export async function createIndent(data: {
         data: {
           companyId,
           number,
+          type: (data.type === "SERVICE" ? "SERVICE" : "MATERIAL") as any,
           priority: data.priority,
           purpose: data.purpose || null,
           status: IndentStatus.DRAFT,
@@ -84,6 +86,7 @@ export async function createIndent(data: {
 export async function updateIndent(
   indentId: string,
   data: {
+    type?: "MATERIAL" | "SERVICE";
     priority: string;
     purpose?: string | null;
     deptId?: string | null;
@@ -121,6 +124,7 @@ export async function updateIndent(
       const updatedIndent = await tx.indent.update({
         where: { id: indentId },
         data: {
+          type: (data.type === "SERVICE" ? "SERVICE" : "MATERIAL") as any,
           priority: data.priority,
           purpose: data.purpose || null,
           deptId: data.deptId || null,

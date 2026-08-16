@@ -1636,6 +1636,7 @@ export default function ItemMasterList({ initialItems, categories, departments }
                     <option value="PACKING">Packing</option>
                     <option value="SEMI_FINISHED">Semi-finished</option>
                     <option value="FINISHED_GOOD">Finished Good</option>
+                    <option value="SERVICE">Service</option>
                   </select>
                 </div>
                 <div>
