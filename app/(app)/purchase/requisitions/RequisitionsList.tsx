@@ -40,6 +40,8 @@ import { useRouter } from "next/navigation";
 interface PRLine {
   id: string;
   itemId?: string | null;
+  serviceDescription?: string | null;
+  serviceUom?: string | null;
   itemName: string;
   itemCode: string;
   qty: number;
@@ -64,6 +66,8 @@ interface PRRecord {
 interface RFQLine {
   id: string;
   itemId?: string | null;
+  serviceDescription?: string | null;
+  serviceUom?: string | null;
   itemName: string;
   itemCode: string;
   qty: number;
@@ -75,6 +79,8 @@ interface RFQLine {
 interface QuotationLine {
   id: string;
   itemId?: string | null;
+  serviceDescription?: string | null;
+  serviceUom?: string | null;
   rate: number;
   discount: number;
   gstRate: number;
@@ -1158,7 +1164,7 @@ export default function RequisitionsList({
       {/* Manual PR Modal */}
       {isPrOpen && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-cream max-w-2xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
+          <div className="bg-cream max-w-4xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
             <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
               <h3 className="font-heading text-lg font-bold">Raise Purchase Requisition (PR)</h3>
               <button onClick={() => setIsPrOpen(false)} className="hover:text-saffron cursor-pointer">
@@ -1175,11 +1181,11 @@ export default function RequisitionsList({
               )}
 
               {/* Add items panel */}
-              <div className="p-4 bg-cream-dark/30 border border-onyx/5 rounded-xl space-y-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/60">Add Requisition Item</h4>
+              <div className="p-4 bg-cream-dark/30 border border-onyx/10 rounded-xl space-y-3">
+                <h4 className="text-xs font-bold uppercase tracking-wider text-onyx/70">Add Requisition Item</h4>
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
                   <div className="sm:col-span-6">
-                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
+                    <label className="block text-xs uppercase font-bold text-onyx/70 mb-1">Item *</label>
                     <SearchableItemSelect
                       items={items}
                       value={newPrLine.itemId || ""}
@@ -1188,28 +1194,28 @@ export default function RequisitionsList({
                     />
                   </div>
                   <div className="sm:col-span-2">
-                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Qty *</label>
+                    <label className="block text-xs uppercase font-bold text-onyx/70 mb-1">Qty *</label>
                     <input
                       type="number"
                       value={newPrLine.qty}
                       onChange={(e) => setNewPrLine(prev => ({ ...prev, qty: parseFloat(e.target.value) || 1 }))}
-                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none font-mono"
+                      className="w-full text-sm p-2.5 bg-white border border-onyx/20 rounded-lg focus:outline-none font-mono"
                     />
                   </div>
                   <div className="sm:col-span-3">
-                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Needed By</label>
+                    <label className="block text-xs uppercase font-bold text-onyx/70 mb-1">Needed By</label>
                     <input
                       type="date"
                       value={newPrLine.requiredBy}
                       onChange={(e) => setNewPrLine(prev => ({ ...prev, requiredBy: limitYearTo4Digits(e.target.value) }))}
-                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none"
+                      className="w-full text-sm p-2.5 bg-white border border-onyx/20 rounded-lg focus:outline-none"
                     />
                   </div>
                   <div className="sm:col-span-1 flex items-center justify-center">
                     <button
                       type="button"
                       onClick={handleAddPrLine}
-                      className="w-full py-2 bg-saffron hover:bg-saffron-dark text-onyx font-bold rounded-lg text-xs cursor-pointer border border-transparent shadow-sm"
+                      className="w-full py-2.5 bg-saffron hover:bg-saffron-dark text-onyx font-bold rounded-lg text-xs cursor-pointer border border-transparent shadow-sm"
                     >
                       Add
                     </button>
@@ -1346,8 +1352,8 @@ export default function RequisitionsList({
 
       {/* Log Quote Modal */}
       {isQuoteOpen && selectedRfq && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-[60] p-4">
-          <div className="bg-cream max-w-2xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-cream max-w-5xl w-full max-h-[90vh] flex flex-col rounded-xl shadow-2xl border border-onyx/10 overflow-hidden">
             <div className="px-6 py-4 bg-onyx text-cream-light border-b border-onyx-light flex items-center justify-between">
               <h3 className="font-heading text-lg font-bold">{editingQuotationId ? "Edit Supplier Quotation" : "Log Supplier Quotation"} ({selectedRfq.number})</h3>
               <button onClick={() => setIsQuoteOpen(false)} className="hover:text-saffron cursor-pointer">
@@ -1365,7 +1371,7 @@ export default function RequisitionsList({
               {/* Vendor, Terms, Freight & Packing Charges */}
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-4">
                 <div className="sm:col-span-6">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-onyx/70 mb-1.5">
                     Select Supplier *
                   </label>
                   <SearchableSelect
@@ -1377,31 +1383,31 @@ export default function RequisitionsList({
                   />
                 </div>
                 <div className="sm:col-span-3">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-onyx/70 mb-1.5">
                     Delivery Terms
                   </label>
                   <input
                     type="text"
                     value={newQuote.terms || ""}
                     onChange={(e) => setNewQuote(prev => ({ ...prev, terms: e.target.value }))}
-                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
+                    className="w-full text-sm p-2.5 bg-cream-dark/30 border border-onyx/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-saffron/40"
                   />
                 </div>
                 <div className="sm:col-span-3">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-onyx/70 mb-1.5">
                     Payment Terms
                   </label>
                   <input
                     type="text"
                     value={newQuote.paymentTerms || ""}
                     onChange={(e) => setNewQuote(prev => ({ ...prev, paymentTerms: e.target.value }))}
-                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
+                    className="w-full text-sm p-2.5 bg-cream-dark/30 border border-onyx/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-saffron/40"
                     placeholder="e.g. Net 30, Advance"
                   />
                 </div>
 
                 <div className="sm:col-span-6">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-onyx/70 mb-1.5">
                     Common Freight (₹)
                   </label>
                   <input
@@ -1412,13 +1418,13 @@ export default function RequisitionsList({
                       const val = parseFloat(e.target.value) || 0;
                       setNewQuote(prev => ({ ...prev, freight: val }));
                     }}
-                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none font-mono"
+                    className="w-full text-sm p-2.5 bg-cream-dark/30 border border-onyx/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-saffron/40 font-mono"
                     placeholder="0.00"
                   />
                 </div>
 
                 <div className="sm:col-span-6">
-                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-onyx/70 mb-1.5">
                     Common Packing Charges (₹)
                   </label>
                   <input
@@ -1429,7 +1435,7 @@ export default function RequisitionsList({
                       const val = parseFloat(e.target.value) || 0;
                       setNewQuote(prev => ({ ...prev, packingCharges: val }));
                     }}
-                    className="w-full text-xs p-2 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none font-mono"
+                    className="w-full text-sm p-2.5 bg-cream-dark/30 border border-onyx/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-saffron/40 font-mono"
                     placeholder="0.00"
                   />
                 </div>
@@ -1437,22 +1443,22 @@ export default function RequisitionsList({
 
               {/* Line rates */}
               <div className="space-y-4">
-                <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70">
+                <label className="block text-xs font-bold uppercase tracking-wider text-onyx/70">
                   Item Rates & Taxes
                 </label>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {newQuote.lines.map((line, idx) => {
                     const rfqLine = selectedRfq.lines.find(rl => rl.id === line.rfqLineId);
                     const canSupply = line.canSupply !== false;
                     return (
-                      <div key={line.rfqLineId || idx} className="p-4 bg-white border border-onyx/5 rounded-xl shadow-sm space-y-3 sm:space-y-0 sm:flex sm:gap-6 sm:items-start">
-                        {/* Left Column */}
-                        <div className="sm:w-1/3 space-y-3">
+                      <div key={line.rfqLineId || idx} className="p-4.5 bg-white border border-onyx/15 rounded-xl shadow-xs space-y-4">
+                        {/* Item Header */}
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-3 border-b border-onyx/10 gap-2">
                           <div>
-                            <p className="font-bold text-xs text-onyx">[{rfqLine?.itemCode}] {rfqLine?.itemName}</p>
-                            <p className="text-[10px] text-onyx/50 mt-0.5">Target Quantity: <span className="font-mono font-bold text-onyx">{rfqLine?.qty}</span></p>
+                            <p className="font-bold text-sm text-onyx">[{rfqLine?.itemCode || "N/A"}] {rfqLine?.itemName || rfqLine?.serviceDescription || "Item"}</p>
+                            <p className="text-xs text-onyx/60 mt-0.5">Target Quantity: <span className="font-mono font-bold text-onyx">{rfqLine?.qty} {rfqLine?.serviceUom || ""}</span></p>
                           </div>
-                          <label className="flex items-center gap-2 cursor-pointer select-none">
+                          <label className="flex items-center gap-2 cursor-pointer select-none bg-cream-dark/30 px-3.5 py-1.5 rounded-lg border border-onyx/10 hover:bg-cream-dark/50 transition">
                             <input
                               type="checkbox"
                               checked={canSupply}
@@ -1469,16 +1475,16 @@ export default function RequisitionsList({
                               }}
                               className="rounded text-saffron focus:ring-saffron cursor-pointer"
                             />
-                            <span className="text-xs font-bold text-onyx/75">Can Supply this Item</span>
+                            <span className="text-xs font-bold text-onyx">Can Supply this Item</span>
                           </label>
                         </div>
 
-                        {/* Right Column */}
-                        <div className={`flex-1 grid grid-cols-2 sm:grid-cols-6 gap-3 p-3 bg-cream-dark/15 border border-onyx/5 rounded-lg transition-opacity duration-200 ${
+                        {/* Input Grid */}
+                        <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3.5 p-3.5 bg-cream-dark/15 border border-onyx/10 rounded-lg transition-opacity duration-200 ${
                           !canSupply ? "opacity-40 pointer-events-none" : ""
                         }`}>
                           <div>
-                            <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Basic Rate (₹) *</label>
+                            <label className="block text-xs uppercase font-bold text-onyx/70 mb-1 truncate">Basic Rate (₹) *</label>
                             <input
                               type="number"
                               step="any"
@@ -1492,13 +1498,13 @@ export default function RequisitionsList({
                                   return { ...prev, lines: updated };
                                 });
                               }}
-                              className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none text-right font-mono"
+                              className="w-full text-sm p-2.5 bg-white border border-onyx/20 rounded-md focus:outline-none focus:ring-2 focus:ring-saffron/40 text-right font-mono"
                               placeholder="0.00"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Quoted Qty</label>
+                            <label className="block text-xs uppercase font-bold text-onyx/70 mb-1 truncate">Quoted Qty</label>
                             <input
                               type="number"
                               step="any"
@@ -1512,13 +1518,13 @@ export default function RequisitionsList({
                                   return { ...prev, lines: updated };
                                 });
                               }}
-                              className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none text-right font-mono"
+                              className="w-full text-sm p-2.5 bg-white border border-onyx/20 rounded-md focus:outline-none focus:ring-2 focus:ring-saffron/40 text-right font-mono"
                               placeholder={rfqLine?.qty.toString()}
                             />
                           </div>
 
                           <div>
-                            <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Discount %</label>
+                            <label className="block text-xs uppercase font-bold text-onyx/70 mb-1 truncate">Discount %</label>
                             <input
                               type="number"
                               step="any"
@@ -1531,12 +1537,12 @@ export default function RequisitionsList({
                                   return { ...prev, lines: updated };
                                 });
                               }}
-                              className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none text-right font-mono"
+                              className="w-full text-sm p-2.5 bg-white border border-onyx/20 rounded-md focus:outline-none focus:ring-2 focus:ring-saffron/40 text-right font-mono"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">GST %</label>
+                            <label className="block text-xs uppercase font-bold text-onyx/70 mb-1 truncate">GST %</label>
                             <input
                               type="number"
                               step="any"
@@ -1549,12 +1555,12 @@ export default function RequisitionsList({
                                   return { ...prev, lines: updated };
                                 });
                               }}
-                              className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none text-right font-mono"
+                              className="w-full text-sm p-2.5 bg-white border border-onyx/20 rounded-md focus:outline-none focus:ring-2 focus:ring-saffron/40 text-right font-mono"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Brand / Make</label>
+                            <label className="block text-xs uppercase font-bold text-onyx/70 mb-1 truncate">Brand / Make</label>
                             <input
                               type="text"
                               value={line.brand || ""}
@@ -1566,13 +1572,13 @@ export default function RequisitionsList({
                                   return { ...prev, lines: updated };
                                 });
                               }}
-                              className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none"
+                              className="w-full text-sm p-2.5 bg-white border border-onyx/20 rounded-md focus:outline-none focus:ring-2 focus:ring-saffron/40"
                               placeholder="e.g. Tata, SKF"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-1">Lead Time (Days)</label>
+                            <label className="block text-xs uppercase font-bold text-onyx/70 mb-1 truncate">Lead Time (Days)</label>
                             <input
                               type="number"
                               step="1"
@@ -1585,7 +1591,7 @@ export default function RequisitionsList({
                                   return { ...prev, lines: updated };
                                 });
                               }}
-                              className="w-full text-xs p-2 bg-white border border-onyx/10 rounded focus:outline-none text-right font-mono"
+                              className="w-full text-sm p-2.5 bg-white border border-onyx/20 rounded-md focus:outline-none focus:ring-2 focus:ring-saffron/40 text-right font-mono"
                               placeholder="5"
                             />
                           </div>
