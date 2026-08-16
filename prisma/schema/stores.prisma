@@ -305,7 +305,9 @@ model Indent {
 model IndentLine {
   id                  String             @id @default(cuid())
   indentId            String
-  itemId              String
+  itemId              String?
+  serviceDescription  String?
+  serviceUom          String?
   qty                 Float
   requiredBy          DateTime?
   issuedQty           Float              @default(0)

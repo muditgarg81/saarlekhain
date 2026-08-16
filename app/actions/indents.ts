@@ -9,7 +9,9 @@ import { revalidatePath } from "next/cache";
 import { IndentStatus, LedgerTxnType, PrStatus } from "@prisma/client";
 
 interface IndentLineInput {
-  itemId: string;
+  itemId?: string | null;
+  serviceDescription?: string | null;
+  serviceUom?: string | null;
   qty: number;
   requiredBy?: string | null;
   remarks?: string | null;
@@ -49,7 +51,9 @@ export async function createIndent(data: {
           deptId: deptId || null,
           lines: {
             create: data.lines.map((l) => ({
-              itemId: l.itemId,
+              itemId: l.itemId || null,
+              serviceDescription: l.serviceDescription || null,
+              serviceUom: l.serviceUom || null,
               qty: l.qty,
               requiredBy: l.requiredBy ? new Date(l.requiredBy) : null,
               remarks: l.remarks || null,
@@ -130,7 +134,9 @@ export async function updateIndent(
           deptId: data.deptId || null,
           lines: {
             create: data.lines.map((l) => ({
-              itemId: l.itemId,
+              itemId: l.itemId || null,
+              serviceDescription: l.serviceDescription || null,
+              serviceUom: l.serviceUom || null,
               qty: l.qty,
               requiredBy: l.requiredBy ? new Date(l.requiredBy) : null,
               remarks: l.remarks || null,
@@ -464,6 +470,7 @@ export async function convertShortageToPr(indentId: string) {
     const prLinesToCreate: { itemId: string; qty: number }[] = [];
 
     for (const line of indent.lines) {
+      if (!line.itemId) continue;
       const remainingQty = line.qty - line.issuedQty;
       if (remainingQty <= 0) continue;
 
@@ -570,6 +577,7 @@ export async function convertMultipleIndentsToPR(indentIds: string[]) {
 
     for (const indent of indents) {
       for (const line of indent.lines) {
+        if (!line.itemId) continue;
         const remainingQty = line.qty - line.issuedQty;
         if (remainingQty <= 0) continue;
 

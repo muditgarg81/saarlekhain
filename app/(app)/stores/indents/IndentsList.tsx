@@ -34,9 +34,11 @@ import {
 
 interface IndentLine {
   id: string;
-  itemId: string;
+  itemId?: string | null;
   itemName: string;
   itemCode: string;
+  serviceDescription?: string | null;
+  serviceUom?: string | null;
   qty: number;
   issuedQty: number;
   stockQty: number;
@@ -109,7 +111,14 @@ export default function IndentsList({ initialIndents, items, stores, departments
     priority: "NORMAL",
     purpose: "",
     deptId: "",
-    lines: [] as { itemId: string; qty: number; remarks: string; requiredBy: string }[],
+    lines: [] as {
+      itemId?: string | null;
+      serviceDescription?: string | null;
+      serviceUom?: string | null;
+      qty: number;
+      remarks: string;
+      requiredBy: string;
+    }[],
   });
 
   const handleOpenEdit = (indent: Indent) => {
@@ -121,7 +130,9 @@ export default function IndentsList({ initialIndents, items, stores, departments
       purpose: indent.purpose || "",
       deptId: indent.deptId || "",
       lines: indent.lines.map(line => ({
-        itemId: line.itemId,
+        itemId: line.itemId || null,
+        serviceDescription: line.serviceDescription || null,
+        serviceUom: line.serviceUom || "JOB",
         qty: line.qty,
         remarks: line.remarks || "",
         requiredBy: line.requiredBy ? new Date(line.requiredBy).toISOString().split("T")[0] : ""
@@ -140,7 +151,7 @@ export default function IndentsList({ initialIndents, items, stores, departments
       deptId: "",
       lines: []
     });
-    setNewLineItem({ itemId: "", qty: 1, remarks: "", requiredBy: "" });
+    setNewLineItem({ itemId: "", serviceDescription: "", serviceUom: "JOB", qty: 1, remarks: "", requiredBy: "" });
     setIsCreateOpen(true);
   };
 
@@ -154,10 +165,17 @@ export default function IndentsList({ initialIndents, items, stores, departments
       deptId: "",
       lines: []
     });
-    setNewLineItem({ itemId: "", qty: 1, remarks: "", requiredBy: "" });
+    setNewLineItem({ itemId: "", serviceDescription: "", serviceUom: "JOB", qty: 1, remarks: "", requiredBy: "" });
   };
 
-  const [newLineItem, setNewLineItem] = useState({ itemId: "", qty: 1, remarks: "", requiredBy: "" });
+  const [newLineItem, setNewLineItem] = useState({
+    itemId: "",
+    serviceDescription: "",
+    serviceUom: "JOB",
+    qty: 1,
+    remarks: "",
+    requiredBy: ""
+  });
 
   // Issue Form State
   const [selectedStoreId, setSelectedStoreId] = useState("");
@@ -184,30 +202,56 @@ export default function IndentsList({ initialIndents, items, stores, departments
 
   // New Indent Handlers
   const addLineItem = () => {
-    if (!newLineItem.itemId) return;
-    const selectedItem = items.find(i => i.id === newLineItem.itemId);
-    if (!selectedItem) return;
+    if (newIndent.type === "SERVICE") {
+      if (!newLineItem.serviceDescription.trim()) {
+        alert("Please enter the Work / Service Description (e.g. Fabrication of machine parts, Motor rewinding)");
+        return;
+      }
+      setNewIndent(prev => ({
+        ...prev,
+        lines: [
+          ...prev.lines,
+          {
+            itemId: newLineItem.itemId || null,
+            serviceDescription: newLineItem.serviceDescription.trim(),
+            serviceUom: newLineItem.serviceUom || "JOB",
+            qty: newLineItem.qty || 1,
+            remarks: newLineItem.remarks || "",
+            requiredBy: newLineItem.requiredBy || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          }
+        ]
+      }));
+      setNewLineItem({ itemId: "", serviceDescription: "", serviceUom: "JOB", qty: 1, remarks: "", requiredBy: "" });
+    } else {
+      if (!newLineItem.itemId) {
+        alert("Please select an item from catalog");
+        return;
+      }
+      const selectedItem = items.find(i => i.id === newLineItem.itemId);
+      if (!selectedItem) return;
 
-    // Check if item already exists
-    const alreadyExists = newIndent.lines.some(l => l.itemId === newLineItem.itemId);
-    if (alreadyExists) {
-      alert("Item is already added. You can edit its quantity inline in the table.");
-      return;
+      const alreadyExists = newIndent.lines.some(l => l.itemId === newLineItem.itemId);
+      if (alreadyExists) {
+        alert("Item is already added. You can edit its quantity inline in the table.");
+        return;
+      }
+
+      setNewIndent(prev => ({
+        ...prev,
+        lines: [
+          ...prev.lines,
+          {
+            itemId: newLineItem.itemId,
+            serviceDescription: null,
+            serviceUom: null,
+            qty: newLineItem.qty,
+            remarks: newLineItem.remarks,
+            requiredBy: newLineItem.requiredBy || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+          }
+        ]
+      }));
+      setNewLineItem({ itemId: "", serviceDescription: "", serviceUom: "JOB", qty: 1, remarks: "", requiredBy: "" });
     }
-
-    setNewIndent(prev => ({
-      ...prev,
-      lines: [
-        ...prev.lines,
-        {
-          itemId: newLineItem.itemId,
-          qty: newLineItem.qty,
-          remarks: newLineItem.remarks,
-          requiredBy: newLineItem.requiredBy || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-        }
-      ]
-    }));
-    setNewLineItem({ itemId: "", qty: 1, remarks: "", requiredBy: "" });
   };
 
   const removeLineItem = (index: number) => {
@@ -892,56 +936,122 @@ export default function IndentsList({ initialIndents, items, stores, departments
               {/* Add Lines Panel */}
               <div className="p-4 bg-cream-dark/30 border border-onyx/5 rounded-xl space-y-3">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/60">Add Line Item</h4>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedBulkItemIds([]);
-                      setIsBulkAddOpen(true);
-                    }}
-                    className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center space-x-1 cursor-pointer border border-transparent hover:underline"
-                  >
-                    <span>+ Bulk Select Items</span>
-                  </button>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                  <div className="sm:col-span-6">
-                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
-                    <SearchableItemSelect
-                      items={items}
-                      value={newLineItem.itemId}
-                      onChange={(val) => setNewLineItem(prev => ({ ...prev, itemId: val }))}
-                      placeholder="Select Item"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Qty *</label>
-                    <input
-                      type="number"
-                      value={newLineItem.qty}
-                      onChange={(e) => setNewLineItem(prev => ({ ...prev, qty: parseFloat(e.target.value) || 1 }))}
-                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none font-mono"
-                    />
-                  </div>
-                  <div className="sm:col-span-3">
-                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Date Needed</label>
-                    <input
-                      type="date"
-                      value={newLineItem.requiredBy}
-                      onChange={(e) => setNewLineItem(prev => ({ ...prev, requiredBy: limitYearTo4Digits(e.target.value) }))}
-                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none"
-                    />
-                  </div>
-                  <div className="sm:col-span-1 flex items-center justify-center">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/70">
+                    {newIndent.type === "SERVICE" ? "Add Service / Work Requirement" : "Add Line Item"}
+                  </h4>
+                  {newIndent.type === "MATERIAL" && (
                     <button
                       type="button"
-                      onClick={addLineItem}
-                      className="w-full py-2 bg-saffron hover:bg-saffron-dark text-onyx font-bold rounded-lg text-xs cursor-pointer border border-transparent shadow-sm"
+                      onClick={() => {
+                        setSelectedBulkItemIds([]);
+                        setIsBulkAddOpen(true);
+                      }}
+                      className="text-[10px] font-bold text-blue-600 hover:text-blue-800 flex items-center space-x-1 cursor-pointer border border-transparent hover:underline"
                     >
-                      Add
+                      <span>+ Bulk Select Items</span>
                     </button>
-                  </div>
+                  )}
                 </div>
+
+                {newIndent.type === "SERVICE" ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                    <div className="sm:col-span-6">
+                      <label className="block text-[9px] uppercase font-bold text-onyx/70 mb-0.5">
+                        Work / Service Description *
+                      </label>
+                      <input
+                        type="text"
+                        value={newLineItem.serviceDescription}
+                        onChange={(e) => setNewLineItem(prev => ({ ...prev, serviceDescription: e.target.value }))}
+                        placeholder="e.g. Fabrication & welding of machine parts, Motor rewinding 15HP..."
+                        className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none focus:border-purple-500 font-medium"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[9px] uppercase font-bold text-onyx/70 mb-0.5">Scope / Qty *</label>
+                      <input
+                        type="number"
+                        min="0.01"
+                        step="any"
+                        value={newLineItem.qty}
+                        onChange={(e) => setNewLineItem(prev => ({ ...prev, qty: parseFloat(e.target.value) || 1 }))}
+                        className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none font-mono font-bold"
+                      />
+                    </div>
+                    <div className="sm:col-span-1">
+                      <label className="block text-[9px] uppercase font-bold text-onyx/70 mb-0.5">Unit</label>
+                      <select
+                        value={newLineItem.serviceUom}
+                        onChange={(e) => setNewLineItem(prev => ({ ...prev, serviceUom: e.target.value }))}
+                        className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none font-bold"
+                      >
+                        <option value="JOB">JOB</option>
+                        <option value="NOS">NOS</option>
+                        <option value="LOT">LOT</option>
+                        <option value="HRS">HRS</option>
+                        <option value="MTRS">MTRS</option>
+                        <option value="SET">SET</option>
+                      </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[9px] uppercase font-bold text-onyx/70 mb-0.5">Date Needed</label>
+                      <input
+                        type="date"
+                        value={newLineItem.requiredBy}
+                        onChange={(e) => setNewLineItem(prev => ({ ...prev, requiredBy: limitYearTo4Digits(e.target.value) }))}
+                        className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none"
+                      />
+                    </div>
+                    <div className="sm:col-span-1 flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={addLineItem}
+                        className="w-full py-2 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded-lg text-xs cursor-pointer shadow-xs"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                    <div className="sm:col-span-6">
+                      <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
+                      <SearchableItemSelect
+                        items={items}
+                        value={newLineItem.itemId}
+                        onChange={(val) => setNewLineItem(prev => ({ ...prev, itemId: val }))}
+                        placeholder="Select Item"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Qty *</label>
+                      <input
+                        type="number"
+                        value={newLineItem.qty}
+                        onChange={(e) => setNewLineItem(prev => ({ ...prev, qty: parseFloat(e.target.value) || 1 }))}
+                        className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none font-mono"
+                      />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Date Needed</label>
+                      <input
+                        type="date"
+                        value={newLineItem.requiredBy}
+                        onChange={(e) => setNewLineItem(prev => ({ ...prev, requiredBy: limitYearTo4Digits(e.target.value) }))}
+                        className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none"
+                      />
+                    </div>
+                    <div className="sm:col-span-1 flex items-center justify-center">
+                      <button
+                        type="button"
+                        onClick={addLineItem}
+                        className="w-full py-2 bg-saffron hover:bg-saffron-dark text-onyx font-bold rounded-lg text-xs cursor-pointer border border-transparent shadow-sm"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Lines Table */}
@@ -958,8 +1068,8 @@ export default function IndentsList({ initialIndents, items, stores, departments
                     <table className="w-full text-left text-xs border-collapse bg-white">
                       <thead className="bg-cream-dark/50">
                         <tr>
-                          <th className="p-2 font-bold uppercase">Item</th>
-                          <th className="p-2 font-bold uppercase text-right w-24">Qty</th>
+                          <th className="p-2 font-bold uppercase">{newIndent.type === "SERVICE" ? "Work / Service Description" : "Item"}</th>
+                          <th className="p-2 font-bold uppercase text-right w-28">Scope / Qty</th>
                           <th className="p-2 font-bold uppercase w-36">Date Needed</th>
                           <th className="p-2 font-bold uppercase">Remarks</th>
                           <th className="p-2 font-bold text-center w-16">Action</th>
@@ -967,11 +1077,21 @@ export default function IndentsList({ initialIndents, items, stores, departments
                       </thead>
                       <tbody>
                         {newIndent.lines.map((line, idx) => {
-                          const item = items.find(i => i.id === line.itemId);
+                          const item = line.itemId ? items.find(i => i.id === line.itemId) : null;
                           return (
                             <tr key={idx} className="border-t border-onyx/5">
                               <td className="p-2">
-                                <div className="font-semibold text-onyx">[{item?.code}] {item?.name}</div>
+                                {line.serviceDescription ? (
+                                  <div className="font-bold text-purple-950 flex items-center space-x-1.5">
+                                    <Wrench size={12} className="text-purple-600 shrink-0" />
+                                    <span>{line.serviceDescription}</span>
+                                    <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200">
+                                      {line.serviceUom || "JOB"}
+                                    </span>
+                                  </div>
+                                ) : (
+                                  <div className="font-semibold text-onyx">[{item?.code}] {item?.name}</div>
+                                )}
                               </td>
                               <td className="p-2 text-right">
                                 <div className="flex items-center justify-end space-x-1">
@@ -983,7 +1103,9 @@ export default function IndentsList({ initialIndents, items, stores, departments
                                     onChange={(e) => updateLineItem(idx, "qty", parseFloat(e.target.value) || 0)}
                                     className="w-16 p-1 border border-onyx/10 rounded font-mono font-bold text-right text-xs focus:outline-none focus:border-saffron"
                                   />
-                                  <span className="text-[10px] text-onyx/40">{item?.baseUom}</span>
+                                  <span className="text-[10px] text-onyx/60 font-bold">
+                                    {line.serviceUom || item?.baseUom || ""}
+                                  </span>
                                 </div>
                               </td>
                               <td className="p-2">
@@ -1055,11 +1177,22 @@ export default function IndentsList({ initialIndents, items, stores, departments
 
             {/* Header */}
             <div className="space-y-2 mt-4 pb-4 border-b border-onyx/5">
-              <span className="text-[10px] font-mono font-bold bg-saffron px-2 py-0.5 rounded text-onyx">
-                {selectedIndent.number}
-              </span>
+              <div className="flex items-center space-x-2">
+                <span className="text-[10px] font-mono font-bold bg-saffron px-2 py-0.5 rounded text-onyx">
+                  {selectedIndent.number}
+                </span>
+                {selectedIndent.type === "SERVICE" ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase bg-purple-100 text-purple-800 border border-purple-200">
+                    SERVICE
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase bg-blue-50 text-blue-700 border border-blue-200">
+                    MATERIAL
+                  </span>
+                )}
+              </div>
               <h3 className="font-heading text-xl font-extrabold text-onyx">
-                Material Requisition Detail
+                {selectedIndent.type === "SERVICE" ? "Service Requisition Detail" : "Material Requisition Detail"}
               </h3>
               <p className="text-xs text-onyx/50">Purpose: {selectedIndent.purpose || "N/A"}</p>
             </div>
@@ -1079,15 +1212,15 @@ export default function IndentsList({ initialIndents, items, stores, departments
             {/* Items list */}
             <div className="flex-1 overflow-y-auto py-6 space-y-4">
               <h4 className="text-[10px] font-mono font-bold uppercase tracking-wider text-onyx/40">
-                Requested Materials List
+                {selectedIndent.type === "SERVICE" ? "Requested Work / Service List" : "Requested Materials List"}
               </h4>
 
               <div className="border border-onyx/5 rounded-lg overflow-hidden">
                 <table className="w-full text-left text-xs border-collapse bg-white">
                   <thead className="bg-cream-dark/50">
                     <tr>
-                      <th className="p-2 font-bold">Item Description</th>
-                      <th className="p-2 font-bold text-right">Qty</th>
+                      <th className="p-2 font-bold">{selectedIndent.type === "SERVICE" ? "Work Description" : "Item Description"}</th>
+                      <th className="p-2 font-bold text-right">Qty / Scope</th>
                       <th className="p-2 font-bold text-right">Qty in Stock</th>
                       <th className="p-2 font-bold">Remarks</th>
                     </tr>
@@ -1096,9 +1229,19 @@ export default function IndentsList({ initialIndents, items, stores, departments
                     {selectedIndent.lines.map((line) => (
                       <tr key={line.id} className="border-t border-onyx/5">
                         <td className="p-2">
-                          <p className="font-semibold text-onyx">[{line.itemCode}] {line.itemName}</p>
+                          {line.serviceDescription ? (
+                            <div className="font-bold text-purple-950 flex items-center space-x-1.5">
+                              <Wrench size={13} className="text-purple-600 shrink-0" />
+                              <span>{line.serviceDescription}</span>
+                              <span className="text-[9px] font-extrabold uppercase px-1.5 py-0.5 rounded bg-purple-100 text-purple-800 border border-purple-200">
+                                {line.serviceUom || "JOB"}
+                              </span>
+                            </div>
+                          ) : (
+                            <p className="font-semibold text-onyx">[{line.itemCode}] {line.itemName}</p>
+                          )}
                         </td>
-                        <td className="p-2 text-right font-mono font-bold">{line.qty}</td>
+                        <td className="p-2 text-right font-mono font-bold">{line.qty} {line.serviceUom || ""}</td>
                         <td className="p-2 text-right font-mono font-bold text-blue-700">{line.stockQty}</td>
                         <td className="p-2 text-onyx/60 text-[10px]">{line.remarks || "-"}</td>
                       </tr>

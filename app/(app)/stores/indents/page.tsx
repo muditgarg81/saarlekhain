@@ -99,15 +99,20 @@ export default async function IndentsPage() {
       deptId: ind.deptId,
       createdAt: ind.createdAt.toISOString(),
       lines: ind.lines.map((line) => {
-        const item = items.find((i) => i.id === line.itemId);
-        const stockSum = stockSums.find((s) => s.itemId === line.itemId);
+        const item = line.itemId ? items.find((i) => i.id === line.itemId) : null;
+        const stockSum = line.itemId ? stockSums.find((s) => s.itemId === line.itemId) : null;
         const currentStock = stockSum?._sum.qty || 0;
+
+        const displayName = item?.name || line.serviceDescription || "Service Work";
+        const displayCode = item?.code || "SVC-WORK";
 
         return {
           id: line.id,
-          itemId: line.itemId,
-          itemName: item?.name || "Unknown Item",
-          itemCode: item?.code || "N/A",
+          itemId: line.itemId || null,
+          itemName: displayName,
+          itemCode: displayCode,
+          serviceDescription: line.serviceDescription || null,
+          serviceUom: line.serviceUom || null,
           qty: line.qty,
           issuedQty: line.issuedQty,
           stockQty: currentStock,

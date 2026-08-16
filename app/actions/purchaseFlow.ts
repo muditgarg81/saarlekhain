@@ -89,6 +89,7 @@ export async function convertIndentToPR(
       for (const lineQty of lineQtys) {
         const line = indent.lines.find(l => l.id === lineQty.lineId);
         if (!line) throw new Error(`Indent line ${lineQty.lineId} not found`);
+        if (!line.itemId) continue;
         
         // Ensure we don't convert more than purchaseQty
         // (if purchaseQty is 0, initialize it to the remaining shortage: qty - issuedQty)

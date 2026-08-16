@@ -153,6 +153,7 @@ export async function runReplenishmentScan(storeId?: string | null) {
       });
       const indentMap = new Map<string, number>();
       for (const line of openIndentLines) {
+        if (!line.itemId) continue;
         const current = indentMap.get(line.itemId) || 0;
         indentMap.set(line.itemId, current + Math.max(0, line.qty - line.issuedQty));
       }
