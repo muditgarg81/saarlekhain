@@ -1220,7 +1220,9 @@ export async function updatePO(poId: string, data: z.infer<typeof poSchema>) {
           otherCharges: validated.otherCharges,
           lines: {
             create: validated.lines.map((l) => ({
-              itemId: l.itemId,
+              itemId: l.itemId || null,
+              serviceDescription: l.serviceDescription || null,
+              serviceUom: l.serviceUom || null,
               qty: l.qty,
               rate: l.rate,
               discount: l.discount,

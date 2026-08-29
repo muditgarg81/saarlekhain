@@ -11,6 +11,7 @@ import {
   shortClosePO
 } from "@/app/actions/purchaseOrders";
 import { SearchableItemSelect } from "@/components/SearchableItemSelect";
+import { SearchableSelect } from "@/components/SearchableSelect";
 import { PoType } from "@prisma/client";
 import { limitYearTo4Digits } from "@/lib/date";
 import { jsPDF } from "jspdf";
@@ -38,6 +39,8 @@ import {
 interface LineItem {
   id: string;
   itemId?: string | null;
+  serviceDescription?: string | null;
+  serviceUom?: string | null;
   itemName: string;
   itemCode: string;
   qty: number;
@@ -218,7 +221,7 @@ export default function PurchaseOrdersList({
     termsConditions: string;
     termsPresetId: string;
     otherCharges: number;
-    lines: { itemId?: string | null; qty: number; rate: number; discount: number; gstRate: number; brand: string; specification?: string }[];
+    lines: { itemId?: string | null; serviceDescription?: string | null; serviceUom?: string | null; qty: number; rate: number; discount: number; gstRate: number; brand: string; specification?: string }[];
     rfqId?: string | null;
   }>({
     vendorId: "",
@@ -232,7 +235,27 @@ export default function PurchaseOrdersList({
     otherCharges: 0,
     lines: []
   });
-  const [newPoLine, setNewPoLine] = useState<{ itemId?: string | null; qty: number; rate: number; discount: number; gstRate: number; brand: string; specification: string }>({ itemId: "", qty: 1, rate: 0, discount: 0, gstRate: 18, brand: "", specification: "" });
+  const [newPoLine, setNewPoLine] = useState<{
+    itemId?: string | null;
+    serviceDescription?: string | null;
+    serviceUom?: string | null;
+    qty: number;
+    rate: number;
+    discount: number;
+    gstRate: number;
+    brand: string;
+    specification: string;
+  }>({
+    itemId: "",
+    serviceDescription: "",
+    serviceUom: "JOB",
+    qty: 1,
+    rate: 0,
+    discount: 0,
+    gstRate: 18,
+    brand: "",
+    specification: ""
+  });
 
   // Amend Form State
   const [amendForm, setAmendForm] = useState({
@@ -244,7 +267,7 @@ export default function PurchaseOrdersList({
     termsConditions: "",
     termsPresetId: "",
     otherCharges: 0,
-    lines: [] as { itemId?: string | null; qty: number; rate: number; discount: number; gstRate: number; brand?: string | null; specification?: string | null }[]
+    lines: [] as { itemId?: string | null; serviceDescription?: string | null; serviceUom?: string | null; qty: number; rate: number; discount: number; gstRate: number; brand?: string | null; specification?: string | null }[]
   });
 
   const [actionLoading, setActionLoading] = useState(false);
@@ -785,12 +808,76 @@ export default function PurchaseOrdersList({
   };
 
   const handleAddPoLine = () => {
-    if (!newPoLine.itemId) return;
-    setNewPo(prev => ({
-      ...prev,
-      lines: [...prev.lines, { ...newPoLine }]
-    }));
-    setNewPoLine({ itemId: "", qty: 1, rate: 0, discount: 0, gstRate: 18, brand: "", specification: "" });
+    if (newPo.type === "SERVICE") {
+      if (!newPoLine.serviceDescription?.trim()) {
+        alert("Please enter a job / work description");
+        return;
+      }
+      if (newPoLine.qty <= 0) {
+        alert("Please enter a positive quantity");
+        return;
+      }
+      if (newPoLine.rate <= 0) {
+        alert("Please enter a valid rate");
+        return;
+      }
+      setNewPo(prev => ({
+        ...prev,
+        lines: [
+          ...prev.lines,
+          {
+            itemId: null,
+            serviceDescription: newPoLine.serviceDescription!.trim(),
+            serviceUom: newPoLine.serviceUom?.trim() || "JOB",
+            qty: newPoLine.qty,
+            rate: newPoLine.rate,
+            discount: newPoLine.discount,
+            gstRate: newPoLine.gstRate,
+            brand: "",
+            specification: newPoLine.specification?.trim() || ""
+          }
+        ]
+      }));
+      setNewPoLine({
+        itemId: "",
+        serviceDescription: "",
+        serviceUom: "JOB",
+        qty: 1,
+        rate: 0,
+        discount: 0,
+        gstRate: 18,
+        brand: "",
+        specification: ""
+      });
+    } else {
+      if (!newPoLine.itemId) {
+        alert("Please select an item");
+        return;
+      }
+      if (newPoLine.qty <= 0) {
+        alert("Please enter a positive quantity");
+        return;
+      }
+      if (newPoLine.rate <= 0) {
+        alert("Please enter a valid rate");
+        return;
+      }
+      setNewPo(prev => ({
+        ...prev,
+        lines: [...prev.lines, { ...newPoLine, serviceDescription: null, serviceUom: null }]
+      }));
+      setNewPoLine({
+        itemId: "",
+        serviceDescription: "",
+        serviceUom: "JOB",
+        qty: 1,
+        rate: 0,
+        discount: 0,
+        gstRate: 18,
+        brand: "",
+        specification: ""
+      });
+    }
   };
 
   const toggleSelect = (id: string) => {
@@ -839,6 +926,8 @@ export default function PurchaseOrdersList({
       otherCharges: po.otherCharges || 0,
       lines: po.lines.map(line => ({
         itemId: line.itemId,
+        serviceDescription: line.serviceDescription,
+        serviceUom: line.serviceUom,
         qty: line.qty,
         rate: line.rate,
         discount: line.discount,
@@ -1453,17 +1542,13 @@ export default function PurchaseOrdersList({
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                     Supplier *
                   </label>
-                  <select
+                  <SearchableSelect
+                    options={vendors.map(v => ({ value: v.id, label: `[${v.code}] ${v.name}` }))}
                     value={newPo.vendorId}
-                    onChange={(e) => setNewPo(prev => ({ ...prev, vendorId: e.target.value }))}
-                    className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
-                    required
-                  >
-                    <option value="">Select Vendor</option>
-                    {vendors.map(v => (
-                      <option key={v.id} value={v.id}>{v.name}</option>
-                    ))}
-                  </select>
+                    onChange={(val) => setNewPo(prev => ({ ...prev, vendorId: val }))}
+                    placeholder="Search & Select Supplier"
+                    disabled={actionLoading}
+                  />
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
@@ -1659,108 +1744,215 @@ export default function PurchaseOrdersList({
 
               {/* Add line item */}
               <div className="p-4 bg-cream-dark/30 border border-onyx/5 rounded-xl space-y-3">
-                <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/60">Add Line Item</h4>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/60">
+                    {newPo.type === "SERVICE" ? "Add Service / Job Line" : "Add Line Item"}
+                  </h4>
+                  {newPo.type === "SERVICE" && (
+                    <span className="text-[9px] font-bold px-2 py-0.5 rounded bg-purple-100 text-purple-800 uppercase font-mono">
+                      Service / Job Mode
+                    </span>
+                  )}
+                </div>
                 
-                {/* Item Select and Tech Specs row */}
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                  <div className="sm:col-span-4">
-                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
-                    <SearchableItemSelect
-                      items={items}
-                      value={newPoLine.itemId || ""}
-                      onChange={(val) => {
-                        const item = items.find(i => i.id === val) as any;
-                        setNewPoLine(prev => ({
-                          ...prev,
-                          itemId: val,
-                          gstRate: item?.gstRate ?? prev.gstRate,
-                          brand: item?.make ?? prev.brand ?? "",
-                          specification: item?.specification ?? "",
-                        }));
-                      }}
-                      placeholder="Select Item"
-                    />
-                  </div>
-                  <div className="sm:col-span-8">
-                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Tech Specs / Technical Specification</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Size, Grade, Standards, drawing ref..."
-                      value={newPoLine.specification}
-                      onChange={(e) => setNewPoLine(prev => ({ ...prev, specification: e.target.value }))}
-                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
-                    />
-                  </div>
-                </div>
+                {newPo.type === "SERVICE" ? (
+                  <>
+                    {/* Service: Job Description & UOM */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                      <div className="sm:col-span-9">
+                        <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">
+                          Job / Work Description *
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Fabrication & Welding of machine parts, Motor Rewinding, Maintenance..."
+                          value={newPoLine.serviceDescription || ""}
+                          onChange={(e) => setNewPoLine(prev => ({ ...prev, serviceDescription: e.target.value }))}
+                          className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-medium text-onyx"
+                        />
+                      </div>
+                      <div className="sm:col-span-3">
+                        <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">
+                          UOM
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="JOB / LOT / AU / NOS"
+                          value={newPoLine.serviceUom || "JOB"}
+                          onChange={(e) => setNewPoLine(prev => ({ ...prev, serviceUom: e.target.value }))}
+                          className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron uppercase font-mono font-bold"
+                        />
+                      </div>
+                    </div>
 
-                {/* Quantities, pricing and action row */}
-                <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
-                  <div className="sm:col-span-3">
-                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Brand / Make</label>
-                    <input
-                      type="text"
-                      placeholder="e.g. Tata, SKF"
-                      value={newPoLine.brand || ""}
-                      onChange={(e) => setNewPoLine(prev => ({ ...prev, brand: e.target.value }))}
-                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Qty *</label>
-                    <input
-                      type="number"
-                      value={newPoLine.qty}
-                      onChange={(e) => setNewPoLine(prev => ({ ...prev, qty: parseFloat(e.target.value) || 1 }))}
-                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
-                    />
-                  </div>
-                  <div className="sm:col-span-3">
-                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Basic Rate *</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={newPoLine.rate || ""}
-                      onChange={(e) => setNewPoLine(prev => ({ ...prev, rate: parseFloat(e.target.value) || 0 }))}
-                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
-                    />
-                  </div>
-                  <div className="sm:col-span-2">
-                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Discount %</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={newPoLine.discount}
-                      onChange={(e) => setNewPoLine(prev => ({ ...prev, discount: parseFloat(e.target.value) || 0 }))}
-                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
-                    />
-                  </div>
-                  <div className="sm:col-span-1">
-                    <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">GST %</label>
-                    <input
-                      type="number"
-                      step="any"
-                      value={newPoLine.gstRate}
-                      onChange={(e) => setNewPoLine(prev => ({ ...prev, gstRate: parseFloat(e.target.value) || 0 }))}
-                      className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
-                    />
-                  </div>
-                  <div className="sm:col-span-1 flex items-center justify-center">
-                    <button
-                      type="button"
-                      onClick={handleAddPoLine}
-                      className="w-full py-2 bg-saffron hover:bg-saffron-dark text-onyx font-bold rounded-lg text-xs cursor-pointer"
-                    >
-                      Add
-                    </button>
-                  </div>
-                </div>
+                    {/* Service: Scope / Specs & Pricing */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                      <div className="sm:col-span-4">
+                        <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">
+                          Scope of Work / Tech Specs (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Drawing ref, equipment ID, scope notes..."
+                          value={newPoLine.specification}
+                          onChange={(e) => setNewPoLine(prev => ({ ...prev, specification: e.target.value }))}
+                          className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Qty *</label>
+                        <input
+                          type="number"
+                          value={newPoLine.qty}
+                          onChange={(e) => setNewPoLine(prev => ({ ...prev, qty: parseFloat(e.target.value) || 1 }))}
+                          className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Basic Rate *</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={newPoLine.rate || ""}
+                          onChange={(e) => setNewPoLine(prev => ({ ...prev, rate: parseFloat(e.target.value) || 0 }))}
+                          className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
+                        />
+                      </div>
+                      <div className="sm:col-span-1">
+                        <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Disc %</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={newPoLine.discount}
+                          onChange={(e) => setNewPoLine(prev => ({ ...prev, discount: parseFloat(e.target.value) || 0 }))}
+                          className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
+                        />
+                      </div>
+                      <div className="sm:col-span-1">
+                        <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">GST %</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={newPoLine.gstRate}
+                          onChange={(e) => setNewPoLine(prev => ({ ...prev, gstRate: parseFloat(e.target.value) || 0 }))}
+                          className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
+                        />
+                      </div>
+                      <div className="sm:col-span-2 flex items-center justify-center">
+                        <button
+                          type="button"
+                          onClick={handleAddPoLine}
+                          className="w-full py-2 bg-saffron hover:bg-saffron-dark text-onyx font-bold rounded-lg text-xs cursor-pointer"
+                        >
+                          Add Service
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    {/* Item Select and Tech Specs row */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                      <div className="sm:col-span-4">
+                        <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Item *</label>
+                        <SearchableItemSelect
+                          items={items}
+                          value={newPoLine.itemId || ""}
+                          onChange={(val) => {
+                            const item = items.find(i => i.id === val) as any;
+                            setNewPoLine(prev => ({
+                              ...prev,
+                              itemId: val,
+                              gstRate: item?.gstRate ?? prev.gstRate,
+                              brand: item?.make ?? prev.brand ?? "",
+                              specification: item?.specification ?? "",
+                            }));
+                          }}
+                          placeholder="Select Item"
+                        />
+                      </div>
+                      <div className="sm:col-span-8">
+                        <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Tech Specs / Technical Specification</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Size, Grade, Standards, drawing ref..."
+                          value={newPoLine.specification}
+                          onChange={(e) => setNewPoLine(prev => ({ ...prev, specification: e.target.value }))}
+                          className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron"
+                        />
+                      </div>
+                    </div>
+
+                    {/* Quantities, pricing and action row */}
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+                      <div className="sm:col-span-3">
+                        <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Brand / Make</label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Tata, SKF"
+                          value={newPoLine.brand || ""}
+                          onChange={(e) => setNewPoLine(prev => ({ ...prev, brand: e.target.value }))}
+                          className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Qty *</label>
+                        <input
+                          type="number"
+                          value={newPoLine.qty}
+                          onChange={(e) => setNewPoLine(prev => ({ ...prev, qty: parseFloat(e.target.value) || 1 }))}
+                          className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
+                        />
+                      </div>
+                      <div className="sm:col-span-3">
+                        <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Basic Rate *</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={newPoLine.rate || ""}
+                          onChange={(e) => setNewPoLine(prev => ({ ...prev, rate: parseFloat(e.target.value) || 0 }))}
+                          className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
+                        />
+                      </div>
+                      <div className="sm:col-span-2">
+                        <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">Discount %</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={newPoLine.discount}
+                          onChange={(e) => setNewPoLine(prev => ({ ...prev, discount: parseFloat(e.target.value) || 0 }))}
+                          className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
+                        />
+                      </div>
+                      <div className="sm:col-span-1">
+                        <label className="block text-[9px] uppercase font-bold text-onyx/50 mb-0.5">GST %</label>
+                        <input
+                          type="number"
+                          step="any"
+                          value={newPoLine.gstRate}
+                          onChange={(e) => setNewPoLine(prev => ({ ...prev, gstRate: parseFloat(e.target.value) || 0 }))}
+                          className="w-full text-xs p-2 bg-white border border-onyx/10 rounded-lg font-mono"
+                        />
+                      </div>
+                      <div className="sm:col-span-1 flex items-center justify-center">
+                        <button
+                          type="button"
+                          onClick={handleAddPoLine}
+                          className="w-full py-2 bg-saffron hover:bg-saffron-dark text-onyx font-bold rounded-lg text-xs cursor-pointer"
+                        >
+                          Add
+                        </button>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               {/* Lines table */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70">
-                    PO Items List ({newPo.lines.length})
+                    {newPo.type === "SERVICE" ? "Service / Job Lines List" : "PO Items List"} ({newPo.lines.length})
                   </label>
                   <p className="text-xs font-bold text-saffron-dark font-mono">
                     Landed Est: ₹{getLandedTotal(newPo.lines, newPo.otherCharges).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
@@ -1768,14 +1960,14 @@ export default function PurchaseOrdersList({
                 </div>
                 {newPo.lines.length === 0 ? (
                   <p className="text-center py-4 bg-white border border-dashed border-onyx/10 text-xs text-onyx/40 font-medium rounded-lg">
-                    No lines added.
+                    {newPo.type === "SERVICE" ? "No service lines added yet." : "No lines added."}
                   </p>
                 ) : (
                   <div className="border border-onyx/5 rounded-lg overflow-hidden">
                     <table className="w-full text-left text-xs border-collapse bg-white">
                       <thead className="bg-cream-dark/50">
                         <tr>
-                          <th className="p-2 font-bold uppercase">Item</th>
+                          <th className="p-2 font-bold uppercase">{newPo.type === "SERVICE" ? "Job Description" : "Item"}</th>
                           <th className="p-2 font-bold uppercase text-right">Qty</th>
                           <th className="p-2 font-bold uppercase text-right">Rate</th>
                           <th className="p-2 font-bold uppercase text-right">Landed Val</th>
@@ -1784,7 +1976,8 @@ export default function PurchaseOrdersList({
                       </thead>
                       <tbody>
                         {newPo.lines.map((line, idx) => {
-                          const item = items.find(i => i.id === line.itemId);
+                          const item = line.itemId ? items.find(i => i.id === line.itemId) : null;
+                          const isServiceLine = !line.itemId && (line.serviceDescription || newPo.type === "SERVICE");
                           const totalTaxable = newPo.lines.reduce((sum, l) => {
                             return sum + l.qty * l.rate * (1 - l.discount / 100);
                           }, 0);
@@ -1799,17 +1992,42 @@ export default function PurchaseOrdersList({
                           return (
                             <tr key={idx} className="border-t border-onyx/5">
                               <td className="p-2">
-                                <div>[{item?.code}] {item?.name}</div>
-                                <div className="flex flex-wrap gap-x-3 mt-0.5">
-                                  {line.brand && (
-                                    <span className="text-[10px] text-emerald-800 font-bold">Brand: {line.brand}</span>
-                                  )}
-                                  {line.specification && (
-                                    <span className="text-[10px] text-onyx/60 font-medium">Specs: {line.specification}</span>
-                                  )}
-                                </div>
+                                {isServiceLine ? (
+                                  <div>
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">
+                                        SERVICE
+                                      </span>
+                                      <span className="font-bold text-onyx">{line.serviceDescription || "Service Work"}</span>
+                                      {line.serviceUom && (
+                                        <span className="text-[9px] font-bold text-purple-700 bg-purple-50 px-1 py-0.5 rounded border border-purple-200 font-mono">
+                                          {line.serviceUom}
+                                        </span>
+                                      )}
+                                    </div>
+                                    {line.specification && (
+                                      <div className="text-[10px] text-onyx/60 font-medium mt-0.5">
+                                        Scope / Specs: {line.specification}
+                                      </div>
+                                    )}
+                                  </div>
+                                ) : (
+                                  <div>
+                                    <div>[{item?.code || "N/A"}] {item?.name || "Unknown Item"}</div>
+                                    <div className="flex flex-wrap gap-x-3 mt-0.5">
+                                      {line.brand && (
+                                        <span className="text-[10px] text-emerald-800 font-bold">Brand: {line.brand}</span>
+                                      )}
+                                      {line.specification && (
+                                        <span className="text-[10px] text-onyx/60 font-medium">Specs: {line.specification}</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                )}
                               </td>
-                              <td className="p-2 text-right font-mono">{line.qty}</td>
+                              <td className="p-2 text-right font-mono">
+                                {line.qty} {isServiceLine ? (line.serviceUom || "JOB") : (item?.baseUom || "")}
+                              </td>
                               <td className="p-2 text-right font-mono">₹{line.rate.toFixed(2)}</td>
                               <td className="p-2 text-right font-mono font-bold">₹{landed.toFixed(2)}</td>
                               <td className="p-2 text-center">
@@ -2097,11 +2315,26 @@ export default function PurchaseOrdersList({
                     </thead>
                     <tbody>
                       {amendForm.lines.map((line, idx) => {
-                        const originalLine = selectedPO.lines.find(ol => ol.itemId === line.itemId);
+                        const originalLine = selectedPO.lines[idx] || selectedPO.lines.find(ol => (ol.itemId && ol.itemId === line.itemId) || ol.id === (line as any).id);
+                        const isServiceLine = !line.itemId || selectedPO.type === "SERVICE";
                         return (
-                          <tr key={line.itemId} className="border-t border-onyx/5">
+                          <tr key={line.itemId || idx} className="border-t border-onyx/5">
                             <td className="p-2.5">
-                              <p className="font-semibold">[{originalLine?.itemCode}] {originalLine?.itemName}</p>
+                              {isServiceLine ? (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">
+                                    SERVICE
+                                  </span>
+                                  <span className="font-bold text-onyx">{line.serviceDescription || originalLine?.serviceDescription || originalLine?.itemName || "Service Work"}</span>
+                                  {(line.serviceUom || originalLine?.serviceUom) && (
+                                    <span className="text-[9px] font-bold text-purple-700 bg-purple-50 px-1 py-0.5 rounded border border-purple-200 font-mono">
+                                      {line.serviceUom || originalLine?.serviceUom}
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <p className="font-semibold">[{originalLine?.itemCode}] {originalLine?.itemName}</p>
+                              )}
                               <div className="flex flex-wrap gap-x-3 mt-0.5">
                                 {line.brand && (
                                   <span className="text-[10px] text-emerald-800 font-bold">Brand: {line.brand}</span>
@@ -2331,7 +2564,21 @@ export default function PurchaseOrdersList({
                         return (
                           <tr key={line.id} className="border-t border-onyx/5">
                             <td className="p-2.5">
-                              <div>[{line.itemCode}] {line.itemName}</div>
+                              {line.itemId ? (
+                                <div>[{line.itemCode}] {line.itemName}</div>
+                              ) : (
+                                <div className="flex items-center gap-1.5 flex-wrap">
+                                  <span className="font-mono text-[9px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-purple-800">
+                                    SERVICE
+                                  </span>
+                                  <span className="font-bold text-onyx">{line.serviceDescription || line.itemName || "Service Work"}</span>
+                                  {line.serviceUom && (
+                                    <span className="text-[9px] font-bold text-purple-700 bg-purple-50 px-1 py-0.5 rounded border border-purple-200 font-mono">
+                                      {line.serviceUom}
+                                    </span>
+                                  )}
+                                </div>
+                              )}
                               <div className="flex flex-wrap gap-x-3 mt-0.5">
                                 {line.brand && (
                                   <span className="text-[10px] text-emerald-800 font-bold">Brand: {line.brand}</span>
