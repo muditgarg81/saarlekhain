@@ -206,6 +206,8 @@ model Quotation {
   paymentTerms   String?
   freight        Float           @default(0)
   packingCharges Float           @default(0)
+  currency       String          @default("INR")
+  exchangeRate   Float           @default(1.0)
   awarded        Boolean         @default(false)
   rfq            Rfq             @relation(fields: [rfqId], references: [id])
   vendor         Vendor          @relation(fields: [vendorId], references: [id])
@@ -249,6 +251,7 @@ model PurchaseOrder {
   orderDate          DateTime         @default(now())
   deliveryDate       DateTime?
   currency           String           @default("INR")
+  exchangeRate       Float            @default(1.0)
   paymentTerms       String?
   freightTerms       String?
   shipTo             String?

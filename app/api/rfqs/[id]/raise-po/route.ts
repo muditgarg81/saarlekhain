@@ -140,7 +140,7 @@ export async function POST(
 
         for (const alloc of allocs) {
           const rfqLine = rfq.lines.find((l) => l.id === alloc.rfqLineId)!;
-          const item = items.find((i) => i.id === rfqLine.itemId)!;
+          const item = items.find((i) => i.id === rfqLine.itemId);
           
           // Fetch quote line to get rate, discount, gstRate
           const qLine = await tx.quotationLine.findUnique({
@@ -152,7 +152,9 @@ export async function POST(
           }
 
           poLinesData.push({
-            itemId: rfqLine.itemId,
+            itemId: rfqLine.itemId || null,
+            serviceDescription: rfqLine.serviceDescription || qLine.serviceDescription || null,
+            serviceUom: rfqLine.serviceUom || qLine.serviceUom || null,
             qty: alloc.qty,
             rate: qLine.rate,
             discount: qLine.discount,
@@ -161,8 +163,8 @@ export async function POST(
             rfqLineId: rfqLine.id,
             prLineId: rfqLine.prLineId,
             allocationId: alloc.id, // helper reference
-            moq: item.moq,
-            itemCode: item.code,
+            moq: item?.moq || 1,
+            itemCode: item?.code || "SERVICE",
             brand: qLine.brand,
           });
 
@@ -179,7 +181,7 @@ export async function POST(
           poTotalValue += landedLine;
 
           // Check item MOQ warning
-          if (pld.qty < pld.moq) {
+          if (pld.itemId && pld.qty < pld.moq) {
             warnings.push(`MOQ Warning: Quantity (${pld.qty}) for item [${pld.itemCode}] is below its MOQ (${pld.moq}) for vendor "${vendor?.name || vendorId}".`);
           }
         }
@@ -190,13 +192,17 @@ export async function POST(
         }
 
         // Create PO
+        const isServiceRfq = rfq.lines.some((l) => !l.itemId || !!l.serviceDescription);
         const po = await tx.purchaseOrder.create({
           data: {
             companyId,
             number: poNumber,
             vendorId,
+            type: isServiceRfq ? PoType.SERVICE : PoType.REGULAR,
             status: PoStatus.PENDING_APPROVAL,
             prId: rfq.prId,
+            currency: quotation?.currency || "INR",
+            exchangeRate: quotation?.exchangeRate || 1.0,
             paymentTerms: paymentTerms || quotation?.paymentTerms || vendor?.paymentTerms || "Net 30",
             freightTerms: freightTerms || "FOB Destination",
             shipTo: shipTo || "Main Warehouse Gate 1",
@@ -206,6 +212,8 @@ export async function POST(
             lines: {
               create: poLinesData.map((pld) => ({
                 itemId: pld.itemId,
+                serviceDescription: pld.serviceDescription,
+                serviceUom: pld.serviceUom,
                 qty: pld.qty,
                 rate: pld.rate,
                 discount: pld.discount,

@@ -88,10 +88,28 @@ interface PORecord {
   lines: LineItem[];
   amendments: AmendmentRecord[];
   otherCharges: number;
+  currency?: string;
+  exchangeRate?: number;
   rfqNumbers?: string[];
   prNumbers?: string[];
   indentNumbers?: string[];
 }
+
+const getCurrencySymbol = (curr?: string | null) => {
+  switch (curr) {
+    case "USD": return "$";
+    case "EUR": return "€";
+    case "GBP": return "£";
+    case "AED": return "AED ";
+    case "SGD": return "S$";
+    case "SAR": return "SAR ";
+    case "CNY": return "¥";
+    case "JPY": return "¥";
+    case "INR":
+    default:
+      return "₹";
+  }
+};
 
 interface Item {
   id: string;
@@ -214,6 +232,8 @@ export default function PurchaseOrdersList({
   const [newPo, setNewPo] = useState<{
     vendorId: string;
     type: PoType;
+    currency: string;
+    exchangeRate: number;
     deliveryDate: string;
     paymentTerms: string;
     freightTerms: string;
@@ -226,6 +246,8 @@ export default function PurchaseOrdersList({
   }>({
     vendorId: "",
     type: "REGULAR" as PoType,
+    currency: "INR",
+    exchangeRate: 1.0,
     deliveryDate: "",
     paymentTerms: "Net 30",
     freightTerms: "FOB Destination",
@@ -284,7 +306,9 @@ export default function PurchaseOrdersList({
         const prefill = JSON.parse(prefillStr);
         setNewPo({
           vendorId: prefill.vendorId || "",
-          type: "REGULAR",
+          type: prefill.lines?.some((l: any) => !l.itemId || !!l.serviceDescription) ? "SERVICE" : "REGULAR",
+          currency: prefill.currency || "INR",
+          exchangeRate: prefill.exchangeRate || 1.0,
           deliveryDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
           paymentTerms: prefill.paymentTerms || "Net 30",
           freightTerms: prefill.freightTerms || "FOB Destination",
@@ -917,6 +941,8 @@ export default function PurchaseOrdersList({
     setNewPo({
       vendorId: po.vendorId,
       type: po.type as PoType,
+      currency: po.currency || "INR",
+      exchangeRate: po.exchangeRate || 1.0,
       deliveryDate: po.deliveryDate ? new Date(po.deliveryDate).toISOString().split("T")[0] : "",
       paymentTerms: po.paymentTerms || "",
       freightTerms: po.freightTerms || "",
@@ -1090,6 +1116,8 @@ export default function PurchaseOrdersList({
               setNewPo({
                 vendorId: "",
                 type: "REGULAR",
+                currency: "INR",
+                exchangeRate: 1.0,
                 deliveryDate: "",
                 paymentTerms: "Net 30",
                 freightTerms: "FOB Destination",
@@ -1579,7 +1607,7 @@ export default function PurchaseOrdersList({
               </div>
 
               {/* Terms & Delivery Location */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
                     Payment Terms *
@@ -1606,19 +1634,67 @@ export default function PurchaseOrdersList({
                 </div>
                 <div>
                   <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
-                    Other Charges (₹)
+                    Currency *
                   </label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={newPo.otherCharges || ""}
+                  <select
+                    value={newPo.currency || "INR"}
                     onChange={(e) => {
-                      const val = parseFloat(e.target.value) || 0;
-                      setNewPo(prev => ({ ...prev, otherCharges: val }));
+                      const curr = e.target.value;
+                      let defaultRate = 1.0;
+                      if (curr === "USD") defaultRate = 84.0;
+                      else if (curr === "EUR") defaultRate = 92.0;
+                      else if (curr === "GBP") defaultRate = 108.0;
+                      else if (curr === "AED") defaultRate = 22.8;
+                      else if (curr === "SGD") defaultRate = 63.5;
+                      else if (curr === "SAR") defaultRate = 22.4;
+                      else if (curr === "CNY") defaultRate = 11.6;
+                      else if (curr === "JPY") defaultRate = 0.55;
+                      setNewPo(prev => ({
+                        ...prev,
+                        currency: curr,
+                        exchangeRate: curr === "INR" ? 1.0 : (prev.currency === curr ? prev.exchangeRate : defaultRate)
+                      }));
                     }}
-                    className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none focus:border-saffron font-mono"
-                    placeholder="0.00"
-                  />
+                    className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none font-bold text-onyx"
+                  >
+                    <option value="INR">INR (₹ - Indian Rupee)</option>
+                    <option value="USD">USD ($ - US Dollar)</option>
+                    <option value="EUR">EUR (€ - Euro)</option>
+                    <option value="GBP">GBP (£ - British Pound)</option>
+                    <option value="AED">AED (AED - UAE Dirham)</option>
+                    <option value="SGD">SGD (S$ - Singapore Dollar)</option>
+                    <option value="SAR">SAR (SAR - Saudi Riyal)</option>
+                    <option value="CNY">CNY (¥ - Chinese Yuan)</option>
+                    <option value="JPY">JPY (¥ - Japanese Yen)</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] font-bold uppercase tracking-wider text-onyx/70 mb-1">
+                    {newPo.currency !== "INR" ? `Exchange Rate (1 ${newPo.currency} = ₹)` : `Other Charges (${getCurrencySymbol(newPo.currency)})`}
+                  </label>
+                  {newPo.currency !== "INR" ? (
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.0001"
+                      required
+                      value={newPo.exchangeRate || ""}
+                      onChange={(e) => setNewPo(prev => ({ ...prev, exchangeRate: parseFloat(e.target.value) || 1 }))}
+                      className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none font-mono font-bold"
+                      placeholder="e.g. 84.00"
+                    />
+                  ) : (
+                    <input
+                      type="number"
+                      step="any"
+                      value={newPo.otherCharges || ""}
+                      onChange={(e) => {
+                        const val = parseFloat(e.target.value) || 0;
+                        setNewPo(prev => ({ ...prev, otherCharges: val }));
+                      }}
+                      className="w-full text-xs p-2.5 bg-cream-dark/30 border border-onyx/10 rounded-lg focus:outline-none"
+                    />
+                  )}
                 </div>
               </div>
 

@@ -36,6 +36,8 @@ const quotationSchema = z.object({
   paymentTerms: z.string().optional().nullable(),
   freight: z.number().nonnegative().default(0),
   packingCharges: z.number().nonnegative().default(0),
+  currency: z.string().default("INR"),
+  exchangeRate: z.number().positive().default(1.0),
   lines: z.array(z.object({
     rfqLineId: z.string().optional().nullable(),
     itemId: z.string().optional().nullable(),
@@ -272,6 +274,8 @@ export async function submitQuotation(data: z.infer<typeof quotationSchema>) {
           paymentTerms: validated.paymentTerms || null,
           freight: validated.freight,
           packingCharges: validated.packingCharges,
+          currency: validated.currency || "INR",
+          exchangeRate: validated.exchangeRate || 1.0,
           awarded: false,
           lines: {
             create: validated.lines.map((l) => ({
@@ -383,17 +387,19 @@ export async function recalculateRfqRanks(rfqId: string, tx: any) {
   const landedUnitMap = new Map<string, { landedUnit: number; leadDays: number; rating: number }>();
 
   for (const q of quotations) {
+    const exchangeRate = q.exchangeRate && q.exchangeRate > 0 ? q.exchangeRate : 1.0;
     let totalBasicValue = 0;
     const activeLines = q.lines.filter((l: any) => l.canSupply);
 
     const lineDetails = activeLines.map((line: any) => {
       const rfqLineQty = line.rfqLine?.qty ?? 0;
       const effectiveQty = line.quotedQty && line.quotedQty > 0 ? line.quotedQty : rfqLineQty;
-      const basicValue = line.rate * (1 - line.discount / 100) * effectiveQty;
+      const rateInInr = line.rate * exchangeRate;
+      const basicValue = rateInInr * (1 - line.discount / 100) * effectiveQty;
       totalBasicValue += basicValue;
       return {
         id: line.id,
-        rate: line.rate,
+        rateInInr,
         discount: line.discount,
         gstRate: line.gstRate,
         effectiveQty,
@@ -403,7 +409,7 @@ export async function recalculateRfqRanks(rfqId: string, tx: any) {
       };
     });
 
-    const totalCommonCharges = (q.freight ?? 0) + (q.packingCharges ?? 0);
+    const totalCommonCharges = ((q.freight ?? 0) + (q.packingCharges ?? 0)) * exchangeRate;
 
     for (const detail of lineDetails) {
       let unitCharges = 0;
@@ -411,7 +417,7 @@ export async function recalculateRfqRanks(rfqId: string, tx: any) {
         const allocatedCharges = totalCommonCharges * (detail.basicValue / totalBasicValue);
         unitCharges = allocatedCharges / detail.effectiveQty;
       }
-      const landedUnit = detail.rate * (1 - detail.discount / 100) * (1 + detail.gstRate / 100) + unitCharges;
+      const landedUnit = detail.rateInInr * (1 - detail.discount / 100) * (1 + detail.gstRate / 100) + unitCharges;
       landedUnitMap.set(detail.id, {
         landedUnit,
         leadDays: detail.leadDays,
@@ -486,6 +492,8 @@ export async function updateQuotation(data: {
   paymentTerms?: string | null;
   freight: number;
   packingCharges: number;
+  currency?: string;
+  exchangeRate?: number;
   lines: {
     id: string;
     rate: number;
@@ -541,6 +549,8 @@ export async function updateQuotation(data: {
           paymentTerms: data.paymentTerms || null,
           freight: data.freight,
           packingCharges: data.packingCharges,
+          currency: data.currency || "INR",
+          exchangeRate: data.exchangeRate || 1.0,
         }
       });
 

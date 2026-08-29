@@ -101,9 +101,27 @@ interface QuotationRecord {
   paymentTerms: string | null;
   freight: number;
   packingCharges: number;
+  currency?: string;
+  exchangeRate?: number;
   awarded: boolean;
   lines: QuotationLine[];
 }
+
+const getCurrencySymbol = (curr?: string | null) => {
+  switch (curr) {
+    case "USD": return "$";
+    case "EUR": return "€";
+    case "GBP": return "£";
+    case "AED": return "AED ";
+    case "SGD": return "S$";
+    case "SAR": return "SAR ";
+    case "CNY": return "¥";
+    case "JPY": return "¥";
+    case "INR":
+    default:
+      return "₹";
+  }
+};
 
 interface RFQRecord {
   id: string;
@@ -242,6 +260,8 @@ export default function RequisitionsList({
     paymentTerms: "",
     freight: 0,
     packingCharges: 0,
+    currency: "INR",
+    exchangeRate: 1.0,
     lines: [] as {
       id?: string;
       rfqLineId?: string | null;
@@ -417,6 +437,8 @@ export default function RequisitionsList({
       paymentTerms: "",
       freight: 0,
       packingCharges: 0,
+      currency: "INR",
+      exchangeRate: 1.0,
       lines: rfq.lines.map(l => ({
         id: undefined,
         rfqLineId: l.id,
@@ -447,6 +469,8 @@ export default function RequisitionsList({
       paymentTerms: quote.paymentTerms ?? "",
       freight: quote.freight ?? 0,
       packingCharges: quote.packingCharges ?? 0,
+      currency: quote.currency || "INR",
+      exchangeRate: quote.exchangeRate || 1.0,
       lines: rfq.lines.map(l => {
         const qLine = quote.lines.find((ql: any) => ql.rfqLineId === l.id);
         return {
@@ -511,6 +535,8 @@ export default function RequisitionsList({
         paymentTerms: newQuote.paymentTerms,
         freight: newQuote.freight,
         packingCharges: newQuote.packingCharges,
+        currency: newQuote.currency || "INR",
+        exchangeRate: newQuote.exchangeRate || 1.0,
         lines: newQuote.lines.map(l => ({
           id: l.id!,
           rate: l.rate,
@@ -541,6 +567,8 @@ export default function RequisitionsList({
         paymentTerms: newQuote.paymentTerms,
         freight: newQuote.freight,
         packingCharges: newQuote.packingCharges,
+        currency: newQuote.currency || "INR",
+        exchangeRate: newQuote.exchangeRate || 1.0,
         lines: newQuote.lines.map(l => ({
           rfqLineId: l.rfqLineId,
           itemId: l.itemId,
@@ -746,12 +774,16 @@ export default function RequisitionsList({
     const poDetails = {
       vendorId: quote.vendorId,
       rfqId: rfq.id,
+      currency: quote.currency || "INR",
+      exchangeRate: quote.exchangeRate || 1.0,
       otherCharges: (quote.freight || 0) + (quote.packingCharges || 0),
       lines: quote.lines.map(ql => {
-        const rfqLine = rfq.lines.find(rl => rl.itemId === ql.itemId);
+        const rfqLine = rfq.lines.find(rl => rl.id === ql.rfqLineId || (!rl.id && rl.itemId === ql.itemId));
         return {
-          itemId: ql.itemId,
-          qty: rfqLine?.qty || 0,
+          itemId: ql.itemId || null,
+          serviceDescription: ql.serviceDescription || rfqLine?.serviceDescription || null,
+          serviceUom: ql.serviceUom || rfqLine?.serviceUom || null,
+          qty: ql.quotedQty ?? rfqLine?.qty ?? 0,
           rate: ql.rate,
           discount: ql.discount,
           gstRate: ql.gstRate
@@ -1434,9 +1466,64 @@ export default function RequisitionsList({
                   />
                 </div>
 
-                <div className="sm:col-span-6">
+                <div className="sm:col-span-3">
                   <label className="block text-xs font-bold uppercase tracking-wider text-onyx/70 mb-1.5">
-                    Common Freight (₹)
+                    Currency *
+                  </label>
+                  <select
+                    value={newQuote.currency || "INR"}
+                    onChange={(e) => {
+                      const curr = e.target.value;
+                      let defaultRate = 1.0;
+                      if (curr === "USD") defaultRate = 84.0;
+                      else if (curr === "EUR") defaultRate = 92.0;
+                      else if (curr === "GBP") defaultRate = 108.0;
+                      else if (curr === "AED") defaultRate = 22.8;
+                      else if (curr === "SGD") defaultRate = 63.5;
+                      else if (curr === "SAR") defaultRate = 22.4;
+                      else if (curr === "CNY") defaultRate = 11.6;
+                      else if (curr === "JPY") defaultRate = 0.55;
+                      setNewQuote(prev => ({
+                        ...prev,
+                        currency: curr,
+                        exchangeRate: curr === "INR" ? 1.0 : (prev.currency === curr ? prev.exchangeRate : defaultRate)
+                      }));
+                    }}
+                    className="w-full text-sm p-2.5 bg-cream-dark/30 border border-onyx/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-saffron/40 font-bold text-onyx cursor-pointer"
+                  >
+                    <option value="INR">INR (₹ - Indian Rupee)</option>
+                    <option value="USD">USD ($ - US Dollar)</option>
+                    <option value="EUR">EUR (€ - Euro)</option>
+                    <option value="GBP">GBP (£ - British Pound)</option>
+                    <option value="AED">AED (AED - UAE Dirham)</option>
+                    <option value="SGD">SGD (S$ - Singapore Dollar)</option>
+                    <option value="SAR">SAR (SAR - Saudi Riyal)</option>
+                    <option value="CNY">CNY (¥ - Chinese Yuan)</option>
+                    <option value="JPY">JPY (¥ - Japanese Yen)</option>
+                  </select>
+                </div>
+
+                {newQuote.currency !== "INR" && (
+                  <div className="sm:col-span-3">
+                    <label className="block text-xs font-bold uppercase tracking-wider text-onyx/70 mb-1.5">
+                      Exchange Rate (1 {newQuote.currency} = ₹) *
+                    </label>
+                    <input
+                      type="number"
+                      step="any"
+                      min="0.0001"
+                      required
+                      value={newQuote.exchangeRate || ""}
+                      onChange={(e) => setNewQuote(prev => ({ ...prev, exchangeRate: parseFloat(e.target.value) || 1 }))}
+                      className="w-full text-sm p-2.5 bg-cream-dark/30 border border-onyx/20 rounded-lg focus:outline-none focus:ring-2 focus:ring-saffron/40 font-mono font-bold text-onyx"
+                      placeholder="e.g. 84.00"
+                    />
+                  </div>
+                )}
+
+                <div className={newQuote.currency !== "INR" ? "sm:col-span-3" : "sm:col-span-4"}>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-onyx/70 mb-1.5">
+                    Common Freight ({getCurrencySymbol(newQuote.currency)})
                   </label>
                   <input
                     type="number"
@@ -1451,9 +1538,9 @@ export default function RequisitionsList({
                   />
                 </div>
 
-                <div className="sm:col-span-6">
+                <div className={newQuote.currency !== "INR" ? "sm:col-span-3" : "sm:col-span-5"}>
                   <label className="block text-xs font-bold uppercase tracking-wider text-onyx/70 mb-1.5">
-                    Common Packing Charges (₹)
+                    Common Packing Charges ({getCurrencySymbol(newQuote.currency)})
                   </label>
                   <input
                     type="number"
@@ -1512,7 +1599,9 @@ export default function RequisitionsList({
                           !canSupply ? "opacity-40 pointer-events-none" : ""
                         }`}>
                           <div>
-                            <label className="block text-xs uppercase font-bold text-onyx/70 mb-1 truncate">Basic Rate (₹) *</label>
+                            <label className="block text-xs uppercase font-bold text-onyx/70 mb-1 truncate">
+                              Basic Rate ({getCurrencySymbol(newQuote.currency)}) *
+                            </label>
                             <input
                               type="number"
                               step="any"
@@ -1526,9 +1615,14 @@ export default function RequisitionsList({
                                   return { ...prev, lines: updated };
                                 });
                               }}
-                              className="w-full text-sm p-2.5 bg-white border border-onyx/20 rounded-md focus:outline-none focus:ring-2 focus:ring-saffron/40 text-right font-mono"
+                              className="w-full text-sm p-2.5 bg-white border border-onyx/20 rounded-md focus:outline-none focus:ring-2 focus:ring-saffron/40 text-right font-mono font-bold"
                               placeholder="0.00"
                             />
+                            {newQuote.currency !== "INR" && line.rate > 0 && (
+                              <span className="text-[10px] text-onyx/60 font-mono font-medium block mt-0.5 text-right">
+                                ≈ ₹{(line.rate * (newQuote.exchangeRate || 1)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                              </span>
+                            )}
                           </div>
 
                           <div>
@@ -1677,13 +1771,20 @@ export default function RequisitionsList({
                         <th key={q.id} className="p-3 text-center border-r border-onyx/10 w-72">
                           <div className="flex flex-col items-center justify-center space-y-1">
                             <p className="font-bold text-onyx">{q.vendorName}</p>
-                            <p className="text-[9px] text-onyx/50 font-normal">Lead: {q.leadDays || "N/A"} days{q.paymentTerms ? ` | Pay: ${q.paymentTerms}` : ""}</p>
+                            <p className="text-[9px] text-onyx/60 font-medium">
+                              {q.currency && q.currency !== "INR" ? (
+                                <span className="text-purple-800 font-bold bg-purple-50 px-1 py-0.5 rounded mr-1">
+                                  {q.currency} (@ ₹{q.exchangeRate || 1})
+                                </span>
+                              ) : null}
+                              Lead: {q.leadDays || "N/A"}d{q.paymentTerms ? ` | ${q.paymentTerms}` : ""}
+                            </p>
                             {compData.rfq.status !== "CLOSED" && canManageRfq && (
                               <div className="flex items-center gap-2 mt-1">
                                 <button
                                   type="button"
                                   onClick={() => handleEditQuoteClick(compData.rfq, q)}
-                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded transition"
+                                  className="p-1 text-blue-600 hover:bg-blue-50 rounded transition cursor-pointer"
                                   title="Edit Quotation"
                                 >
                                   <Edit size={13} />
@@ -1691,7 +1792,7 @@ export default function RequisitionsList({
                                 <button
                                   type="button"
                                   onClick={() => handleDeleteQuote(q.id)}
-                                  className="p-1 text-red-600 hover:bg-red-50 rounded transition"
+                                  className="p-1 text-red-600 hover:bg-red-50 rounded transition cursor-pointer"
                                   title="Delete Quotation"
                                 >
                                   <Trash2 size={13} />
@@ -1742,7 +1843,7 @@ export default function RequisitionsList({
                             if (!line) {
                               return <td key={q.id} className="p-3 text-center text-onyx/30 border-r border-onyx/10 bg-cream-dark/10">No quote</td>;
                             }
-                            const cost = line.landedUnit ?? calculateLandedCost(line.rate, line.discount, line.gstRate);
+                            const cost = line.landedUnit ?? calculateLandedCost(line.rate * (q.exchangeRate || 1), line.discount, line.gstRate);
                             const rank = line.rank || 999;
                             const isL1 = rank === 1;
                             const allocs = allocState[item.id] || [];
@@ -1757,7 +1858,14 @@ export default function RequisitionsList({
                                 } ${isSelected ? "bg-saffron/5" : ""}`}
                               >
                                 <div className="space-y-1">
-                                  <p className="font-mono text-xs">Basic: ₹{line.rate.toFixed(2)}</p>
+                                  <p className="font-mono text-xs font-bold">
+                                    Basic: {getCurrencySymbol(q.currency)}{line.rate.toFixed(2)}
+                                  </p>
+                                  {q.currency && q.currency !== "INR" && (
+                                    <p className="text-[9px] text-onyx/60 font-mono">
+                                      ≈ ₹{(line.rate * (q.exchangeRate || 1)).toFixed(2)}
+                                    </p>
+                                  )}
                                   <p className="text-[9px] text-onyx/50 font-mono">Disc: {line.discount}% | GST: {line.gstRate}%</p>
                                   <p className={`text-xs font-mono font-bold ${isL1 ? "text-saffron-dark" : "text-onyx"}`}>
                                     Landed: ₹{cost.toFixed(2)}

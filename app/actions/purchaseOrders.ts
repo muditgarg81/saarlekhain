@@ -24,6 +24,8 @@ const poLineSchema = z.object({
 const poSchema = z.object({
   vendorId: z.string(),
   type: z.nativeEnum(PoType).default(PoType.REGULAR),
+  currency: z.string().default("INR"),
+  exchangeRate: z.number().positive().default(1.0),
   deliveryDate: z.string().optional().nullable(),
   paymentTerms: z.string().optional().nullable(),
   freightTerms: z.string().optional().nullable(),
@@ -178,6 +180,8 @@ export async function createPO(data: z.infer<typeof poSchema>) {
           vendorId: validated.vendorId,
           type: validated.type,
           status: PoStatus.DRAFT,
+          currency: validated.currency || "INR",
+          exchangeRate: validated.exchangeRate || 1.0,
           deliveryDate: validated.deliveryDate ? new Date(validated.deliveryDate) : null,
           paymentTerms: validated.paymentTerms || null,
           freightTerms: validated.freightTerms || null,
@@ -1209,6 +1213,8 @@ export async function updatePO(poId: string, data: z.infer<typeof poSchema>) {
           vendorId: validated.vendorId,
           type: validated.type,
           status: PoStatus.DRAFT, // Reset status to DRAFT on edit
+          currency: validated.currency || "INR",
+          exchangeRate: validated.exchangeRate || 1.0,
           deliveryDate: validated.deliveryDate ? new Date(validated.deliveryDate) : null,
           paymentTerms: validated.paymentTerms || null,
           freightTerms: validated.freightTerms || null,
