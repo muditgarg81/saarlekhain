@@ -665,12 +665,16 @@ export default function PurchaseOrdersList({
     rightY += 4.5;
     doc.text(`PO Type: ${po.type}`, 110, rightY);
     rightY += 4.5;
+    doc.text(`Currency: ${po.currency || "INR"}${po.currency && po.currency !== "INR" ? ` (Rate: Rs. ${po.exchangeRate || 1})` : ""}`, 110, rightY);
+    rightY += 4.5;
 
     const startY = Math.max(leftY, rightY) + 5;
 
+    const currCode = po.currency || "INR";
+
     // 3. Table of items
     const tableHeaders = [
-      ["S.No", "Code", "Item Description", "Qty", "UOM", "Basic Rate (Rs.)", "Disc %", "GST %", "Landed Cost (Rs.)"]
+      ["S.No", "Code", "Item Description", "Qty", "UOM", `Rate (${currCode})`, "Disc %", "GST %", `Landed (${currCode})`]
     ];
 
     const totalTaxable = po.lines.reduce((sum, line) => {
@@ -731,30 +735,38 @@ export default function PurchaseOrdersList({
     doc.setTextColor(80, 80, 80);
 
     doc.text("Basic Value:", 120, currentY);
-    doc.text(`INR ${totals.basicTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, 195, currentY, { align: "right" });
+    doc.text(`${currCode} ${totals.basicTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, 195, currentY, { align: "right" });
     
     if (totals.discountTotal > 0) {
       currentY += 5;
       doc.text("Total Discount (-):", 120, currentY);
-      doc.text(`-INR ${totals.discountTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, 195, currentY, { align: "right" });
+      doc.text(`-${currCode} ${totals.discountTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, 195, currentY, { align: "right" });
     }
 
     if (po.otherCharges > 0) {
       currentY += 5;
       doc.text("Other Charges (+):", 120, currentY);
-      doc.text(`INR ${po.otherCharges.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, 195, currentY, { align: "right" });
+      doc.text(`${currCode} ${po.otherCharges.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, 195, currentY, { align: "right" });
     }
 
     currentY += 5;
     doc.text("Total GST (+):", 120, currentY);
-    doc.text(`INR ${totals.gstTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, 195, currentY, { align: "right" });
+    doc.text(`${currCode} ${totals.gstTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, 195, currentY, { align: "right" });
 
     currentY += 6;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
     doc.setTextColor(30, 30, 30);
     doc.text("Net Landed Total:", 120, currentY);
-    doc.text(`INR ${totals.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, 195, currentY, { align: "right" });
+    doc.text(`${currCode} ${totals.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, 195, currentY, { align: "right" });
+
+    if (po.currency && po.currency !== "INR") {
+      currentY += 5;
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(8.5);
+      doc.setTextColor(100, 100, 100);
+      doc.text(`Converted INR (Rate ${po.exchangeRate || 1}): INR ${(totals.grandTotal * (po.exchangeRate || 1)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}`, 195, currentY, { align: "right" });
+    }
 
     // 5. Terms & Conditions
     doc.addPage();
@@ -1224,7 +1236,14 @@ export default function PurchaseOrdersList({
                       <td className="font-semibold text-onyx">{po.vendorName}</td>
                       <td>{po.type}</td>
                       <td suppressHydrationWarning>{new Date(po.orderDate).toLocaleDateString()}</td>
-                      <td className="font-mono font-bold">₹{po.totalValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</td>
+                      <td className="font-mono font-bold">
+                        {getCurrencySymbol(po.currency)}{po.totalValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        {po.currency && po.currency !== "INR" && (
+                          <span className="text-[10px] font-sans font-normal text-onyx/60 block">
+                            {po.currency} (≈ ₹{(po.totalValue * (po.exchangeRate || 1)).toLocaleString("en-IN", { minimumFractionDigits: 2 })})
+                          </span>
+                        )}
+                      </td>
                       <td className="font-mono text-xs">
                         {po.rfqNumbers && po.rfqNumbers.length > 0 ? (
                           <button
@@ -1419,7 +1438,8 @@ export default function PurchaseOrdersList({
                     <div>
                       <span className="text-[10px] uppercase font-bold text-onyx/40 tracking-wider block">Landed Value</span>
                       <span className="font-mono font-bold text-onyx/85">
-                        ₹{po.totalValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        {getCurrencySymbol(po.currency)}{po.totalValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        {po.currency && po.currency !== "INR" ? ` (${po.currency})` : ""}
                       </span>
                     </div>
                   </div>
@@ -2539,7 +2559,6 @@ export default function PurchaseOrdersList({
             </div>
 
             {/* General Info */}
-            {/* General Info */}
             <div className="py-4 grid grid-cols-2 gap-x-4 gap-y-3 text-xs border-b border-onyx/5 bg-cream-dark/20 p-3.5 rounded-lg mt-4">
               <div>
                 <span className="font-semibold text-onyx/50">PO Type:</span>
@@ -2557,6 +2576,13 @@ export default function PurchaseOrdersList({
                 <span className="font-semibold text-onyx/50">Delivery Date:</span>
                 <p className="font-bold text-onyx mt-0.5">
                   <span suppressHydrationWarning>{selectedPO.deliveryDate ? new Date(selectedPO.deliveryDate).toLocaleDateString() : "N/A"}</span>
+                </p>
+              </div>
+              <div>
+                <span className="font-semibold text-onyx/50">PO Currency:</span>
+                <p className="font-bold text-onyx mt-0.5 font-mono">
+                  {selectedPO.currency || "INR"}
+                  {selectedPO.currency && selectedPO.currency !== "INR" ? ` (@ ₹${selectedPO.exchangeRate || 1})` : ""}
                 </p>
               </div>
               <div>
@@ -2618,9 +2644,9 @@ export default function PurchaseOrdersList({
                     <thead className="bg-cream-dark/50">
                       <tr>
                         <th className="p-2.5 font-bold">Item Description</th>
-                        <th className="p-2.5 font-bold text-right">Rate</th>
+                        <th className="p-2.5 font-bold text-right">Rate ({getCurrencySymbol(selectedPO.currency)})</th>
                         <th className="p-2.5 font-bold text-right">Qty</th>
-                        <th className="p-2.5 font-bold text-right">Landed Cost</th>
+                        <th className="p-2.5 font-bold text-right">Landed Cost ({getCurrencySymbol(selectedPO.currency)})</th>
                         <th className="p-2.5 font-bold text-right">Recd Qty</th>
                       </tr>
                     </thead>
@@ -2664,9 +2690,13 @@ export default function PurchaseOrdersList({
                                 )}
                               </div>
                             </td>
-                            <td className="p-2.5 text-right font-mono">₹{line.rate.toFixed(2)}</td>
+                            <td className="p-2.5 text-right font-mono font-bold">
+                              {getCurrencySymbol(selectedPO.currency)}{line.rate.toFixed(2)}
+                            </td>
                             <td className="p-2.5 text-right font-mono font-bold">{line.qty}</td>
-                            <td className="p-2.5 text-right font-mono">₹{landed.toFixed(2)}</td>
+                            <td className="p-2.5 text-right font-mono font-bold">
+                              {getCurrencySymbol(selectedPO.currency)}{landed.toFixed(2)}
+                            </td>
                             <td className="p-2.5 text-right font-mono font-bold text-blue-700">{line.receivedQty}</td>
                           </tr>
                         );
@@ -2682,28 +2712,46 @@ export default function PurchaseOrdersList({
                     <div className="p-3 bg-cream-dark/30 border border-onyx/5 rounded-lg space-y-1.5 text-xs">
                       <div className="flex justify-between">
                         <span className="text-onyx/60 font-semibold">Basic Total Value:</span>
-                        <span className="font-mono text-onyx">₹{totals.basicTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                        <span className="font-mono text-onyx font-bold">
+                          {getCurrencySymbol(selectedPO.currency)}{totals.basicTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </span>
                       </div>
                       {totals.discountTotal > 0 && (
                         <div className="flex justify-between">
                           <span className="text-onyx/60 font-semibold">Total Discount (-):</span>
-                          <span className="font-mono text-red-600 font-bold">-₹{totals.discountTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                          <span className="font-mono text-red-600 font-bold">
+                            -{getCurrencySymbol(selectedPO.currency)}{totals.discountTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </span>
                         </div>
                       )}
                       {selectedPO.otherCharges > 0 && (
                         <div className="flex justify-between">
                           <span className="text-onyx/60 font-semibold">Other Charges (+):</span>
-                          <span className="font-mono text-onyx">₹{selectedPO.otherCharges.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                          <span className="font-mono text-onyx font-bold">
+                            {getCurrencySymbol(selectedPO.currency)}{selectedPO.otherCharges.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </span>
                         </div>
                       )}
                       <div className="flex justify-between">
                         <span className="text-onyx/60 font-semibold">Total GST (+):</span>
-                        <span className="font-mono text-onyx">₹{totals.gstTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                        <span className="font-mono text-onyx font-bold">
+                          {getCurrencySymbol(selectedPO.currency)}{totals.gstTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </span>
                       </div>
                       <div className="border-t border-onyx/10 pt-1.5 flex justify-between font-bold">
                         <span className="text-onyx">Net Landed Total:</span>
-                        <span className="font-mono text-saffron-dark text-sm">₹{totals.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span>
+                        <span className="font-mono text-saffron-dark text-sm">
+                          {getCurrencySymbol(selectedPO.currency)}{totals.grandTotal.toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                        </span>
                       </div>
+                      {selectedPO.currency && selectedPO.currency !== "INR" && (
+                        <div className="border-t border-onyx/10 pt-1.5 flex justify-between font-semibold text-xs text-onyx/70">
+                          <span>Equivalent in Base Currency (INR):</span>
+                          <span className="font-mono text-onyx font-bold">
+                            ₹{(totals.grandTotal * (selectedPO.exchangeRate || 1)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                          </span>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}
@@ -2876,7 +2924,9 @@ export default function PurchaseOrdersList({
                     <h4 className="text-[10px] font-bold uppercase tracking-wider text-onyx/40">4. Purchase Order (PO)</h4>
                     <div className="mt-1 bg-cream-dark/20 p-2.5 rounded-lg border border-onyx/5 text-xs">
                       <div className="font-bold text-onyx">{selectedPO.vendorName}</div>
-                      <div className="text-[10px] text-onyx/60 mt-0.5">Landed Value: <span className="font-mono font-bold">₹{selectedPO.totalValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}</span></div>
+                      <div className="text-[10px] text-onyx/60 mt-0.5">
+                        Landed Value: <span className="font-mono font-bold">{getCurrencySymbol(selectedPO.currency)}{selectedPO.totalValue.toLocaleString("en-IN", { minimumFractionDigits: 2 })}{selectedPO.currency && selectedPO.currency !== "INR" ? ` (${selectedPO.currency})` : ""}</span>
+                      </div>
                       <div className="text-[10px] text-onyx/60">Status: <span className="font-bold">{selectedPO.status}</span></div>
                     </div>
                   </div>

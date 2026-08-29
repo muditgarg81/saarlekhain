@@ -347,6 +347,8 @@ export default async function PurchaseOrdersPage() {
       vendorPan: po.vendor.pan,
       type: po.type,
       status: po.status,
+      currency: po.currency || "INR",
+      exchangeRate: po.exchangeRate || 1.0,
       orderDate: po.orderDate.toISOString(),
       deliveryDate: po.deliveryDate ? po.deliveryDate.toISOString() : null,
       paymentTerms: po.paymentTerms,
