@@ -1595,12 +1595,12 @@ export default function RequisitionsList({
                         </div>
 
                         {/* Input Grid */}
-                        <div className={`grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3.5 p-3.5 bg-cream-dark/15 border border-onyx/10 rounded-lg transition-opacity duration-200 ${
+                        <div className={`grid grid-cols-2 sm:grid-cols-3 ${newQuote.currency !== "INR" ? "md:grid-cols-7" : "md:grid-cols-6"} gap-3.5 p-3.5 bg-cream-dark/15 border border-onyx/10 rounded-lg transition-opacity duration-200 ${
                           !canSupply ? "opacity-40 pointer-events-none" : ""
                         }`}>
                           <div>
                             <label className="block text-xs uppercase font-bold text-onyx/70 mb-1 truncate">
-                              Basic Rate ({getCurrencySymbol(newQuote.currency)}) *
+                              Rate ({getCurrencySymbol(newQuote.currency)}) *
                             </label>
                             <input
                               type="number"
@@ -1618,12 +1618,40 @@ export default function RequisitionsList({
                               className="w-full text-sm p-2.5 bg-white border border-onyx/20 rounded-md focus:outline-none focus:ring-2 focus:ring-saffron/40 text-right font-mono font-bold"
                               placeholder="0.00"
                             />
-                            {newQuote.currency !== "INR" && line.rate > 0 && (
-                              <span className="text-[10px] text-onyx/60 font-mono font-medium block mt-0.5 text-right">
-                                ≈ ₹{(line.rate * (newQuote.exchangeRate || 1)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                            {newQuote.currency !== "INR" && (
+                              <span className="text-[10px] text-purple-800 font-mono font-semibold block mt-0.5 text-right">
+                                {getCurrencySymbol(newQuote.currency)}
                               </span>
                             )}
                           </div>
+
+                          {newQuote.currency !== "INR" && (
+                            <div>
+                              <label className="block text-xs uppercase font-bold text-purple-900 mb-1 truncate">
+                                Rate in INR (₹)
+                              </label>
+                              <input
+                                type="number"
+                                step="any"
+                                value={line.rate > 0 ? parseFloat((line.rate * (newQuote.exchangeRate || 1)).toFixed(2)) : ""}
+                                onChange={(e) => {
+                                  const inrVal = parseFloat(e.target.value) || 0;
+                                  const exRate = newQuote.exchangeRate || 1;
+                                  const foreignRate = exRate > 0 ? parseFloat((inrVal / exRate).toFixed(4)) : 0;
+                                  setNewQuote(prev => {
+                                    const updated = [...prev.lines];
+                                    updated[idx].rate = foreignRate;
+                                    return { ...prev, lines: updated };
+                                  });
+                                }}
+                                className="w-full text-sm p-2.5 bg-purple-50/50 border border-purple-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-400 text-right font-mono font-bold text-purple-950"
+                                placeholder="0.00"
+                              />
+                              <span className="text-[10px] text-purple-700 font-mono font-medium block mt-0.5 text-right">
+                                auto-converted
+                              </span>
+                            </div>
+                          )}
 
                           <div>
                             <label className="block text-xs uppercase font-bold text-onyx/70 mb-1 truncate">Quoted Qty</label>
@@ -1682,28 +1710,10 @@ export default function RequisitionsList({
                           </div>
 
                           <div>
-                            <label className="block text-xs uppercase font-bold text-onyx/70 mb-1 truncate">Brand / Make</label>
-                            <input
-                              type="text"
-                              value={line.brand || ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setNewQuote(prev => {
-                                  const updated = [...prev.lines];
-                                  updated[idx].brand = val;
-                                  return { ...prev, lines: updated };
-                                });
-                              }}
-                              className="w-full text-sm p-2.5 bg-white border border-onyx/20 rounded-md focus:outline-none focus:ring-2 focus:ring-saffron/40"
-                              placeholder="e.g. Tata, SKF"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-xs uppercase font-bold text-onyx/70 mb-1 truncate">Lead Time (Days)</label>
+                            <label className="block text-xs uppercase font-bold text-onyx/70 mb-1 truncate">Lead (Days)</label>
                             <input
                               type="number"
-                              step="1"
+                              required={canSupply}
                               value={line.leadDays ?? ""}
                               onChange={(e) => {
                                 const val = e.target.value === "" ? null : parseInt(e.target.value) || 0;
@@ -1717,12 +1727,70 @@ export default function RequisitionsList({
                               placeholder="5"
                             />
                           </div>
+
+                          <div>
+                            <label className="block text-xs uppercase font-bold text-onyx/70 mb-1 truncate">Brand / Make</label>
+                            <input
+                              type="text"
+                              value={line.brand || ""}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setNewQuote(prev => {
+                                  const updated = [...prev.lines];
+                                  updated[idx].brand = val;
+                                  return { ...prev, lines: updated };
+                                });
+                              }}
+                              className="w-full text-sm p-2.5 bg-white border border-onyx/20 rounded-md focus:outline-none focus:ring-2 focus:ring-saffron/40"
+                              placeholder="e.g. SKF"
+                            />
+                          </div>
                         </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
+
+              {/* Conversion Summary Banner when Foreign Currency is used */}
+              {newQuote.currency !== "INR" && (
+                <div className="p-4 bg-purple-50/80 border border-purple-200 rounded-xl space-y-2 text-xs">
+                  <div className="flex items-center justify-between font-bold text-purple-950 pb-2 border-b border-purple-200/60">
+                    <span className="flex items-center gap-1.5">
+                      <span>💱 Foreign Currency to INR Conversion Summary</span>
+                    </span>
+                    <span className="font-mono text-[11px] bg-purple-200/80 text-purple-900 px-2 py-0.5 rounded font-bold">
+                      1 {newQuote.currency} = ₹{(newQuote.exchangeRate || 1).toFixed(2)}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1">
+                    <div>
+                      <span className="text-[10px] text-purple-900/60 uppercase font-bold block">Basic Total ({newQuote.currency})</span>
+                      <span className="font-mono font-bold text-sm text-purple-950">
+                        {getCurrencySymbol(newQuote.currency)}{newQuote.lines.filter(l => l.canSupply !== false).reduce((sum, l) => sum + (l.rate * (l.quotedQty || 0)), 0).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-purple-900/60 uppercase font-bold block">Exchange Conversion Rate</span>
+                      <span className="font-mono font-bold text-sm text-purple-950">
+                        ₹{(newQuote.exchangeRate || 1).toFixed(2)} / {newQuote.currency}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-purple-900/60 uppercase font-bold block">Converted Basic Total (INR)</span>
+                      <span className="font-mono font-bold text-sm text-purple-950">
+                        ₹{(newQuote.lines.filter(l => l.canSupply !== false).reduce((sum, l) => sum + (l.rate * (l.quotedQty || 0)), 0) * (newQuote.exchangeRate || 1)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-purple-900/60 uppercase font-bold block">Freight + Packing (INR)</span>
+                      <span className="font-mono font-bold text-sm text-purple-950">
+                        ₹{(((newQuote.freight || 0) + (newQuote.packingCharges || 0)) * (newQuote.exchangeRate || 1)).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               <div className="pt-4 border-t border-onyx/10 flex items-center justify-end space-x-3">
                 <button
