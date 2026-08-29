@@ -404,6 +404,10 @@ export default function RequisitionsList({
   };
 
   const handleOpenQuote = (rfq: RFQRecord) => {
+    if (rfq.status === "CLOSED" || rfq.status === "AWARDED") {
+      alert(`Cannot log quotes because RFQ ${rfq.number} is ${rfq.status.toLowerCase().replace("_", " ")}.`);
+      return;
+    }
     setSelectedRfq(rfq);
     setEditingQuotationId(null);
     setNewQuote({
@@ -430,6 +434,10 @@ export default function RequisitionsList({
   };
 
   const handleEditQuoteClick = (rfq: RFQRecord, quote: any) => {
+    if (rfq.status === "CLOSED") {
+      alert(`Cannot edit quote because RFQ ${rfq.number} is closed.`);
+      return;
+    }
     setSelectedRfq(rfq);
     setEditingQuotationId(quote.id);
     setNewQuote({
@@ -477,6 +485,10 @@ export default function RequisitionsList({
 
   const handleCreateQuote = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (selectedRfq && (selectedRfq.status === "CLOSED" || selectedRfq.status === "AWARDED")) {
+      setErrorMsg("Cannot submit quote for a closed or awarded RFQ.");
+      return;
+    }
     if (!newQuote.vendorId) {
       alert("Please select a vendor");
       return;
@@ -1059,7 +1071,7 @@ export default function RequisitionsList({
                             >
                               <Eye size={13} />
                             </button>
-                            {rfq.status !== "AWARDED" && canManageRfq && (
+                            {rfq.status !== "AWARDED" && rfq.status !== "CLOSED" && canManageRfq && (
                               <button
                                 onClick={() => handleOpenQuote(rfq)}
                                 title="Log Vendor Quote"
@@ -1136,7 +1148,7 @@ export default function RequisitionsList({
                         <Eye size={12} />
                         <span>Details</span>
                       </button>
-                      {rfq.status !== "AWARDED" && canManageRfq && (
+                      {rfq.status !== "AWARDED" && rfq.status !== "CLOSED" && canManageRfq && (
                         <button
                           onClick={() => handleOpenQuote(rfq)}
                           className="flex items-center space-x-1 px-2.5 py-1.5 bg-saffron hover:bg-saffron-dark text-onyx font-bold rounded text-xs cursor-pointer"

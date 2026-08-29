@@ -252,6 +252,15 @@ export async function submitQuotation(data: z.infer<typeof quotationSchema>) {
   try {
     const validated = quotationSchema.parse(data);
 
+    const rfq = await db.rfq.findFirst({
+      where: { id: validated.rfqId, companyId },
+    });
+    if (!rfq) return { success: false, error: "RFQ not found" };
+
+    if (rfq.status === RfqStatus.CLOSED || rfq.status === RfqStatus.AWARDED) {
+      return { success: false, error: `Cannot submit quote because the RFQ is ${rfq.status.toLowerCase().replace("_", " ")}.` };
+    }
+
     const result = await db.$transaction(async (tx) => {
       const q = await tx.quotation.create({
         data: {
